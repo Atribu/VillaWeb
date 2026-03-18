@@ -1,0 +1,30 @@
+[
+  {
+    "villaSlug": "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
+    "baseNightlyPrice": 18500,
+    "cleaningFee": 3000,
+    "minNightCount": 3,
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "villaSlug": "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
+    "baseNightlyPrice": 14900,
+    "cleaningFee": 4500,
+    "minNightCount": 4,
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "baseNightlyPrice": 17250,
+    "cleaningFee": 1800,
+    "minNightCount": 3,
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "villaSlug": "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand",
+    "baseNightlyPrice": 24900,
+    "cleaningFee": 4500,
+    "minNightCount": 4,
+    "updatedAt": "2026-03-18"
+  }
+]

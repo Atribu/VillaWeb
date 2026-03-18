@@ -1,0 +1,35 @@
+[
+  {
+    "id": "discount-soleia-spring",
+    "title": "Ilkbahar Deniz Manzarasi Kampanyasi",
+    "villaScope": "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
+    "percentOff": 14,
+    "startDate": "2026-03-01",
+    "endDate": "2026-04-15",
+    "note": "Erken sezon doluluk hizlandirma kampanyasi.",
+    "active": true,
+    "createdAt": "2026-03-10T10:00:00.000Z"
+  },
+  {
+    "id": "discount-palm-family",
+    "title": "Ailelere Ozel Nisan Avantaji",
+    "villaScope": "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
+    "percentOff": 11,
+    "startDate": "2026-03-15",
+    "endDate": "2026-04-20",
+    "note": "Aile segmentinde talep toplamaya yonelik donemsel indirim.",
+    "active": true,
+    "createdAt": "2026-03-12T14:00:00.000Z"
+  },
+  {
+    "id": "discount-marea-groups",
+    "title": "Grup Rezervasyon Yaz Oncesi",
+    "villaScope": "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand",
+    "percentOff": 12,
+    "startDate": "2026-04-01",
+    "endDate": "2026-05-20",
+    "note": "Kalabalik grup taleplerini erkenden toplamak icin olusturuldu.",
+    "active": true,
+    "createdAt": "2026-03-13T09:30:00.000Z"
+  }
+]

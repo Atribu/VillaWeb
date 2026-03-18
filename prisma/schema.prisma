@@ -1,0 +1,360 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum VillaStatus {
+  DRAFT
+  ACTIVE
+  PASSIVE
+}
+
+enum AvailabilityBlockType {
+  AVAILABLE
+  UNAVAILABLE
+  MAINTENANCE
+  RESERVED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum AppointmentRequestStatus {
+  NEW
+  CONTACT_PENDING
+  CONTACTED
+  OFFER_SENT
+  CONFIRMED
+  CANCELLED
+}
+
+enum RequestSource {
+  WEB
+  PANEL
+  PHONE
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model User {
+  id                     String                            @id @default(cuid())
+  name                   String
+  email                  String                            @unique
+  passwordHash           String                            @map("password_hash")
+  role                   Role
+  isActive               Boolean                           @default(true) @map("is_active")
+  createdAt              DateTime                          @default(now()) @map("created_at")
+  updatedAt              DateTime                          @updatedAt @map("updated_at")
+  createdVillas          Villa[]
+  availabilityBlocks     VillaAvailabilityBlock[]
+  seasonalPrices         VillaSeasonalPrice[]
+  villaDiscounts         VillaDiscount[]
+  statusHistoryChanges   AppointmentRequestStatusHistory[]
+
+  @@map("users")
+}
+
+model Villa {
+  id                     String                  @id @default(cuid())
+  title                  String
+  slug                   String                  @unique
+  shortDescription       String?                 @map("short_description")
+  description            String
+  city                   String
+  district               String?
+  address                String?
+  latitude               Decimal?                @db.Decimal(10, 7)
+  longitude              Decimal?                @db.Decimal(10, 7)
+  capacity               Int
+  bedroomCount           Int                     @map("bedroom_count")
+  bathroomCount          Int                     @map("bathroom_count")
+  poolType               String?                 @map("pool_type")
+  nightlyBasePrice       Decimal                 @db.Decimal(10, 2) @map("nightly_base_price")
+  currency               String                  @default("TRY")
+  status                 VillaStatus             @default(DRAFT)
+  featured               Boolean                 @default(false)
+  seoTitle               String?                 @map("seo_title")
+  seoDescription         String?                 @map("seo_description")
+  seoKeywords            String?                 @map("seo_keywords")
+  createdByUserId        String                  @map("created_by_user_id")
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  createdBy              User                    @relation(fields: [createdByUserId], references: [id])
+  images                 VillaImage[]
+  amenities              VillaAmenity[]
+  availabilityBlocks     VillaAvailabilityBlock[]
+  seasonalPrices         VillaSeasonalPrice[]
+  discounts              VillaDiscount[]
+  appointmentRequests    AppointmentRequest[]
+  viewEvents             VillaViewEvent[]
+  liveSessions           VillaLiveSession[]
+  revenueRecords         RevenueRecord[]
+  dailyMetrics           VillaDailyMetric[]
+
+  @@index([city, district])
+  @@index([status, featured])
+  @@map("villas")
+}
+
+model VillaImage {
+  id                     String    @id @default(cuid())
+  villaId                String    @map("villa_id")
+  url                    String
+  altText                String?   @map("alt_text")
+  sortOrder              Int       @default(0) @map("sort_order")
+  isCover                Boolean   @default(false) @map("is_cover")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@index([villaId, sortOrder])
+  @@map("villa_images")
+}
+
+model Amenity {
+  id                     String        @id @default(cuid())
+  name                   String        @unique
+  icon                   String?
+  villas                 VillaAmenity[]
+
+  @@map("amenities")
+}
+
+model VillaAmenity {
+  id                     String    @id @default(cuid())
+  villaId                String    @map("villa_id")
+  amenityId              String    @map("amenity_id")
+  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  amenity                 Amenity   @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@unique([villaId, amenityId])
+  @@map("villa_amenities")
+}
+
+model VillaAvailabilityBlock {
+  id                     String                @id @default(cuid())
+  villaId                String                @map("villa_id")
+  startDate              DateTime              @map("start_date")
+  endDate                DateTime              @map("end_date")
+  blockType              AvailabilityBlockType @map("block_type")
+  note                   String?
+  createdByUserId        String?               @map("created_by_user_id")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  villa                   Villa                 @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  createdBy               User?                 @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([villaId, startDate, endDate])
+  @@map("villa_availability_blocks")
+}
+
+model VillaSeasonalPrice {
+  id                     String    @id @default(cuid())
+  villaId                String    @map("villa_id")
+  startDate              DateTime  @map("start_date")
+  endDate                DateTime  @map("end_date")
+  nightlyPrice           Decimal   @db.Decimal(10, 2) @map("nightly_price")
+  minNights              Int?      @map("min_nights")
+  maxNights              Int?      @map("max_nights")
+  createdByUserId        String?   @map("created_by_user_id")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  createdBy               User?     @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([villaId, startDate, endDate])
+  @@map("villa_seasonal_prices")
+}
+
+model VillaDiscount {
+  id                     String        @id @default(cuid())
+  villaId                String        @map("villa_id")
+  name                   String
+  discountType           DiscountType  @map("discount_type")
+  discountValue          Decimal       @db.Decimal(10, 2) @map("discount_value")
+  startAt                DateTime      @map("start_at")
+  endAt                  DateTime      @map("end_at")
+  label                  String?
+  isActive               Boolean       @default(true) @map("is_active")
+  createdByUserId        String?       @map("created_by_user_id")
+  createdAt              DateTime      @default(now()) @map("created_at")
+  villa                   Villa         @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  createdBy               User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([villaId, startAt, endAt])
+  @@map("villa_discounts")
+}
+
+model CouponCode {
+  id                     String             @id @default(cuid())
+  code                   String             @unique
+  description            String?
+  discountType           DiscountType       @map("discount_type")
+  discountValue          Decimal            @db.Decimal(10, 2) @map("discount_value")
+  startAt                DateTime           @map("start_at")
+  endAt                  DateTime           @map("end_at")
+  usageLimit             Int?               @map("usage_limit")
+  usedCount              Int                @default(0) @map("used_count")
+  isActive               Boolean            @default(true) @map("is_active")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  redemptions            CouponRedemption[]
+
+  @@index([isActive, startAt, endAt])
+  @@map("coupon_codes")
+}
+
+model CouponRedemption {
+  id                     String             @id @default(cuid())
+  couponId               String             @map("coupon_id")
+  appointmentRequestId   String?            @unique @map("appointment_request_id")
+  discountAmount         Decimal            @db.Decimal(10, 2) @map("discount_amount")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  coupon                  CouponCode         @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  appointmentRequest      AppointmentRequest? @relation(fields: [appointmentRequestId], references: [id], onDelete: SetNull)
+
+  @@map("coupon_redemptions")
+}
+
+model AppointmentRequest {
+  id                       String                            @id @default(cuid())
+  villaId                  String                            @map("villa_id")
+  fullName                 String                            @map("full_name")
+  phone                    String
+  email                    String?
+  guestCount               Int                               @map("guest_count")
+  stayStartDate            DateTime                          @map("stay_start_date")
+  stayEndDate              DateTime                          @map("stay_end_date")
+  preferredContactDate     DateTime?                         @map("preferred_contact_date")
+  preferredContactTimeRange String?                          @map("preferred_contact_time_range")
+  message                  String?
+  couponCodeText           String?                           @map("coupon_code_text")
+  estimatedBaseAmount      Decimal?                          @db.Decimal(10, 2) @map("estimated_base_amount")
+  estimatedDiscountAmount  Decimal?                          @db.Decimal(10, 2) @map("estimated_discount_amount")
+  estimatedFinalAmount     Decimal?                          @db.Decimal(10, 2) @map("estimated_final_amount")
+  status                   AppointmentRequestStatus          @default(NEW)
+  source                   RequestSource                     @default(WEB)
+  createdAt                DateTime                          @default(now()) @map("created_at")
+  updatedAt                DateTime                          @updatedAt @map("updated_at")
+  villa                     Villa                             @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  statusHistory             AppointmentRequestStatusHistory[]
+  couponRedemption          CouponRedemption?
+  revenueRecords            RevenueRecord[]
+
+  @@index([villaId, status])
+  @@index([stayStartDate, stayEndDate])
+  @@map("appointment_requests")
+}
+
+model AppointmentRequestStatusHistory {
+  id                     String                    @id @default(cuid())
+  appointmentRequestId   String                    @map("appointment_request_id")
+  oldStatus              AppointmentRequestStatus? @map("old_status")
+  newStatus              AppointmentRequestStatus  @map("new_status")
+  changedByUserId        String?                   @map("changed_by_user_id")
+  createdAt              DateTime                  @default(now()) @map("created_at")
+  appointmentRequest      AppointmentRequest         @relation(fields: [appointmentRequestId], references: [id], onDelete: Cascade)
+  changedBy               User?                      @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentRequestId, createdAt])
+  @@map("appointment_request_status_history")
+}
+
+model VillaViewEvent {
+  id                     String    @id @default(cuid())
+  villaId                String    @map("villa_id")
+  sessionId              String    @map("session_id")
+  userAgent              String?   @map("user_agent")
+  referer                String?
+  createdAt              DateTime  @default(now()) @map("created_at")
+  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@index([villaId, createdAt])
+  @@index([sessionId])
+  @@map("villa_view_events")
+}
+
+model VillaLiveSession {
+  id                     String    @id @default(cuid())
+  villaId                String    @map("villa_id")
+  sessionId              String    @map("session_id")
+  lastSeenAt             DateTime  @map("last_seen_at")
+  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@unique([villaId, sessionId])
+  @@index([lastSeenAt])
+  @@map("villa_live_sessions")
+}
+
+model RevenueRecord {
+  id                     String              @id @default(cuid())
+  villaId                String              @map("villa_id")
+  appointmentRequestId   String?             @map("appointment_request_id")
+  amount                 Decimal             @db.Decimal(12, 2)
+  currency               String              @default("TRY")
+  recordedAt             DateTime            @map("recorded_at")
+  villa                   Villa               @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  appointmentRequest      AppointmentRequest? @relation(fields: [appointmentRequestId], references: [id], onDelete: SetNull)
+
+  @@index([villaId, recordedAt])
+  @@map("revenue_records")
+}
+
+model VillaDailyMetric {
+  id                     String    @id @default(cuid())
+  villaId                String    @map("villa_id")
+  metricDate             DateTime  @map("metric_date")
+  viewCount              Int       @default(0) @map("view_count")
+  requestCount           Int       @default(0) @map("request_count")
+  couponUsageCount       Int       @default(0) @map("coupon_usage_count")
+  revenueTotal           Decimal   @default(0) @db.Decimal(12, 2) @map("revenue_total")
+  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@unique([villaId, metricDate])
+  @@map("villa_daily_metrics")
+}
+
+model BlogPost {
+  id                     String         @id @default(cuid())
+  title                  String
+  slug                   String         @unique
+  excerpt                String?
+  content                String
+  coverImage             String?        @map("cover_image")
+  seoTitle               String?        @map("seo_title")
+  seoDescription         String?        @map("seo_description")
+  publishedAt            DateTime?      @map("published_at")
+  status                 BlogPostStatus @default(DRAFT)
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+
+  @@map("blog_posts")
+}
+
+model SiteSettings {
+  id                     String    @id @default(cuid())
+  siteName               String    @default("VillaVera") @map("site_name")
+  defaultTitle           String?   @map("default_title")
+  defaultDescription     String?   @map("default_description")
+  phone                  String?
+  email                  String?
+  address                String?
+  instagramUrl           String?   @map("instagram_url")
+  facebookUrl            String?   @map("facebook_url")
+  whatsappNumber         String?   @map("whatsapp_number")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}

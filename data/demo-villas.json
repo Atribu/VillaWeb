@@ -1,0 +1,209 @@
+[
+  {
+    "id": "villa-marea-grand",
+    "title": "Villa Marea Grand",
+    "slug": "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand",
+    "locationLabel": "Bodrum, Mugla",
+    "city": "Mugla",
+    "district": "Bodrum",
+    "badge": "Kalabalik grup",
+    "category": "Luks Manzarali",
+    "status": "ACTIVE",
+    "featured": false,
+    "shortDescription": "12 kisilik kapasite, coklu teras ve etkinlik odakli buyuk yasam alani.",
+    "description": "Bodrum yarimadasinda buyuk gruplar icin planlanan Villa Marea Grand, hem havuz basi zamanlar hem de uzun sureli yaz konaklamalari icin dikkat cekici bir secenektir.",
+    "nightlyPrice": 24900,
+    "discountedNightlyPrice": 21900,
+    "capacity": 12,
+    "bedroomCount": 6,
+    "bathroomCount": 6,
+    "poolType": "Sicaklik kontrollu havuz",
+    "imageCount": 3,
+    "imageUrls": [
+      "/uploads/villas/villa-marea-grand/01-grand-exterior.svg.png",
+      "/uploads/villas/villa-marea-grand/02-event-pool.svg.png",
+      "/uploads/villas/villa-marea-grand/03-rooftop.svg.png"
+    ],
+    "coverImageUrl": "/uploads/villas/villa-marea-grand/01-grand-exterior.svg.png",
+    "coverGradient": "from-slate-700 via-cyan-700 to-amber-200",
+    "seoTitle": "Bodrum kalabalik gruplar icin luks villa | Villa Marea Grand",
+    "seoDescription": "Bodrum'da kalabalik aile ve gruplar icin ozel havuzlu, yuksek kapasiteli luks villa arayanlar icin Villa Marea Grand.",
+    "focusKeyword": "bodrum luks villa",
+    "coverAlt": "Bodrum Villa Marea Grand genis teras ve havuz panoramasi",
+    "viewCount": 884,
+    "requestCount": 49,
+    "revenueLabel": "520.000 TL",
+    "createdAt": "2026-03-17T09:15:00.000Z",
+    "availabilityRanges": [
+      {
+        "id": "marea-group-june",
+        "startDate": "2026-06-25",
+        "endDate": "2026-07-02",
+        "label": "Grup rezervasyonu",
+        "status": "RESERVED"
+      },
+      {
+        "id": "marea-event-july",
+        "startDate": "2026-07-20",
+        "endDate": "2026-07-24",
+        "label": "Etkinlik hazirligi",
+        "status": "MAINTENANCE"
+      }
+    ]
+  },
+  {
+    "id": "villa-verde-cove",
+    "title": "Villa Verde Cove",
+    "slug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "locationLabel": "Kas, Antalya",
+    "city": "Antalya",
+    "district": "Kas",
+    "badge": "Balayi secimi",
+    "category": "Balayi",
+    "status": "ACTIVE",
+    "featured": true,
+    "shortDescription": "Iki kisilik muhafazakar konsept, izole havuz ve gun batimi terasi.",
+    "description": "Kas cevresindeki dogal dokuyu sakin bir luks deneyimle bulusturan Villa Verde Cove, balayina cikacak ciftlerin mahremiyet beklentisine gore tasarlandi.",
+    "nightlyPrice": 17250,
+    "capacity": 2,
+    "bedroomCount": 1,
+    "bathroomCount": 1,
+    "poolType": "Izole havuz",
+    "imageCount": 3,
+    "imageUrls": [
+      "/uploads/villas/villa-verde-cove/01-hideaway.svg.png",
+      "/uploads/villas/villa-verde-cove/02-isolated-pool.svg.png",
+      "/uploads/villas/villa-verde-cove/03-suite.svg.png"
+    ],
+    "coverImageUrl": "/uploads/villas/villa-verde-cove/01-hideaway.svg.png",
+    "coverGradient": "from-sky-700 via-teal-600 to-orange-200",
+    "seoTitle": "Kas balayi icin muhafazakar villa | Villa Verde Cove",
+    "seoDescription": "Kas'ta balayi icin ideal, muhafazakar ve ozel havuzlu villa secenegi. Villa Verde Cove ile romantik ve sakin tatil deneyimi.",
+    "focusKeyword": "kas balayi villasi",
+    "coverAlt": "Kas Villa Verde Cove izole havuz ve gun batimi terasi",
+    "viewCount": 1196,
+    "requestCount": 91,
+    "revenueLabel": "289.000 TL",
+    "createdAt": "2026-03-17T09:10:00.000Z",
+    "availabilityRanges": [
+      {
+        "id": "verde-honeymoon-may",
+        "startDate": "2026-05-28",
+        "endDate": "2026-06-02",
+        "label": "Balayi rezervasyonu",
+        "status": "RESERVED"
+      },
+      {
+        "id": "verde-closed-july",
+        "startDate": "2026-07-14",
+        "endDate": "2026-07-17",
+        "label": "Kapali tarih",
+        "status": "UNAVAILABLE"
+      }
+    ]
+  },
+  {
+    "id": "villa-palm-serenity",
+    "title": "Villa Palm Serenity",
+    "slug": "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
+    "locationLabel": "Fethiye, Mugla",
+    "city": "Mugla",
+    "district": "Fethiye",
+    "badge": "Aile dostu",
+    "category": "Genis Aile",
+    "status": "ACTIVE",
+    "featured": true,
+    "shortDescription": "Bahce kullanimi, cocuk havuzu ve 10 kisilik aile tatiline uygun planlama.",
+    "description": "Dogayla ic ice konumda yer alan Villa Palm Serenity, genis mutfak ve acik hava oturma alanlariyla ailelerin rahat bir konaklama deneyimi yasamasi icin kurgulandi.",
+    "nightlyPrice": 14900,
+    "discountedNightlyPrice": 13250,
+    "capacity": 10,
+    "bedroomCount": 5,
+    "bathroomCount": 4,
+    "poolType": "Ozel havuz + cocuk havuzu",
+    "imageCount": 3,
+    "imageUrls": [
+      "/uploads/villas/villa-palm-serenity/01-garden.svg.png",
+      "/uploads/villas/villa-palm-serenity/02-family-pool.svg.png",
+      "/uploads/villas/villa-palm-serenity/03-lounge.svg.png"
+    ],
+    "coverImageUrl": "/uploads/villas/villa-palm-serenity/01-garden.svg.png",
+    "coverGradient": "from-emerald-700 via-teal-500 to-amber-200",
+    "seoTitle": "Fethiye ozel havuzlu aile villasi | Villa Palm Serenity",
+    "seoDescription": "Fethiye'de ozel havuzlu, genis bahceli ve kalabalik ailelere uygun premium villa. Villa Palm Serenity ile konforlu yaz tatili planlayin.",
+    "focusKeyword": "fethiye aile villasi",
+    "coverAlt": "Fethiye Villa Palm Serenity genis bahce ve havuz alani",
+    "viewCount": 1042,
+    "requestCount": 73,
+    "revenueLabel": "338.000 TL",
+    "createdAt": "2026-03-17T09:05:00.000Z",
+    "availabilityRanges": [
+      {
+        "id": "palm-family-june",
+        "startDate": "2026-06-10",
+        "endDate": "2026-06-15",
+        "label": "Aile rezervasyonu",
+        "status": "RESERVED"
+      },
+      {
+        "id": "palm-maintenance-august",
+        "startDate": "2026-08-01",
+        "endDate": "2026-08-05",
+        "label": "Bakim ve hazirlik",
+        "status": "MAINTENANCE"
+      }
+    ]
+  },
+  {
+    "id": "villa-soleia-lagoon",
+    "title": "Villa Soleia Lagoon",
+    "slug": "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
+    "locationLabel": "Kalkan, Antalya",
+    "city": "Antalya",
+    "district": "Kalkan",
+    "badge": "Deniz manzarali",
+    "category": "Luks Manzarali",
+    "status": "ACTIVE",
+    "featured": true,
+    "shortDescription": "Panoramik deniz manzarasi, sonsuzluk havuzu ve 8 kisilik premium yasam alani.",
+    "description": "Kalkan merkezine yakin konumlanan Villa Soleia Lagoon, kalabalik aileler ve premium tatil arayan misafirler icin genis bir yasam senaryosu sunar.",
+    "nightlyPrice": 18500,
+    "discountedNightlyPrice": 15900,
+    "capacity": 8,
+    "bedroomCount": 4,
+    "bathroomCount": 4,
+    "poolType": "Sonsuzluk havuzu",
+    "imageCount": 3,
+    "imageUrls": [
+      "/uploads/villas/villa-soleia-lagoon/01-exterior.svg.png",
+      "/uploads/villas/villa-soleia-lagoon/02-pool.svg.png",
+      "/uploads/villas/villa-soleia-lagoon/03-terrace.svg.png"
+    ],
+    "coverImageUrl": "/uploads/villas/villa-soleia-lagoon/01-exterior.svg.png",
+    "coverGradient": "from-teal-700 via-cyan-600 to-amber-200",
+    "seoTitle": "Kalkan deniz manzarali luks villa | Villa Soleia Lagoon",
+    "seoDescription": "Kalkan'da deniz manzarali, ozel havuzlu ve 8 kisilik premium villa secenegi. Villa Soleia Lagoon ile sakin ve luks tatil deneyimi.",
+    "focusKeyword": "kalkan deniz manzarali villa",
+    "coverAlt": "Kalkan deniz manzarali Villa Soleia Lagoon havuz ve teras gorunumu",
+    "viewCount": 1284,
+    "requestCount": 86,
+    "revenueLabel": "412.000 TL",
+    "createdAt": "2026-03-17T09:00:00.000Z",
+    "availabilityRanges": [
+      {
+        "id": "soleia-reserved-june",
+        "startDate": "2026-06-18",
+        "endDate": "2026-06-24",
+        "label": "Onayli rezervasyon",
+        "status": "RESERVED"
+      },
+      {
+        "id": "soleia-maintenance-july",
+        "startDate": "2026-07-08",
+        "endDate": "2026-07-11",
+        "label": "Bakim kapamasi",
+        "status": "MAINTENANCE"
+      }
+    ]
+  }
+]

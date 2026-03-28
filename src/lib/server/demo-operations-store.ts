@@ -70,6 +70,11 @@ export async function getDemoRequests() {
   return requests.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+export async function getDemoRequestById(requestId: string) {
+  const requests = await getDemoRequests();
+  return requests.find((request) => request.id === requestId) ?? null;
+}
+
 export async function upsertDemoPricingRecord(input: DemoPricingRecord) {
   if (input.baseNightlyPrice <= 0) {
     throw new DemoOperationsStoreError("Gecelik fiyat sifirdan buyuk olmalidir.");

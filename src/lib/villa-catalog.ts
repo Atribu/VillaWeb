@@ -11,6 +11,11 @@ export type AvailabilityRange = {
   endDate: string;
   label: string;
   status: "UNAVAILABLE" | "RESERVED" | "MAINTENANCE";
+  /**
+   * Bu blok bir "rezervasyon talebi" (request) onaylanınca otomatik eklendiyse
+   * hangi request'e ait olduğunu tutar. Manuel bloklarda undefined kalır.
+   */
+  sourceRequestId?: string;
 };
 
 export type CatalogVilla = {
@@ -24,6 +29,9 @@ export type CatalogVilla = {
   category: string;
   status: "ACTIVE" | "DRAFT";
   featured: boolean;
+  rating?: number;
+  reviewCount?: number;
+  isSuperhost?: boolean;
   shortDescription: string;
   description: string;
   nightlyPrice: number;
@@ -71,6 +79,9 @@ export const seedVillaCatalog: CatalogVilla[] = [
     category: "Luks Manzarali",
     status: "ACTIVE",
     featured: true,
+    rating: 4.92,
+    reviewCount: 187,
+    isSuperhost: true,
     shortDescription:
       "Panoramik deniz manzarasi, sonsuzluk havuzu ve 8 kisilik premium yasam alani.",
     description:
@@ -126,6 +137,9 @@ export const seedVillaCatalog: CatalogVilla[] = [
     category: "Genis Aile",
     status: "ACTIVE",
     featured: true,
+    rating: 4.86,
+    reviewCount: 142,
+    isSuperhost: true,
     shortDescription:
       "Bahce kullanimi, cocuk havuzu ve 10 kisilik aile tatiline uygun planlama.",
     description:
@@ -181,6 +195,9 @@ export const seedVillaCatalog: CatalogVilla[] = [
     category: "Balayi",
     status: "ACTIVE",
     featured: true,
+    rating: 4.95,
+    reviewCount: 96,
+    isSuperhost: false,
     shortDescription:
       "Iki kisilik muhafazakar konsept, izole havuz ve gun batimi terasi.",
     description:
@@ -235,6 +252,9 @@ export const seedVillaCatalog: CatalogVilla[] = [
     category: "Luks Manzarali",
     status: "ACTIVE",
     featured: false,
+    rating: 4.78,
+    reviewCount: 63,
+    isSuperhost: false,
     shortDescription:
       "12 kisilik kapasite, coklu teras ve etkinlik odakli buyuk yasam alani.",
     description:

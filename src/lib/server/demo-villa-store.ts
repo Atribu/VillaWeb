@@ -284,6 +284,7 @@ export async function addDemoVillaAvailability(input: {
   endDate: string;
   label: string;
   status: AvailabilityRange["status"];
+  sourceRequestId?: string;
 }) {
   const villas = await getStoredDemoVillas();
   const villaIndex = villas.findIndex((villa) => villa.slug === input.slug);
@@ -328,6 +329,7 @@ export async function addDemoVillaAvailability(input: {
     endDate: input.endDate,
     label: input.label.trim() || "Manuel blok",
     status: input.status,
+    sourceRequestId: input.sourceRequestId,
   };
 
   const updatedVilla: CatalogVilla = {
@@ -356,6 +358,35 @@ export async function deleteDemoVillaAvailability(input: { slug: string; rangeId
     throw new DemoVillaStoreError("Silinecek uygunluk kaydi bulunamadi.");
   }
 
+  villas[villaIndex] = {
+    ...villa,
+    availabilityRanges: sortAvailabilityRanges(nextRanges),
+  };
+
+  await saveDemoVillas(villas);
+
+  return villas[villaIndex];
+}
+
+export async function deleteDemoVillaAvailabilityByRequestId(input: {
+  slug: string;
+  requestId: string;
+}) {
+  const villas = await getStoredDemoVillas();
+  const villaIndex = villas.findIndex((villa) => villa.slug === input.slug);
+
+  if (villaIndex === -1) {
+    throw new DemoVillaStoreError("Villa bulunamadi.");
+  }
+
+  const villa = villas[villaIndex];
+  const existingRanges = villa.availabilityRanges ?? [];
+
+  const nextRanges = existingRanges.filter(
+    (range) => range.sourceRequestId !== input.requestId || range.status !== "RESERVED",
+  );
+
+  // Idempotent davranış: zaten yoksa hata fırlatma.
   villas[villaIndex] = {
     ...villa,
     availabilityRanges: sortAvailabilityRanges(nextRanges),

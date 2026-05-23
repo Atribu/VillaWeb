@@ -1,0 +1,35 @@
+[
+  {
+    "id": "sync-log-001",
+    "sourceId": "ical-soleia-air",
+    "villaSlug": "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
+    "villaTitle": "Villa Soleia Lagoon",
+    "channelName": "Airbnb Mirror",
+    "outcome": "SUCCESS",
+    "eventCount": 3,
+    "message": "Takvim bloklari cakismaz sekilde iceri alindi.",
+    "createdAt": "2026-05-18T08:15:00.000Z"
+  },
+  {
+    "id": "sync-log-002",
+    "sourceId": "ical-palm-booking",
+    "villaSlug": "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
+    "villaTitle": "Villa Palm Serenity",
+    "channelName": "Booking Feed",
+    "outcome": "WARNING",
+    "eventCount": 1,
+    "message": "Tek bir tarih blogunda fark bulundu, manuel kontrol onerildi.",
+    "createdAt": "2026-05-18T07:55:00.000Z"
+  },
+  {
+    "id": "sync-log-003",
+    "sourceId": "ical-verde-export",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "channelName": "Direct Export",
+    "outcome": "SUCCESS",
+    "eventCount": 2,
+    "message": "Dis kanal icin export takvimi yenilendi.",
+    "createdAt": "2026-05-18T06:40:00.000Z"
+  }
+]

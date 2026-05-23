@@ -1,0 +1,32 @@
+[
+  {
+    "id": "service-search-console",
+    "name": "Google Search Console",
+    "url": "https://search.google.com/search-console",
+    "ownerLabel": "SEO Ekibi",
+    "category": "SEO",
+    "status": "ACTIVE",
+    "note": "Organik sorgu ve indeksleme takibi icin kullaniliyor.",
+    "updatedAt": "2026-05-18T07:35:00.000Z"
+  },
+  {
+    "id": "service-analytics",
+    "name": "Google Analytics",
+    "url": "https://analytics.google.com/",
+    "ownerLabel": "Pazarlama Ekibi",
+    "category": "Analitik",
+    "status": "WARNING",
+    "note": "Son event naming revizyonundan sonra panel tarafinda kontrol isteniyor.",
+    "updatedAt": "2026-05-17T17:20:00.000Z"
+  },
+  {
+    "id": "service-mail-provider",
+    "name": "Mail Provider",
+    "url": "https://mail.provider.demo",
+    "ownerLabel": "CRM Ekibi",
+    "category": "Iletisim",
+    "status": "OFFLINE",
+    "note": "SMTP limit uyarisi nedeniyle gecici olarak devre disi.",
+    "updatedAt": "2026-05-16T14:45:00.000Z"
+  }
+]

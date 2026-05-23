@@ -1,78 +1,126 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { signOutUser } from "@/lib/auth/actions";
-import { getPanelNavigation } from "@/lib/auth/panel-access";
+import { PanelSidebar } from "@/components/panel/panel-sidebar";
 import { getUserSession } from "@/lib/auth/server-session";
 
 export default async function ProtectedPanelLayout({ children }: { children: ReactNode }) {
   const session = await getUserSession();
-  const navigation = getPanelNavigation(session?.role ?? "STAFF");
+  const role = session?.role ?? "STAFF";
+  const todayLabel = new Intl.DateTimeFormat("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    weekday: "long",
+  }).format(new Date());
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-      <aside className="bg-ocean-panel px-6 py-8 text-white">
-        <Link href="/" className="block rounded-3xl border border-white/10 bg-white/8 px-5 py-4">
-          <p className="font-display text-3xl font-semibold">VillaVera</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.3em] text-teal-100">Yonetim Paneli</p>
-        </Link>
+    <div className="min-h-screen bg-[#eaedf1]">
+      <div className="border-b border-[#cfd6dd] bg-[#d8d8dc]">
+        <div className="flex items-center justify-between px-4 py-1.5 text-xs text-[#2d4a62] sm:px-6">
+          <div className="flex items-center gap-4">
+            <span className="inline-flex h-5 w-6 items-center justify-center rounded-sm bg-[#e11d48] text-[10px] font-bold text-white">
+              TR
+            </span>
+            <span>{todayLabel}</span>
+          </div>
 
-        <nav className="mt-10 space-y-2">
-          {navigation.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded-2xl px-4 py-3 text-sm font-medium text-teal-50/85 transition hover:bg-white/10 hover:text-white"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="mt-10 rounded-[1.75rem] border border-white/12 bg-white/10 p-5 backdrop-blur">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-100">
-            Aktif Oturum
-          </p>
-          <p className="mt-3 text-lg font-semibold text-white">
-            {session?.displayName ?? "Yetkili Kullanici"}
-          </p>
-          <p className="mt-1 text-sm text-teal-50/80">
-            {session?.role === "ADMIN" ? "Tam yetki" : "Sadece villa modulu"}
-          </p>
-
-          <form action={signOutUser} className="mt-5">
-            <button
-              type="submit"
-              className="w-full rounded-full border border-white/18 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              Cikis Yap
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      <div className="bg-[#f7f8f5]">
-        <div className="border-b border-slate-200 bg-white/85 px-6 py-5 backdrop-blur sm:px-8">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-teal)]">
-                {session?.role === "ADMIN" ? "Admin Paneli" : "Villa Personel Paneli"}
-              </p>
-              <h1 className="mt-2 text-2xl font-semibold text-[var(--color-ink)]">
-                {session?.role === "ADMIN"
-                  ? "Tum panel yetkileri aktif"
-                  : "Sadece villa ekleme ve villa yonetimi alanlari aktif"}
-              </h1>
-            </div>
-            <Link
-              href="/panel/giris"
-              className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-[var(--color-aqua)] hover:text-[var(--color-teal)]"
-            >
-              Giris Ekrani
-            </Link>
+          <div className="flex items-center gap-4">
+            <span className="hidden text-[#58748a] sm:inline">Bildirimler acik</span>
+            <span className="font-medium text-[#2b78ad]">{session?.displayName ?? "Yetkili"}</span>
           </div>
         </div>
+      </div>
 
-        <main className="px-6 py-8 sm:px-8">{children}</main>
+      <div className="border-b border-[#1f618e] bg-[#2b78ad] px-4 py-3 text-white sm:px-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-6">
+            <Link href="/" className="block">
+              <p className="font-display text-4xl font-semibold tracking-tight">
+                Villa<span className="text-white/80">Vera</span>
+              </p>
+            </Link>
+
+            <div className="hidden items-center gap-3 text-sm xl:flex">
+              <span className="font-semibold">Backoffice</span>
+              <span className="rounded-full bg-white/14 px-3 py-1 text-xs font-medium text-white/90">
+                {role === "ADMIN" ? "Admin Tam Yetki" : "Villa Personeli"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+            <div className="rounded-md bg-white/12 px-3 py-2 text-sm font-medium text-white/95">
+              Demo Kur Paneli
+            </div>
+            <div className="flex min-w-[260px] items-center overflow-hidden rounded-md border border-[#205d87] bg-white text-slate-700 shadow-inner">
+              <div className="border-r border-slate-200 bg-[#f6f8fa] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                Rezervasyon Ara
+              </div>
+              <input
+                type="text"
+                placeholder="Rezervasyon ara"
+                className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-slate-400"
+              />
+              <button
+                type="button"
+                className="border-l border-slate-200 px-3 py-2 text-[#2b78ad] transition hover:bg-slate-50"
+                aria-label="Rezervasyon ara"
+              >
+                Ara
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                href="/"
+                className="rounded-md bg-white/12 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/18"
+              >
+                Site
+              </Link>
+              <Link
+                href="/panel/giris"
+                className="rounded-md bg-white/12 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/18"
+              >
+                Giris
+              </Link>
+              <form action={signOutUser}>
+                <button
+                  type="submit"
+                  className="rounded-md bg-[#1f5f89] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#194d70]"
+                >
+                  Cikis
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid min-h-[calc(100vh-104px)] grid-cols-[auto_1fr]">
+        <aside className="border-r border-[#cfd6dd] bg-white">
+          <PanelSidebar role={role} />
+        </aside>
+
+        <div className="min-w-0">
+          <div className="border-b border-[#d9dee5] bg-[#f5f6f8] px-6 py-4 shadow-[inset_0_-1px_0_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-3 w-3 rounded-full bg-[#2b78ad]" />
+                <p className="text-xl font-semibold text-[#4f5565]">
+                  {role === "ADMIN"
+                    ? "VillaVera backoffice sistemine hos geldiniz"
+                    : "Villa operasyon ekranina hos geldiniz"}
+                </p>
+              </div>
+              <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#7a8796]">
+                Demo operasyon paneli
+              </span>
+            </div>
+          </div>
+
+          <main className="px-4 py-5 sm:px-7 sm:py-7">{children}</main>
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,35 @@
+[
+  {
+    "id": "message-001",
+    "senderName": "Derya Tuncer",
+    "recipientLabel": "Rezervasyon Ekibi",
+    "subject": "Villa Verde Cove kalan odemesi icin hatirlatma",
+    "body": "14 gun vade icin hatirlatma metni hazir. Misafire bugun icinde ikinci bildirim gecilebilir.",
+    "status": "NEW",
+    "priority": "HIGH",
+    "relatedModule": "Muhasebe",
+    "createdAt": "2026-05-18T08:25:00.000Z"
+  },
+  {
+    "id": "message-002",
+    "senderName": "Burak Yalcin",
+    "recipientLabel": "Villa Personeli",
+    "subject": "Palm Serenity temizlik vardiyasi teyidi",
+    "body": "20 Mayis cikisi sonrasi temizlik ve havuz bakimi birlikte planlandi, gorsel kontrol bekleniyor.",
+    "status": "READ",
+    "priority": "MEDIUM",
+    "relatedModule": "Takip & Operasyon",
+    "createdAt": "2026-05-17T16:40:00.000Z"
+  },
+  {
+    "id": "message-003",
+    "senderName": "Aylin Erdem",
+    "recipientLabel": "CRM Ekibi",
+    "subject": "Yeni yorum akisi icin geri donus",
+    "body": "Balayi segmentindeki son misafirler icin yorum isteme mesajlari haftalik plana eklendi.",
+    "status": "RESOLVED",
+    "priority": "LOW",
+    "relatedModule": "CRM",
+    "createdAt": "2026-05-16T11:10:00.000Z"
+  }
+]

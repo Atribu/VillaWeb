@@ -1,0 +1,17 @@
+[
+  {
+    "id": "invoice-request-003",
+    "requestId": "request-003",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "guestName": "Elif Demir",
+    "invoiceNumber": "F-20260315-003",
+    "issueDate": "2026-03-15",
+    "dueDate": "2026-04-26",
+    "totalAmount": 65970,
+    "status": "SENT",
+    "source": "AUTO_APPROVAL",
+    "createdAt": "2026-03-15T16:45:00.000Z",
+    "updatedAt": "2026-03-15T16:45:00.000Z"
+  }
+]

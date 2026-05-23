@@ -1,0 +1,37 @@
+[
+  {
+    "id": "payment-request-003-deposit",
+    "invoiceId": "invoice-request-003",
+    "requestId": "request-003",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "guestName": "Elif Demir",
+    "type": "DEPOSIT",
+    "title": "Kapora tahsilati",
+    "amount": 23090,
+    "dueDate": "2026-03-17",
+    "status": "PAID",
+    "method": "Banka Havalesi",
+    "source": "AUTO_APPROVAL",
+    "paidAt": "2026-03-18T16:45:00.000Z",
+    "createdAt": "2026-03-15T16:45:00.000Z",
+    "updatedAt": "2026-03-18T16:45:00.000Z"
+  },
+  {
+    "id": "payment-request-003-balance",
+    "invoiceId": "invoice-request-003",
+    "requestId": "request-003",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "guestName": "Elif Demir",
+    "type": "BALANCE",
+    "title": "Kalan odeme tahsilati",
+    "amount": 42880,
+    "dueDate": "2026-04-26",
+    "status": "PENDING",
+    "method": "Kredi Karti Linki",
+    "source": "AUTO_APPROVAL",
+    "createdAt": "2026-03-15T16:45:00.000Z",
+    "updatedAt": "2026-03-15T16:45:00.000Z"
+  }
+]

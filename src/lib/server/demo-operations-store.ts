@@ -5,12 +5,15 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { formatCurrency, type CatalogVilla } from "@/lib/villa-catalog";
 import {
+  buildSeedRequestEvents,
   DEMO_REFERENCE_DATE,
   type DemoCoupon,
   type DemoDiscountCampaign,
   type DemoPricingRecord,
   type DemoRequest,
+  type DemoRequestEvent,
   type RequestStatus,
+  getRequestStatusLabel,
   getEligibleCoupon,
   getResolvedStayPricing,
   normalizeCouponCode,
@@ -19,14 +22,22 @@ import {
   seedDemoCoupons,
   seedDemoDiscountCampaigns,
   seedDemoPricingRecords,
+  seedDemoRequestEvents,
   seedDemoRequests,
 } from "@/lib/demo-operations";
+import {
+  buildOperationTasksForApprovedRequest,
+  type DemoOperationTask,
+  type DemoOperationTaskStatus,
+} from "@/lib/demo-operations-workflow";
 
 const demoDataDirectory = path.join(process.cwd(), "data");
 const pricingFilePath = path.join(demoDataDirectory, "demo-pricing.json");
 const discountFilePath = path.join(demoDataDirectory, "demo-discounts.json");
 const couponFilePath = path.join(demoDataDirectory, "demo-coupons.json");
 const requestFilePath = path.join(demoDataDirectory, "demo-requests.json");
+const requestEventFilePath = path.join(demoDataDirectory, "demo-request-events.json");
+const operationTaskFilePath = path.join(demoDataDirectory, "demo-operation-tasks.json");
 
 export class DemoOperationsStoreError extends Error {}
 
@@ -70,9 +81,97 @@ export async function getDemoRequests() {
   return requests.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+export async function getDemoRequestEvents() {
+  try {
+    await access(requestEventFilePath);
+  } catch {
+    const requests = await getDemoRequests();
+    await writeJsonFile(requestEventFilePath, buildSeedRequestEvents(requests));
+  }
+
+  const events = await readJsonFile(requestEventFilePath, seedDemoRequestEvents);
+  return events.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function getDemoOperationTasks() {
+  try {
+    await access(operationTaskFilePath);
+  } catch {
+    const requests = await getDemoRequests();
+    const seedTasks = requests
+      .filter((request) => request.status === "APPROVED")
+      .flatMap((request) => buildOperationTasksForApprovedRequest(request));
+    await writeJsonFile(operationTaskFilePath, seedTasks);
+  }
+
+  const tasks = await readJsonFile(operationTaskFilePath, [] as DemoOperationTask[]);
+  return tasks.sort((left, right) => {
+    if (left.scheduledDate === right.scheduledDate) {
+      return left.createdAt.localeCompare(right.createdAt);
+    }
+
+    return left.scheduledDate.localeCompare(right.scheduledDate);
+  });
+}
+
+async function appendDemoRequestEvent(event: DemoRequestEvent) {
+  const events = await getDemoRequestEvents();
+  events.unshift(event);
+  await writeJsonFile(requestEventFilePath, events);
+}
+
+async function writeDemoOperationTasks(tasks: DemoOperationTask[]) {
+  await writeJsonFile(operationTaskFilePath, tasks);
+}
+
 export async function getDemoRequestById(requestId: string) {
   const requests = await getDemoRequests();
   return requests.find((request) => request.id === requestId) ?? null;
+}
+
+export async function syncOperationTasksForApprovedRequest(request: DemoRequest) {
+  const existingTasks = await getDemoOperationTasks();
+  const requestTasks = existingTasks.filter((task) => task.requestId === request.id);
+
+  if (requestTasks.length > 0) {
+    return requestTasks;
+  }
+
+  const nextTasks = buildOperationTasksForApprovedRequest(request);
+  await writeDemoOperationTasks([...existingTasks, ...nextTasks]);
+  return nextTasks;
+}
+
+export async function deleteOperationTasksByRequestId(requestId: string) {
+  const tasks = await getDemoOperationTasks();
+  const nextTasks = tasks.filter((task) => task.requestId !== requestId);
+
+  if (nextTasks.length === tasks.length) {
+    return;
+  }
+
+  await writeDemoOperationTasks(nextTasks);
+}
+
+export async function updateDemoOperationTaskStatus(
+  taskId: string,
+  status: DemoOperationTaskStatus,
+) {
+  const tasks = await getDemoOperationTasks();
+  const taskIndex = tasks.findIndex((task) => task.id === taskId);
+
+  if (taskIndex === -1) {
+    throw new DemoOperationsStoreError("Gorev bulunamadi.");
+  }
+
+  tasks[taskIndex] = {
+    ...tasks[taskIndex],
+    status,
+  };
+
+  await writeDemoOperationTasks(tasks);
+
+  return tasks[taskIndex];
 }
 
 export async function upsertDemoPricingRecord(input: DemoPricingRecord) {
@@ -280,6 +379,8 @@ export async function createDemoRequest(input: {
   email: string;
   message: string;
   couponCode?: string;
+  origin?: "PUBLIC_FORM" | "MANUAL_PANEL";
+  actorLabel?: string;
 }) {
   const [pricingRecords, discounts, coupons, requests] = await Promise.all([
     getDemoPricingRecords(),
@@ -314,6 +415,7 @@ export async function createDemoRequest(input: {
     email: input.email.trim(),
     message: input.message.trim(),
     couponCode: resolved.coupon?.code,
+    origin: input.origin ?? "PUBLIC_FORM",
     status: "NEW",
     createdAt: new Date().toISOString(),
     pricing: resolved.pricing,
@@ -321,6 +423,22 @@ export async function createDemoRequest(input: {
 
   requests.unshift(createdRequest);
   await writeJsonFile(requestFilePath, requests);
+  await appendDemoRequestEvent({
+    id: `event-${randomUUID().slice(0, 8)}`,
+    requestId: createdRequest.id,
+    villaSlug: createdRequest.villaSlug,
+    villaTitle: createdRequest.villaTitle,
+    eventType: "CREATED",
+    status: createdRequest.status,
+    title:
+      createdRequest.origin === "MANUAL_PANEL"
+        ? "Panelden yeni rezervasyon kaydi acildi"
+        : "Public formdan yeni talep olustu",
+    detail: `${createdRequest.fullName} icin ${createdRequest.checkIn} - ${createdRequest.checkOut} araliginda ${createdRequest.guestCount} misafirlik kayit acildi.`,
+    actorLabel: input.actorLabel ?? (createdRequest.origin === "MANUAL_PANEL" ? "Panel kullanicisi" : "Public form"),
+    origin: createdRequest.origin ?? "PUBLIC_FORM",
+    createdAt: createdRequest.createdAt,
+  });
 
   if (resolved.coupon) {
     const nextCoupons = coupons.map((coupon) =>
@@ -346,12 +464,28 @@ export async function updateDemoRequestStatus(requestId: string, status: Request
     throw new DemoOperationsStoreError("Guncellenecek talep bulunamadi.");
   }
 
+  const previousStatus = requests[requestIndex].status;
   requests[requestIndex] = {
     ...requests[requestIndex],
     status,
   };
 
   await writeJsonFile(requestFilePath, requests);
+  await appendDemoRequestEvent({
+    id: `event-${randomUUID().slice(0, 8)}`,
+    requestId: requests[requestIndex].id,
+    villaSlug: requests[requestIndex].villaSlug,
+    villaTitle: requests[requestIndex].villaTitle,
+    eventType: "STATUS_CHANGED",
+    status,
+    title: "Talep durumu guncellendi",
+    detail: `${requests[requestIndex].fullName} kaydi ${getRequestStatusLabel(
+      previousStatus,
+    )} durumundan ${getRequestStatusLabel(status)} durumuna alindi.`,
+    actorLabel: "Operasyon ekibi",
+    origin: requests[requestIndex].origin ?? "PUBLIC_FORM",
+    createdAt: new Date().toISOString(),
+  });
 
   return requests[requestIndex];
 }

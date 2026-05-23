@@ -1,0 +1,29 @@
+[
+  {
+    "id": "commission-web-direct",
+    "scopeType": "WEB_DIRECT",
+    "scopeLabel": "Direkt Web SEO Trafiği",
+    "percent": 4,
+    "payoutRule": "Net rezervasyon tutari uzerinden pazarlama maliyet payi",
+    "active": true,
+    "updatedAt": "2026-05-10T10:00:00.000Z"
+  },
+  {
+    "id": "commission-partner-holiday",
+    "scopeType": "AGENCY",
+    "scopeLabel": "Holiday Partners",
+    "percent": 12,
+    "payoutRule": "Onaylanan rezervasyonlarda partner acenta komisyonu",
+    "active": true,
+    "updatedAt": "2026-05-11T09:30:00.000Z"
+  },
+  {
+    "id": "commission-central-sales",
+    "scopeType": "STAFF",
+    "scopeLabel": "Rezervasyon Uzmani Prim Orani",
+    "percent": 3,
+    "payoutRule": "Tekliften onaya donusen manuel kayitlar icin ekip primi",
+    "active": false,
+    "updatedAt": "2026-05-12T15:15:00.000Z"
+  }
+]

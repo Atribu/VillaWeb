@@ -1,0 +1,48 @@
+[
+  {
+    "id": "review-soleia-01",
+    "villaSlug": "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
+    "villaTitle": "Villa Soleia Lagoon",
+    "guestName": "Merve A.",
+    "rating": 5,
+    "comment": "Manzara ve havuz alanı çok güçlüydü. Giriş süreci çok hızlı ilerledi, tekrar tercih ederiz.",
+    "source": "GOOGLE",
+    "status": "PUBLISHED",
+    "createdAt": "2026-03-14T11:20:00.000Z"
+  },
+  {
+    "id": "review-palm-01",
+    "villaSlug": "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
+    "villaTitle": "Villa Palm Serenity",
+    "guestName": "Banu K.",
+    "rating": 4,
+    "comment": "Aile konaklaması için gayet rahattı. Bahçe ve çocuk havuzu çok işimize yaradı.",
+    "source": "DIRECT",
+    "status": "PUBLISHED",
+    "createdAt": "2026-03-16T09:15:00.000Z"
+  },
+  {
+    "id": "review-verde-01",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "guestName": "Elif D.",
+    "rating": 5,
+    "comment": "Balayı için sakin ve çok keyifliydi. Yorum yayına alınmadan önce bir iki fotoğraf da eklemek istiyoruz.",
+    "source": "WHATSAPP",
+    "status": "PENDING",
+    "createdAt": "2026-03-18T14:40:00.000Z",
+    "staffNote": "Fotoğraf eklenirse vitrine öne çıkarılabilir."
+  },
+  {
+    "id": "review-marea-01",
+    "villaSlug": "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand",
+    "villaTitle": "Villa Marea Grand",
+    "guestName": "Can Y.",
+    "rating": 3,
+    "comment": "Kalabalık grup için alan iyiydi ama giriş saatiyle ilgili yaşadığımız karışıklık nedeniyle tekrar kontrol istiyoruz.",
+    "source": "DIRECT",
+    "status": "HIDDEN",
+    "createdAt": "2026-03-12T16:05:00.000Z",
+    "staffNote": "Misafirle yeniden görüşülüyor, görünür değil."
+  }
+]

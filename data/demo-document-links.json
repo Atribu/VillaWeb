@@ -1,0 +1,26 @@
+[
+  {
+    "id": "doclink-kvkk",
+    "title": "KVKK Metin Paketi",
+    "url": "/kvkk",
+    "category": "Yasal",
+    "status": "ACTIVE",
+    "updatedAt": "2026-05-18T08:05:00.000Z"
+  },
+  {
+    "id": "doclink-tahsilat",
+    "title": "Tahsilat Proseduru Notlari",
+    "url": "/docs/tahsilat-iade-proseduru.pdf",
+    "category": "Muhasebe",
+    "status": "ACTIVE",
+    "updatedAt": "2026-05-16T09:30:00.000Z"
+  },
+  {
+    "id": "doclink-seo-plan",
+    "title": "SEO Icerik Takvimi",
+    "url": "/docs/seo-icerik-takvimi.xlsx",
+    "category": "Icerik",
+    "status": "DRAFT",
+    "updatedAt": "2026-05-15T11:40:00.000Z"
+  }
+]

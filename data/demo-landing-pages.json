@@ -1,0 +1,32 @@
+[
+  {
+    "id": "landing-kalkan-villa",
+    "title": "Kalkan Villa Kiralama",
+    "slug": "kalkan-villa-kiralama",
+    "targetRegion": "Kalkan",
+    "focusKeyword": "kalkan villa kiralama",
+    "status": "LIVE",
+    "leadCount": 28,
+    "updatedAt": "2026-05-18T07:50:00.000Z"
+  },
+  {
+    "id": "landing-balayi-villa",
+    "title": "Balayi Icin Ozel Villa",
+    "slug": "balayi-icin-ozel-villa",
+    "targetRegion": "Kas",
+    "focusKeyword": "balayi villasi",
+    "status": "REVISION",
+    "leadCount": 11,
+    "updatedAt": "2026-05-17T16:20:00.000Z"
+  },
+  {
+    "id": "landing-fethiye-aile",
+    "title": "Fethiye Aile Villalari",
+    "slug": "fethiye-aile-villalari",
+    "targetRegion": "Fethiye",
+    "focusKeyword": "fethiye aile villasi",
+    "status": "DRAFT",
+    "leadCount": 0,
+    "updatedAt": "2026-05-16T10:40:00.000Z"
+  }
+]

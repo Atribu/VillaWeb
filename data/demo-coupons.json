@@ -1,0 +1,28 @@
+[
+  {
+    "id": "coupon-yazbasliyor",
+    "title": "Yaz Basliyor Kuponu",
+    "code": "YAZBASLIYOR10",
+    "villaScope": "ALL",
+    "percentOff": 10,
+    "startDate": "2026-03-01",
+    "endDate": "2026-05-31",
+    "usageLimit": 25,
+    "usageCount": 3,
+    "active": true,
+    "createdAt": "2026-03-08T08:00:00.000Z"
+  },
+  {
+    "id": "coupon-balayi",
+    "title": "Balayi Ozel Kod",
+    "code": "BALAYI7",
+    "villaScope": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "percentOff": 7,
+    "startDate": "2026-03-10",
+    "endDate": "2026-06-30",
+    "usageLimit": 12,
+    "usageCount": 1,
+    "active": true,
+    "createdAt": "2026-03-10T15:00:00.000Z"
+  }
+]

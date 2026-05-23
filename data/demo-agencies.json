@@ -1,0 +1,38 @@
+[
+  {
+    "id": "agency-direct-web",
+    "name": "Direkt Web",
+    "kind": "DIRECT_WEB",
+    "ownerName": "Pazarlama Ekibi",
+    "city": "Istanbul",
+    "status": "ACTIVE",
+    "requestCount": 3,
+    "approvedRevenue": 65970,
+    "openPipeline": 157261,
+    "note": "SEO ve organik kanallar uzerinden gelen dogrudan rezervasyon akislarini toplar."
+  },
+  {
+    "id": "agency-holiday-partners",
+    "name": "Holiday Partners",
+    "kind": "PARTNER",
+    "ownerName": "Nazli Inan",
+    "city": "Bodrum",
+    "status": "PAUSED",
+    "requestCount": 6,
+    "approvedRevenue": 184000,
+    "openPipeline": 2,
+    "note": "Partner acenta tarafinda komisyon bazli calisan distribusyon kanali."
+  },
+  {
+    "id": "agency-merkez-rezervasyon",
+    "name": "Merkez Rezervasyon",
+    "kind": "INTERNAL",
+    "ownerName": "Satis Masasi",
+    "city": "Antalya",
+    "status": "ACTIVE",
+    "requestCount": 0,
+    "approvedRevenue": 0,
+    "openPipeline": 0,
+    "note": "Telefon, WhatsApp ve panelden acilan manuel rezervasyonlar bu ekipten geciyor."
+  }
+]

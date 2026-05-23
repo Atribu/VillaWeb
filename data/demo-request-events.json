@@ -1,0 +1,67 @@
+[
+  {
+    "id": "event-request-002-created",
+    "requestId": "request-002",
+    "villaSlug": "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
+    "villaTitle": "Villa Palm Serenity",
+    "eventType": "CREATED",
+    "status": "NEW",
+    "title": "Public formdan yeni talep alindi",
+    "detail": "Seda Karaca icin 2026-04-18 - 2026-04-24 araliginda kayit acildi.",
+    "actorLabel": "Public form",
+    "origin": "PUBLIC_FORM",
+    "createdAt": "2026-03-17T13:15:00.000Z"
+  },
+  {
+    "id": "event-request-001-created",
+    "requestId": "request-001",
+    "villaSlug": "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
+    "villaTitle": "Villa Soleia Lagoon",
+    "eventType": "CREATED",
+    "status": "QUOTE_SENT",
+    "title": "Public formdan yeni talep alindi",
+    "detail": "Mert Yildiz icin 2026-04-22 - 2026-04-27 araliginda kayit acildi.",
+    "actorLabel": "Public form",
+    "origin": "PUBLIC_FORM",
+    "createdAt": "2026-03-16T10:20:00.000Z"
+  },
+  {
+    "id": "event-request-001-status",
+    "requestId": "request-001",
+    "villaSlug": "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
+    "villaTitle": "Villa Soleia Lagoon",
+    "eventType": "STATUS_CHANGED",
+    "status": "QUOTE_SENT",
+    "title": "Kayit Teklif Gonderildi durumuna tasindi",
+    "detail": "Mert Yildiz kaydi operasyon akisinda teklif gonderildi olarak isaretlendi.",
+    "actorLabel": "Operasyon ekibi",
+    "origin": "PUBLIC_FORM",
+    "createdAt": "2026-03-16T10:55:00.000Z"
+  },
+  {
+    "id": "event-request-003-created",
+    "requestId": "request-003",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "eventType": "CREATED",
+    "status": "APPROVED",
+    "title": "Public formdan yeni talep alindi",
+    "detail": "Elif Demir icin 2026-05-10 - 2026-05-14 araliginda kayit acildi.",
+    "actorLabel": "Public form",
+    "origin": "PUBLIC_FORM",
+    "createdAt": "2026-03-15T16:45:00.000Z"
+  },
+  {
+    "id": "event-request-003-status",
+    "requestId": "request-003",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "eventType": "STATUS_CHANGED",
+    "status": "APPROVED",
+    "title": "Kayit Onaylandi durumuna tasindi",
+    "detail": "Elif Demir kaydi operasyon akisinda onaylandi olarak isaretlendi.",
+    "actorLabel": "Operasyon ekibi",
+    "origin": "PUBLIC_FORM",
+    "createdAt": "2026-03-15T17:20:00.000Z"
+  }
+]

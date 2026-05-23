@@ -2,14 +2,9 @@ import { NextResponse } from "next/server";
 import type { RequestStatus } from "@/lib/demo-operations";
 import {
   DemoOperationsStoreError,
-  getDemoRequestById,
-  updateDemoRequestStatus,
-} from "@/lib/server/demo-operations-store";
-import {
   DemoVillaStoreError,
-  addDemoVillaAvailability,
-  deleteDemoVillaAvailabilityByRequestId,
-} from "@/lib/server/demo-villa-store";
+  transitionDemoRequestStatus,
+} from "@/lib/server/demo-request-lifecycle";
 import { revalidateDemoExperience } from "@/lib/server/demo-revalidate";
 
 export const runtime = "nodejs";
@@ -32,58 +27,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new DemoOperationsStoreError("Talep durumu zorunludur.");
     }
 
-    const existingRequest = await getDemoRequestById(id);
+    const updatedRequest = await transitionDemoRequestStatus({
+      requestId: id,
+      status: payload.status,
+      villaSlug: payload.villaSlug,
+    });
 
-    if (!existingRequest) {
-      throw new DemoOperationsStoreError("Talep bulunamadi.");
-    }
-
-    const oldStatus = existingRequest.status;
-    const nextStatus = payload.status;
-    const villaSlug = payload.villaSlug ?? existingRequest.villaSlug;
-
-    if (oldStatus === nextStatus) {
-      revalidateDemoExperience(villaSlug);
-      return NextResponse.json({ request: existingRequest });
-    }
-
-    let reservationBlocksCreated = false;
-
-    // Airbnb mantigi: Onaylanan rezervasyon takvimi kilitler.
-    if (nextStatus === "APPROVED" && oldStatus !== "APPROVED") {
-      await addDemoVillaAvailability({
-        slug: existingRequest.villaSlug,
-        startDate: existingRequest.checkIn,
-        endDate: existingRequest.checkOut,
-        label: `Rezervasyon: ${existingRequest.fullName}`,
-        status: "RESERVED",
-        sourceRequestId: existingRequest.id,
-      });
-      reservationBlocksCreated = true;
-    }
-
-    if (oldStatus === "APPROVED" && nextStatus !== "APPROVED") {
-      await deleteDemoVillaAvailabilityByRequestId({
-        slug: existingRequest.villaSlug,
-        requestId: existingRequest.id,
-      });
-    }
-
-    let updatedRequest;
-    try {
-      updatedRequest = await updateDemoRequestStatus(id, nextStatus);
-    } catch (error) {
-      if (reservationBlocksCreated) {
-        // Status update başarısız olursa, takvimdeki rezervasyon bloğunu geri al.
-        await deleteDemoVillaAvailabilityByRequestId({
-          slug: existingRequest.villaSlug,
-          requestId: existingRequest.id,
-        }).catch(() => {});
-      }
-
-      throw error;
-    }
-    revalidateDemoExperience(villaSlug);
+    revalidateDemoExperience(updatedRequest.villaSlug);
 
     return NextResponse.json({ request: updatedRequest });
   } catch (error) {

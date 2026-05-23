@@ -1,0 +1,38 @@
+[
+  {
+    "id": "branch-bodrum-partner",
+    "agencyId": "agency-holiday-partners",
+    "agencyName": "Holiday Partners",
+    "name": "Bodrum Subesi",
+    "city": "Bodrum",
+    "phone": "+90 252 330 44 44",
+    "status": "PAUSED",
+    "userCount": 0,
+    "requestCount": 6,
+    "approvedRevenue": 184000
+  },
+  {
+    "id": "branch-digital-desk",
+    "agencyId": "agency-direct-web",
+    "agencyName": "Direkt Web",
+    "name": "Dijital Satis Masasi",
+    "city": "Istanbul",
+    "phone": "+90 212 401 10 10",
+    "status": "ACTIVE",
+    "userCount": 2,
+    "requestCount": 3,
+    "approvedRevenue": 65970
+  },
+  {
+    "id": "branch-central-desk",
+    "agencyId": "agency-merkez-rezervasyon",
+    "agencyName": "Merkez Rezervasyon",
+    "name": "Merkez Operasyon",
+    "city": "Antalya",
+    "phone": "+90 242 520 20 20",
+    "status": "ACTIVE",
+    "userCount": 4,
+    "requestCount": 0,
+    "approvedRevenue": 0
+  }
+]

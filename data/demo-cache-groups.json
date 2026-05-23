@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cache-public-home",
+    "label": "Public Ana Sayfa",
+    "target": "/",
+    "status": "HEALTHY",
+    "ttlMinutes": 30,
+    "warmIntervalMinutes": 15,
+    "lastWarmedAt": "2026-05-18T08:40:00.000Z",
+    "note": "Hero ve one cikan villalar bolumu bu gruptan besleniyor."
+  },
+  {
+    "id": "cache-villa-detail",
+    "label": "Villa Detay Sayfalari",
+    "target": "/villalar/[slug]",
+    "status": "WARMING",
+    "ttlMinutes": 20,
+    "warmIntervalMinutes": 10,
+    "lastWarmedAt": "2026-05-18T08:32:00.000Z",
+    "note": "Uygunluk degisikligi oldugunda yeniden isitma tetiklenir."
+  },
+  {
+    "id": "cache-blog-seo",
+    "label": "Blog ve SEO Icerikleri",
+    "target": "/blog/*",
+    "status": "STALE",
+    "ttlMinutes": 60,
+    "warmIntervalMinutes": 45,
+    "lastWarmedAt": "2026-05-17T21:10:00.000Z",
+    "note": "Son SEO icerik guncellemesinden sonra yeniden warm bekliyor."
+  }
+]

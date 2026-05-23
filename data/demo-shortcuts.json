@@ -1,0 +1,29 @@
+[
+  {
+    "id": "shortcut-panel-home",
+    "title": "Backoffice Ana Sayfa",
+    "url": "/panel",
+    "category": "Panel",
+    "description": "Operasyon ekibinin gunluk olarak en sik kullandigi dashboard girisi.",
+    "status": "ACTIVE",
+    "updatedAt": "2026-05-18T08:10:00.000Z"
+  },
+  {
+    "id": "shortcut-public-villas",
+    "title": "Canli Villa Listeleme",
+    "url": "/villalar",
+    "category": "Public",
+    "description": "Vitrin tarafindaki canli listeleme sayfasini hizli acmak icin kullanilir.",
+    "status": "ACTIVE",
+    "updatedAt": "2026-05-18T08:12:00.000Z"
+  },
+  {
+    "id": "shortcut-finance-overview",
+    "title": "Muhasebe Genel Bakis",
+    "url": "/panel/muhasebe",
+    "category": "Muhasebe",
+    "description": "Tahsilat ve bakiye akislarini hizli kontrol etmek icin ayri kisayol.",
+    "status": "HIDDEN",
+    "updatedAt": "2026-05-17T15:00:00.000Z"
+  }
+]

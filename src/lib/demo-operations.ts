@@ -9,6 +9,8 @@ export type RequestStatus =
   | "APPROVED"
   | "CANCELLED";
 
+export type RequestOrigin = "PUBLIC_FORM" | "MANUAL_PANEL";
+
 export type DemoPricingRecord = {
   villaSlug: string;
   baseNightlyPrice: number;
@@ -71,9 +73,26 @@ export type DemoRequest = {
   email: string;
   message: string;
   couponCode?: string;
+  origin?: RequestOrigin;
   status: RequestStatus;
   createdAt: string;
   pricing: RequestPricingBreakdown;
+};
+
+export type DemoRequestEventType = "CREATED" | "STATUS_CHANGED";
+
+export type DemoRequestEvent = {
+  id: string;
+  requestId: string;
+  villaSlug: string;
+  villaTitle: string;
+  eventType: DemoRequestEventType;
+  status?: RequestStatus;
+  title: string;
+  detail: string;
+  actorLabel: string;
+  origin: RequestOrigin;
+  createdAt: string;
 };
 
 export type ResolvedVillaPricing = {
@@ -210,6 +229,7 @@ export const seedDemoRequests: DemoRequest[] = [
     email: "mert@example.com",
     message: "Havalimanindan transfer ve cocuk yatagi bilgisini de iletmenizi rica ederim.",
     couponCode: "YAZBASLIYOR10",
+    origin: "PUBLIC_FORM",
     status: "QUOTE_SENT",
     createdAt: "2026-03-16T10:20:00.000Z",
     pricing: {
@@ -239,6 +259,7 @@ export const seedDemoRequests: DemoRequest[] = [
     phone: "+90 530 222 22 22",
     email: "seda@example.com",
     message: "Bebek sandalyesi ve erken giris imkani hakkinda bilgi rica ederim.",
+    origin: "PUBLIC_FORM",
     status: "NEW",
     createdAt: "2026-03-17T13:15:00.000Z",
     pricing: {
@@ -266,6 +287,7 @@ export const seedDemoRequests: DemoRequest[] = [
     email: "elif@example.com",
     message: "Balayi paketi ve oda susleme seceneklerini ogrenmek istiyorum.",
     couponCode: "BALAYI7",
+    origin: "PUBLIC_FORM",
     status: "APPROVED",
     createdAt: "2026-03-15T16:45:00.000Z",
     pricing: {
@@ -284,8 +306,68 @@ export const seedDemoRequests: DemoRequest[] = [
   },
 ];
 
+export function buildSeedRequestEvents(requests: DemoRequest[]) {
+  return requests.flatMap((request) => {
+    const createdAt = new Date(request.createdAt);
+    const origin = request.origin ?? "PUBLIC_FORM";
+    const createdEvent: DemoRequestEvent = {
+      id: `event-${request.id}-created`,
+      requestId: request.id,
+      villaSlug: request.villaSlug,
+      villaTitle: request.villaTitle,
+      eventType: "CREATED",
+      status: request.status,
+      title:
+        origin === "MANUAL_PANEL"
+          ? "Panelden rezervasyon olusturuldu"
+          : "Public formdan yeni talep alindi",
+      detail: `${request.fullName} icin ${request.checkIn} - ${request.checkOut} araliginda kayit acildi.`,
+      actorLabel: origin === "MANUAL_PANEL" ? "Panel kullanicisi" : "Public form",
+      origin,
+      createdAt: request.createdAt,
+    };
+
+    if (request.status === "NEW") {
+      return [createdEvent];
+    }
+
+    const statusEventDate = new Date(createdAt.getTime() + 1000 * 60 * 35).toISOString();
+    const statusEvent: DemoRequestEvent = {
+      id: `event-${request.id}-status`,
+      requestId: request.id,
+      villaSlug: request.villaSlug,
+      villaTitle: request.villaTitle,
+      eventType: "STATUS_CHANGED",
+      status: request.status,
+      title: `Kayit ${getRequestStatusLabel(request.status)} durumuna tasindi`,
+      detail: `${request.fullName} kaydi operasyon akisinda ${getRequestStatusLabel(
+        request.status,
+      ).toLowerCase()} olarak isaretlendi.`,
+      actorLabel: "Operasyon ekibi",
+      origin,
+      createdAt: statusEventDate,
+    };
+
+    return [
+      createdEvent,
+      statusEvent,
+    ];
+  });
+}
+
+export const seedDemoRequestEvents: DemoRequestEvent[] = buildSeedRequestEvents(seedDemoRequests);
+
 export function getRequestStatusLabel(status: RequestStatus) {
   return REQUEST_STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
+}
+
+export function getRequestOriginLabel(origin?: RequestOrigin) {
+  switch (origin) {
+    case "MANUAL_PANEL":
+      return "Panel Rezervasyonu";
+    default:
+      return "Public Form";
+  }
 }
 
 export function getRequestStatusTone(status: RequestStatus) {

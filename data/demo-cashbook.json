@@ -1,0 +1,19 @@
+[
+  {
+    "id": "cash-payment-request-003-deposit",
+    "requestId": "request-003",
+    "invoiceId": "invoice-request-003",
+    "paymentId": "payment-request-003-deposit",
+    "villaSlug": "kas-balayi-icin-muhafazakar-villa-verde-cove",
+    "villaTitle": "Villa Verde Cove",
+    "guestName": "Elif Demir",
+    "direction": "INCOME",
+    "category": "Rezervasyon Tahsilati",
+    "title": "Kapora tahsilati",
+    "amount": 23090,
+    "date": "2026-03-18",
+    "source": "AUTO_PAYMENT",
+    "note": "Villa Verde Cove icin otomatik muhasebe kaydi",
+    "createdAt": "2026-03-18T16:45:00.000Z"
+  }
+]

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { REQUEST_STATUS_OPTIONS, type RequestStatus } from "@/lib/demo-operations";
 import { findBlockedRange, getNightCount } from "@/lib/villa-availability";
 import { getDemoVillaBySlug } from "@/lib/server/demo-villa-store";
 import {
   createDemoRequest,
   DemoOperationsStoreError,
 } from "@/lib/server/demo-operations-store";
+import { transitionDemoRequestStatus } from "@/lib/server/demo-request-lifecycle";
 import { revalidateDemoExperience } from "@/lib/server/demo-revalidate";
 
 export const runtime = "nodejs";
@@ -19,6 +21,8 @@ type RequestPayload = {
   email?: string;
   message?: string;
   couponCode?: string;
+  initialStatus?: RequestStatus;
+  origin?: "PUBLIC_FORM" | "MANUAL_PANEL";
 };
 
 export async function POST(request: Request) {
@@ -33,6 +37,12 @@ export async function POST(request: Request) {
     const email = String(payload.email ?? "").trim();
     const message = String(payload.message ?? "").trim();
     const couponCode = String(payload.couponCode ?? "").trim();
+    const initialStatus = payload.initialStatus ?? "NEW";
+    const origin = payload.origin ?? "PUBLIC_FORM";
+
+    if (!REQUEST_STATUS_OPTIONS.some((option) => option.value === initialStatus)) {
+      throw new DemoOperationsStoreError("Gecersiz rezervasyon durumu secildi.");
+    }
 
     if (!villaSlug || !checkIn || !checkOut) {
       throw new DemoOperationsStoreError("Villa ve tarih secimi olmadan talep kaydi acilamaz.");
@@ -92,11 +102,22 @@ export async function POST(request: Request) {
       email,
       message,
       couponCode,
+      origin,
+      actorLabel: origin === "MANUAL_PANEL" ? "Panel kullanicisi" : "Public form",
     });
+
+    const requestRecord =
+      initialStatus === "NEW"
+        ? createdRequest
+        : await transitionDemoRequestStatus({
+            requestId: createdRequest.id,
+            status: initialStatus,
+            villaSlug: createdRequest.villaSlug,
+          });
 
     revalidateDemoExperience(villa.slug);
 
-    return NextResponse.json({ request: createdRequest });
+    return NextResponse.json({ request: requestRecord });
   } catch (error) {
     if (error instanceof DemoOperationsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });

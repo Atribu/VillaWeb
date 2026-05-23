@@ -1,0 +1,32 @@
+[
+  {
+    "id": "seo-kalkan-rehber",
+    "title": "Kalkan'da Villa Kiralarken Nelere Dikkat Edilmeli",
+    "contentType": "BLOG",
+    "targetUrl": "/blog/kalkanda-villa-kiralama-rehberi",
+    "primaryKeyword": "kalkan villa kiralama rehberi",
+    "status": "PUBLISHED",
+    "seoScore": 88,
+    "updatedAt": "2026-05-18T06:30:00.000Z"
+  },
+  {
+    "id": "seo-muhafazakar-kategori",
+    "title": "Muhafazakar Villalar Kategori Icerigi",
+    "contentType": "CATEGORY",
+    "targetUrl": "/villalar?tema=muhafazakar",
+    "primaryKeyword": "muhafazakar villa",
+    "status": "IN_PROGRESS",
+    "seoScore": 71,
+    "updatedAt": "2026-05-17T12:40:00.000Z"
+  },
+  {
+    "id": "seo-bodrum-landing",
+    "title": "Bodrum Kalabalik Gruplar Icin Villa Landing",
+    "contentType": "LANDING",
+    "targetUrl": "/bodrum-kalabalik-gruplar-icin-villa",
+    "primaryKeyword": "bodrum grup villasi",
+    "status": "PLANNED",
+    "seoScore": 62,
+    "updatedAt": "2026-05-16T09:15:00.000Z"
+  }
+]

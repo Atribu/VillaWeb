@@ -20,7 +20,7 @@ export async function authenticateUser(
     return { error: "Kullanici adi ve sifre alanlari zorunludur." };
   }
 
-  const user = validateUser(username, password);
+  const user = await validateUser(username, password);
 
   if (!user) {
     return { error: "Kullanici adi veya sifre hatali." };

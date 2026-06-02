@@ -9,8 +9,11 @@ import {
   type DemoReviewRecord,
 } from "@/lib/demo-crm";
 import {
+  getPaymentDisplayStatus,
   getPaymentStatusLabel,
   getPaymentStatusTone,
+  type DemoPaymentDisplayStatus,
+  type DemoPaymentRecord,
   type DemoFinanceOverview,
 } from "@/lib/demo-finance";
 import {
@@ -54,7 +57,7 @@ import {
 } from "@/lib/demo-websites";
 import { getDemoCrmOverview, getDemoReviews } from "@/lib/server/demo-crm-store";
 import { getDemoSyncLogs } from "@/lib/server/demo-calendar-sync-store";
-import { getDemoFinanceOverview } from "@/lib/server/demo-finance-store";
+import { getDemoFinanceOverview, getDemoPayments } from "@/lib/server/demo-finance-store";
 import { getDemoOperationTasks, getDemoRequests } from "@/lib/server/demo-operations-store";
 import { getDemoCacheGroups } from "@/lib/server/demo-settings-store";
 import {
@@ -76,6 +79,11 @@ type DashboardSearchParams = {
   operationSearch?: string | string[];
   requestStatus?: string | string[];
   taskStatus?: string | string[];
+  dateFrom?: string | string[];
+  dateTo?: string | string[];
+  onlyActionable?: string | string[];
+  financeStatus?: string | string[];
+  crmFocus?: string | string[];
 };
 
 type FilterField = {
@@ -109,6 +117,42 @@ function formatStayRange(request: DemoRequest) {
   return `${formatter.format(new Date(request.checkIn))} - ${formatter.format(new Date(request.checkOut))}`;
 }
 
+function getDateKey(value: string) {
+  return value.slice(0, 10);
+}
+
+function normalizeDateRange(dateFrom: string, dateTo: string) {
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    return {
+      dateFrom: dateTo,
+      dateTo: dateFrom,
+    };
+  }
+
+  return {
+    dateFrom,
+    dateTo,
+  };
+}
+
+function matchesDateRange(value: string | undefined, dateFrom: string, dateTo: string) {
+  if (!value) {
+    return !dateFrom && !dateTo;
+  }
+
+  const dateKey = getDateKey(value);
+
+  if (dateFrom && dateKey < dateFrom) {
+    return false;
+  }
+
+  if (dateTo && dateKey > dateTo) {
+    return false;
+  }
+
+  return true;
+}
+
 function getSearchParamValue(value?: string | string[]) {
   if (Array.isArray(value)) {
     return value[0] ?? "";
@@ -134,15 +178,7 @@ function includesSearchTerm(values: Array<string | number | undefined>, query: s
   return values.some((value) => normalizeForSearch(String(value ?? "")).includes(normalizedQuery));
 }
 
-function buildPreservedFields(
-  current: {
-    reservationSearch: string;
-    operationSearch: string;
-    requestStatus: string;
-    taskStatus: string;
-  },
-  omit: string[],
-) {
+function buildPreservedFields(current: Record<string, string>, omit: string[]) {
   return Object.entries(current)
     .filter(([key, value]) => !omit.includes(key) && value.trim().length > 0)
     .map(([name, value]) => ({ name, value }));
@@ -248,11 +284,21 @@ function DashboardFilterBar({
   operationSearch,
   requestStatus,
   taskStatus,
+  dateFrom,
+  dateTo,
+  onlyActionable,
+  financeStatus,
+  crmFocus,
 }: {
   reservationSearch: string;
   operationSearch: string;
   requestStatus: string;
   taskStatus: string;
+  dateFrom: string;
+  dateTo: string;
+  onlyActionable: boolean;
+  financeStatus: string;
+  crmFocus: string;
 }) {
   return (
     <section className="rounded-sm bg-white px-5 py-5 shadow-[0_6px_20px_rgba(15,23,42,0.08)]">
@@ -260,17 +306,41 @@ function DashboardFilterBar({
         <div>
           <p className="text-sm font-semibold text-slate-700">Dashboard filtreleri</p>
           <p className="mt-1 text-sm text-slate-500">
-            Bu alan talep, rezervasyon ve operasyon bloklarini hizli sekilde tarar.
+            Bu alan talep, operasyon, finans ve CRM bloklarini ayni ekranda hizli sekilde tarar.
           </p>
         </div>
 
-        <form action="/panel" method="get" className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr_auto]">
+        <form action="/panel" method="get" className="grid gap-4 2xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
           {reservationSearch ? (
             <input type="hidden" name="reservationSearch" value={reservationSearch} />
           ) : null}
           {operationSearch ? (
             <input type="hidden" name="operationSearch" value={operationSearch} />
           ) : null}
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Baslangic tarihi
+            </span>
+            <input
+              type="date"
+              name="dateFrom"
+              defaultValue={dateFrom}
+              className="w-full rounded-sm border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-[#59b7d1]"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Bitis tarihi
+            </span>
+            <input
+              type="date"
+              name="dateTo"
+              defaultValue={dateTo}
+              className="w-full rounded-sm border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-[#59b7d1]"
+            />
+          </label>
 
           <label className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -308,7 +378,51 @@ function DashboardFilterBar({
             </select>
           </label>
 
-          <div className="flex items-end gap-3">
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Finans durumu
+            </span>
+            <select
+              name="financeStatus"
+              defaultValue={financeStatus}
+              className="w-full rounded-sm border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-[#59b7d1]"
+            >
+              <option value="">Tum finans kalemleri</option>
+              <option value="PENDING">Beklemede</option>
+              <option value="OVERDUE">Vadesi gecti</option>
+              <option value="PAID">Tahsil edildi</option>
+              <option value="CANCELLED">Iptal edildi</option>
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              CRM odagi
+            </span>
+            <select
+              name="crmFocus"
+              defaultValue={crmFocus}
+              className="w-full rounded-sm border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-[#59b7d1]"
+            >
+              <option value="">Tum CRM akisları</option>
+              <option value="PIPELINE">Pipeline musteri</option>
+              <option value="VIP">VIP musteri</option>
+              <option value="NEW_MESSAGES">Yeni mesajlar</option>
+              <option value="PENDING_REVIEWS">Bekleyen yorumlar</option>
+            </select>
+          </label>
+
+          <div className="flex flex-col items-start justify-end gap-3">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                name="onlyActionable"
+                value="1"
+                defaultChecked={onlyActionable}
+                className="h-4 w-4 rounded border-slate-300 text-[#2b78ad] focus:ring-[#2b78ad]"
+              />
+              Sadece aksiyon gerekenler
+            </label>
             <button
               type="submit"
               className="inline-flex h-[42px] items-center justify-center rounded-sm bg-[#2b78ad] px-5 text-sm font-semibold text-white transition hover:bg-[#215d86]"
@@ -624,8 +738,12 @@ function OperationsFocusPanel({
 
 function FinancePulsePanel({
   overview,
+  payments,
+  resultLabel,
 }: {
   overview: DemoFinanceOverview;
+  payments: Array<DemoPaymentRecord & { displayStatus: DemoPaymentDisplayStatus }>;
+  resultLabel: string;
 }) {
   return (
     <PanelSection
@@ -644,8 +762,16 @@ function FinancePulsePanel({
         ))}
       </div>
 
-      <div className="mt-4 space-y-3">
-        {overview.recentPayments.slice(0, 4).map((payment) => (
+      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+        {resultLabel}
+      </p>
+
+      <div className="mt-3 space-y-3">
+        {payments.length === 0 ? (
+          <p className="text-sm text-slate-500">Secili filtrelerle eslesen finans kaydi bulunamadi.</p>
+        ) : null}
+
+        {payments.slice(0, 4).map((payment) => (
           <article key={payment.id} className="rounded-sm border border-slate-200 px-4 py-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-1">
@@ -677,11 +803,13 @@ function CommunicationCrmPanel({
   reviews,
   messages,
   activeUsersValue,
+  resultLabel,
 }: {
   customers: DemoCustomerRecord[];
   reviews: DemoReviewRecord[];
   messages: DemoInternalMessageRecord[];
   activeUsersValue: string;
+  resultLabel: string;
 }) {
   const pendingReviews = reviews.filter((review) => review.status === "PENDING");
 
@@ -706,9 +834,16 @@ function CommunicationCrmPanel({
         ))}
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+        {resultLabel}
+      </p>
+
+      <div className="mt-3 grid gap-4 xl:grid-cols-2">
         <div className="space-y-3">
           <p className="text-sm font-semibold text-slate-700">Son ekip mesajlari</p>
+          {messages.length === 0 ? (
+            <p className="text-sm text-slate-500">Secili filtrelerle eslesen mesaj kaydi bulunamadi.</p>
+          ) : null}
           {messages.slice(0, 3).map((message) => (
             <article key={message.id} className="rounded-sm border border-slate-200 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -734,6 +869,9 @@ function CommunicationCrmPanel({
 
         <div className="space-y-3">
           <p className="text-sm font-semibold text-slate-700">One cikan musteri ve yorumlar</p>
+          {customers.length === 0 && pendingReviews.length === 0 ? (
+            <p className="text-sm text-slate-500">Secili filtrelerle eslesen CRM kaydi bulunamadi.</p>
+          ) : null}
           {customers.slice(0, 2).map((customer) => (
             <article key={customer.id} className="rounded-sm border border-slate-200 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -786,12 +924,14 @@ function DigitalHealthPanel({
   seoContents,
   syncLogs,
   cacheGroups,
+  resultLabel,
 }: {
   websites: DemoWebsiteRecord[];
   landings: DemoLandingPageRecord[];
   seoContents: DemoSeoContentRecord[];
   syncLogs: DemoSyncLogRecord[];
   cacheGroups: DemoCacheGroupRecord[];
+  resultLabel: string;
 }) {
   const liveWebsiteCount = websites.filter((website) => website.status === "LIVE").length;
   const liveLandingCount = landings.filter((landing) => landing.status === "LIVE").length;
@@ -821,9 +961,16 @@ function DigitalHealthPanel({
         ))}
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+        {resultLabel}
+      </p>
+
+      <div className="mt-3 grid gap-4 xl:grid-cols-2">
         <div className="space-y-3">
           <p className="text-sm font-semibold text-slate-700">Site ve icerik akisi</p>
+          {websites.length === 0 && landings.length === 0 && seoContents.length === 0 ? (
+            <p className="text-sm text-slate-500">Secili filtrelerle eslesen web/SEO kaydi bulunamadi.</p>
+          ) : null}
           {websites.slice(0, 2).map((website) => (
             <article key={website.id} className="rounded-sm border border-slate-200 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -882,6 +1029,9 @@ function DigitalHealthPanel({
 
         <div className="space-y-3">
           <p className="text-sm font-semibold text-slate-700">Sync ve cache loglari</p>
+          {syncLogs.length === 0 && cacheGroups.length === 0 ? (
+            <p className="text-sm text-slate-500">Secili filtrelerle eslesen sync/cache kaydi bulunamadi.</p>
+          ) : null}
           {syncLogs.slice(0, 3).map((log) => (
             <article key={log.id} className="rounded-sm border border-slate-200 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -934,12 +1084,19 @@ export default async function PanelDashboardPage({
   const operationSearch = getSearchParamValue(resolvedSearchParams.operationSearch).trim();
   const requestStatus = getSearchParamValue(resolvedSearchParams.requestStatus).trim();
   const taskStatus = getSearchParamValue(resolvedSearchParams.taskStatus).trim();
+  const rawDateFrom = getSearchParamValue(resolvedSearchParams.dateFrom).trim();
+  const rawDateTo = getSearchParamValue(resolvedSearchParams.dateTo).trim();
+  const onlyActionable = getSearchParamValue(resolvedSearchParams.onlyActionable).trim() === "1";
+  const financeStatus = getSearchParamValue(resolvedSearchParams.financeStatus).trim();
+  const crmFocus = getSearchParamValue(resolvedSearchParams.crmFocus).trim();
+  const { dateFrom, dateTo } = normalizeDateRange(rawDateFrom, rawDateTo);
 
   const [
     requests,
     villas,
     operationTasks,
     financeOverview,
+    payments,
     crmOverview,
     reviews,
     usersOverview,
@@ -954,6 +1111,7 @@ export default async function PanelDashboardPage({
     getDemoVillas(),
     getDemoOperationTasks(),
     getDemoFinanceOverview(),
+    getDemoPayments(),
     getDemoCrmOverview(),
     getDemoReviews(),
     getDemoUsersMessagesOverview(),
@@ -966,8 +1124,10 @@ export default async function PanelDashboardPage({
   ]);
 
   const todayKey = new Date().toISOString().slice(0, 10);
+  const actionableRequestStatuses = new Set<DemoRequest["status"]>(["NEW", "CONTACTED", "QUOTE_SENT"]);
   const filteredRequests = requests.filter((request) => {
     const matchesStatus = !requestStatus || request.status === requestStatus;
+    const matchesDate = matchesDateRange(request.createdAt, dateFrom, dateTo);
     const matchesSearch = includesSearchTerm(
       [
         request.id,
@@ -980,7 +1140,9 @@ export default async function PanelDashboardPage({
       reservationSearch,
     );
 
-    return matchesStatus && matchesSearch;
+    const matchesActionable = !onlyActionable || actionableRequestStatuses.has(request.status);
+
+    return matchesStatus && matchesDate && matchesSearch && matchesActionable;
   });
   const recentRequests = filteredRequests.slice(0, 3);
   const recentReservations = filteredRequests
@@ -989,6 +1151,7 @@ export default async function PanelDashboardPage({
 
   const filteredOperationTasks = operationTasks.filter((task) => {
     const matchesStatus = !taskStatus || task.status === taskStatus;
+    const matchesDate = matchesDateRange(task.scheduledDate, dateFrom, dateTo);
     const matchesSearch = includesSearchTerm(
       [
         task.id,
@@ -1000,8 +1163,13 @@ export default async function PanelDashboardPage({
       ],
       operationSearch,
     );
+    const matchesActionable =
+      !onlyActionable ||
+      task.status === "READY" ||
+      task.status === "IN_PROGRESS" ||
+      (task.status === "PENDING" && task.scheduledDate <= todayKey);
 
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesDate && matchesSearch && matchesActionable;
   });
 
   const openTasks = filteredOperationTasks.filter(
@@ -1020,7 +1188,7 @@ export default async function PanelDashboardPage({
 
   const villaSearchTerm = reservationSearch || operationSearch;
   const visibleVillas = villaSearchTerm
-      ? villas.filter((villa) =>
+    ? villas.filter((villa) =>
         includesSearchTerm(
           [villa.title, villa.slug, villa.city, villa.district, villa.locationLabel],
           villaSearchTerm,
@@ -1028,19 +1196,119 @@ export default async function PanelDashboardPage({
       )
     : villas;
 
+  const filteredPayments = payments
+    .map((payment) => ({
+      ...payment,
+      displayStatus: getPaymentDisplayStatus(payment),
+    }))
+    .filter((payment) => {
+      const matchesDate = matchesDateRange(payment.dueDate, dateFrom, dateTo);
+      const matchesFinanceStatus = !financeStatus || payment.displayStatus === financeStatus;
+      const matchesActionable =
+        !onlyActionable || payment.displayStatus === "PENDING" || payment.displayStatus === "OVERDUE";
+
+      return matchesDate && matchesFinanceStatus && matchesActionable;
+    })
+    .sort((left, right) => {
+      if (left.dueDate === right.dueDate) {
+        return right.createdAt.localeCompare(left.createdAt);
+      }
+
+      return right.dueDate.localeCompare(left.dueDate);
+    });
+
+  const baseCrmCustomers = crmOverview.customers.filter((customer) => {
+    const matchesDate = matchesDateRange(customer.lastRequestAt, dateFrom, dateTo);
+    const matchesActionable =
+      !onlyActionable ||
+      customer.segment === "LEAD" ||
+      customer.segment === "ACTIVE" ||
+      customer.pipelineValue > 0;
+
+    return matchesDate && matchesActionable;
+  });
+
+  const baseCrmMessages = messages.filter((message) => {
+    const matchesDate = matchesDateRange(message.createdAt, dateFrom, dateTo);
+    const matchesActionable = !onlyActionable || message.status === "NEW";
+
+    return matchesDate && matchesActionable;
+  });
+
+  const baseCrmReviews = reviews.filter((review) => {
+    const matchesDate = matchesDateRange(review.createdAt, dateFrom, dateTo);
+    const matchesActionable = !onlyActionable || review.status === "PENDING";
+
+    return matchesDate && matchesActionable;
+  });
+
+  const filteredCustomers = baseCrmCustomers.filter((customer) => {
+    switch (crmFocus) {
+      case "VIP":
+        return customer.segment === "VIP";
+      case "PIPELINE":
+        return customer.pipelineValue > 0 || customer.segment === "LEAD" || customer.segment === "ACTIVE";
+      default:
+        return true;
+    }
+  });
+
+  const filteredMessages = baseCrmMessages.filter((message) =>
+    crmFocus === "NEW_MESSAGES" ? message.status === "NEW" : true,
+  );
+
+  const filteredReviews = baseCrmReviews.filter((review) =>
+    crmFocus === "PENDING_REVIEWS" ? review.status === "PENDING" : true,
+  );
+
+  const filteredWebsites = websites.filter((website) => {
+    const matchesDate = matchesDateRange(website.updatedAt, dateFrom, dateTo);
+    const matchesActionable = !onlyActionable || website.status !== "LIVE";
+    return matchesDate && matchesActionable;
+  });
+
+  const filteredLandings = landings.filter((landing) => {
+    const matchesDate = matchesDateRange(landing.updatedAt, dateFrom, dateTo);
+    const matchesActionable = !onlyActionable || landing.status !== "LIVE";
+    return matchesDate && matchesActionable;
+  });
+
+  const filteredSeoContents = seoContents.filter((content) => {
+    const matchesDate = matchesDateRange(content.updatedAt, dateFrom, dateTo);
+    const matchesActionable = !onlyActionable || content.status !== "PUBLISHED";
+    return matchesDate && matchesActionable;
+  });
+
+  const filteredSyncLogs = syncLogs.filter((log) => {
+    const matchesDate = matchesDateRange(log.createdAt, dateFrom, dateTo);
+    const matchesActionable = !onlyActionable || log.outcome !== "SUCCESS";
+    return matchesDate && matchesActionable;
+  });
+
+  const filteredCacheGroups = cacheGroups.filter((group) => {
+    const matchesDate = matchesDateRange(group.lastWarmedAt, dateFrom, dateTo);
+    const matchesActionable = !onlyActionable || group.status !== "HEALTHY";
+    return matchesDate && matchesActionable;
+  });
+
   const activeVillaCount = visibleVillas.length;
   const newRequestCount = filteredRequests.filter((request) => request.status === "NEW").length;
   const approvedCount = filteredRequests.filter((request) => request.status === "APPROVED").length;
-  const unreadMessageCount = messages.filter((message) => message.status === "NEW").length;
-  const pendingReviewCount = reviews.filter((review) => review.status === "PENDING").length;
-  const syncWarningCount = syncLogs.filter((log) => log.outcome !== "SUCCESS").length;
-  const staleCacheCount = cacheGroups.filter((group) => group.status === "STALE").length;
+  const unreadMessageCount = baseCrmMessages.filter((message) => message.status === "NEW").length;
+  const pendingReviewCount = baseCrmReviews.filter((review) => review.status === "PENDING").length;
+  const syncWarningCount = filteredSyncLogs.filter((log) => log.outcome !== "SUCCESS").length;
+  const staleCacheCount = filteredCacheGroups.filter((group) => group.status === "STALE").length;
   const reservationHiddenFields = buildPreservedFields(
     {
       reservationSearch,
       operationSearch,
       requestStatus,
       taskStatus,
+      dateFrom,
+      dateTo,
+      financeStatus,
+      crmFocus,
+      onlyActionable: onlyActionable ? "1" : "",
     },
     ["reservationSearch"],
   );
@@ -1050,16 +1318,38 @@ export default async function PanelDashboardPage({
       operationSearch,
       requestStatus,
       taskStatus,
+      dateFrom,
+      dateTo,
+      financeStatus,
+      crmFocus,
+      onlyActionable: onlyActionable ? "1" : "",
     },
     ["operationSearch"],
   );
   const activeFilterLabels = [
+    dateFrom ? `Baslangic: ${dateFrom}` : "",
+    dateTo ? `Bitis: ${dateTo}` : "",
     reservationSearch ? `Rezervasyon aramasi: ${reservationSearch}` : "",
     requestStatus ? `Talep durumu: ${getRequestStatusLabel(requestStatus as DemoRequest["status"])}` : "",
     operationSearch ? `Operasyon aramasi: ${operationSearch}` : "",
     taskStatus
       ? `Gorev durumu: ${getOperationTaskStatusLabel(taskStatus as DemoOperationTask["status"])}`
       : "",
+    financeStatus
+      ? `Finans: ${getPaymentStatusLabel(financeStatus as DemoPaymentDisplayStatus)}`
+      : "",
+    crmFocus
+      ? `CRM odagi: ${
+          crmFocus === "PIPELINE"
+            ? "Pipeline"
+            : crmFocus === "VIP"
+              ? "VIP"
+              : crmFocus === "NEW_MESSAGES"
+                ? "Yeni mesajlar"
+                : "Bekleyen yorumlar"
+        }`
+      : "",
+    onlyActionable ? "Sadece aksiyon gerekenler" : "",
   ].filter(Boolean);
 
   const metricCards = [
@@ -1195,6 +1485,11 @@ export default async function PanelDashboardPage({
         operationSearch={operationSearch}
         requestStatus={requestStatus}
         taskStatus={taskStatus}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onlyActionable={onlyActionable}
+        financeStatus={financeStatus}
+        crmFocus={crmFocus}
       />
 
       <ActiveFiltersBar items={activeFilterLabels} />
@@ -1245,22 +1540,28 @@ export default async function PanelDashboardPage({
           openTaskCount={openTasks.length}
           urgentTaskCount={urgentTasks.length}
         />
-        <FinancePulsePanel overview={financeOverview} />
+        <FinancePulsePanel
+          overview={financeOverview}
+          payments={filteredPayments}
+          resultLabel={`${filteredPayments.length} finans kalemi eslesti`}
+        />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">
         <CommunicationCrmPanel
-          customers={crmOverview.customers}
-          reviews={reviews}
-          messages={messages}
+          customers={filteredCustomers}
+          reviews={filteredReviews}
+          messages={filteredMessages}
           activeUsersValue={usersOverview.summaryCards[2]?.value ?? "0"}
+          resultLabel={`${filteredCustomers.length} musteri / ${filteredMessages.length} mesaj / ${filteredReviews.length} yorum eslesti`}
         />
         <DigitalHealthPanel
-          websites={websites}
-          landings={landings}
-          seoContents={seoContents}
-          syncLogs={syncLogs}
-          cacheGroups={cacheGroups}
+          websites={filteredWebsites}
+          landings={filteredLandings}
+          seoContents={filteredSeoContents}
+          syncLogs={filteredSyncLogs}
+          cacheGroups={filteredCacheGroups}
+          resultLabel={`${filteredWebsites.length} site / ${filteredLandings.length} landing / ${filteredSyncLogs.length} sync kaydi eslesti`}
         />
       </section>
     </div>

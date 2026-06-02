@@ -10,6 +10,7 @@ export type DemoCashSource = "AUTO_PAYMENT" | "MANUAL";
 
 export type DemoInvoiceRecord = {
   id: string;
+  companyId?: string;
   requestId: string;
   villaSlug: string;
   villaTitle: string;
@@ -26,6 +27,7 @@ export type DemoInvoiceRecord = {
 
 export type DemoPaymentRecord = {
   id: string;
+  companyId?: string;
   invoiceId: string;
   requestId: string;
   villaSlug: string;
@@ -45,6 +47,7 @@ export type DemoPaymentRecord = {
 
 export type DemoCashEntry = {
   id: string;
+  companyId?: string;
   requestId?: string;
   invoiceId?: string;
   paymentId?: string;

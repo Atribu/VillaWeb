@@ -4,6 +4,7 @@ export type DemoSeoContentStatus = "PLANNED" | "IN_PROGRESS" | "PUBLISHED";
 
 export type DemoWebsiteRecord = {
   id: string;
+  companyId?: string;
   name: string;
   domain: string;
   locale: string;
@@ -15,6 +16,7 @@ export type DemoWebsiteRecord = {
 
 export type DemoLandingPageRecord = {
   id: string;
+  companyId?: string;
   title: string;
   slug: string;
   targetRegion: string;
@@ -26,6 +28,7 @@ export type DemoLandingPageRecord = {
 
 export type DemoSeoContentRecord = {
   id: string;
+  companyId?: string;
   title: string;
   contentType: "BLOG" | "LANDING" | "CATEGORY";
   targetUrl: string;

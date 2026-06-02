@@ -19,6 +19,7 @@ export type DemoOperationTaskPriority = "LOW" | "MEDIUM" | "HIGH";
 
 export type DemoOperationTask = {
   id: string;
+  companyId: string;
   requestId: string;
   villaSlug: string;
   villaTitle: string;
@@ -119,7 +120,12 @@ export function buildOperationTasksForApprovedRequest(request: DemoRequest): Dem
   const supplierDate = addDays(request.checkIn, -2);
   const reminderDate = addDays(request.checkIn, -1);
 
-  const definitions: Array<Omit<DemoOperationTask, "id" | "requestId" | "villaSlug" | "villaTitle" | "guestName" | "createdAt" | "source">> = [
+  const definitions: Array<
+    Omit<
+      DemoOperationTask,
+      "id" | "companyId" | "requestId" | "villaSlug" | "villaTitle" | "guestName" | "createdAt" | "source"
+    >
+  > = [
     {
       taskType: "RESERVATION_TRACK",
       title: "Rezervasyon takip dosyasini ac",
@@ -186,6 +192,7 @@ export function buildOperationTasksForApprovedRequest(request: DemoRequest): Dem
 
   return definitions.map((definition, index) => ({
     id: `${request.id.toLowerCase()}-task-${String(index + 1).padStart(2, "0")}`,
+    companyId: request.companyId,
     requestId: request.id,
     villaSlug: request.villaSlug,
     villaTitle: request.villaTitle,

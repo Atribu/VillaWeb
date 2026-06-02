@@ -1,74 +1,144 @@
 import "server-only";
 
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import type { RequestOrigin, RequestStatus } from "@/lib/demo-operations";
-import {
-  buildDemoRoles,
-  buildUsersMessagesOverview,
-  seedDemoAgencies,
-  seedDemoBranches,
-  seedDemoCommissionRates,
-  seedDemoInternalMessages,
-  seedDemoTeamUsers,
-  type DemoAgencyStatus,
-  type DemoBranchStatus,
-  type DemoMessageStatus,
-  type DemoRoleId,
-  type DemoTeamUserStatus,
+import { db } from "@/lib/db";
+import type {
+  DemoAgencyStatus,
+  DemoBranchStatus,
+  DemoCommissionRateRecord,
+  DemoMessageStatus,
+  DemoRoleId,
+  DemoTeamUserStatus,
 } from "@/lib/demo-users-messages";
-import { getDemoRequests } from "@/lib/server/demo-operations-store";
-
-const demoDataDirectory = path.join(process.cwd(), "data");
-const agenciesFilePath = path.join(demoDataDirectory, "demo-agencies.json");
-const branchesFilePath = path.join(demoDataDirectory, "demo-branches.json");
-const usersFilePath = path.join(demoDataDirectory, "demo-team-users.json");
-const messagesFilePath = path.join(demoDataDirectory, "demo-internal-messages.json");
-const commissionsFilePath = path.join(demoDataDirectory, "demo-commission-rates.json");
+import { buildDemoRoles, buildUsersMessagesOverview } from "@/lib/demo-users-messages";
+import {
+  assertPanelCompanyAccess,
+  resolvePanelCompanyId,
+} from "@/lib/server/demo-company-context";
+import {
+  decimalToNumber,
+  iso,
+  mapDemoRoleToMembershipRole,
+  mapDemoUserStatusToMembershipStatus,
+  mapMembershipRoleToDemoRole,
+  mapMembershipStatusToDemoStatus,
+  mapMessageStatusToDemo,
+} from "@/lib/server/prisma-demo-shared";
 
 export class DemoUsersMessagesStoreError extends Error {}
 
-async function ensureJsonFile<T>(filePath: string, seedData: T) {
-  await mkdir(demoDataDirectory, { recursive: true });
-
-  try {
-    await access(filePath);
-  } catch {
-    await writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
+function mapCommissionScopeType(scopeType: "AGENCY" | "BRANCH" | "USER" | "WEB_DIRECT") {
+  if (scopeType === "USER") {
+    return "STAFF" as const;
   }
+
+  return scopeType;
 }
 
-async function readJsonFile<T>(filePath: string, seedData: T): Promise<T> {
-  await ensureJsonFile(filePath, seedData);
-  const raw = await readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJsonFile<T>(filePath: string, value: T) {
-  await writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
-
-function mapOriginToAgencyId(origin?: RequestOrigin) {
-  return origin === "MANUAL_PANEL" ? "agency-merkez-rezervasyon" : "agency-direct-web";
-}
-
-function mapOriginToBranchId(origin?: RequestOrigin) {
-  return origin === "MANUAL_PANEL" ? "branch-central-desk" : "branch-digital-desk";
-}
-
-function getPipelineStatuses() {
-  return new Set<RequestStatus>(["NEW", "CONTACTED", "QUOTE_SENT"]);
-}
-
-async function syncAgenciesAndBranches() {
-  const [agencies, branches, requests, users] = await Promise.all([
-    readJsonFile(agenciesFilePath, seedDemoAgencies),
-    readJsonFile(branchesFilePath, seedDemoBranches),
-    getDemoRequests(),
-    readJsonFile(usersFilePath, seedDemoTeamUsers),
+async function getUsersMessagesSnapshot(companyId?: string | null) {
+  const [agencies, branches, memberships, messages, commissions, requests] = await Promise.all([
+    db.agency.findMany({
+      where: companyId ? { companyId } : undefined,
+      orderBy: { name: "asc" },
+    }),
+    db.branch.findMany({
+      where: companyId ? { companyId } : undefined,
+      include: {
+        agency: true,
+      },
+      orderBy: { name: "asc" },
+    }),
+    db.companyMembership.findMany({
+      where: companyId ? { companyId } : undefined,
+      include: {
+        user: true,
+        branch: {
+          include: {
+            agency: true,
+          },
+        },
+      },
+      orderBy: [{ companyId: "asc" }, { createdAt: "asc" }],
+    }),
+    db.internalMessage.findMany({
+      where: companyId ? { companyId } : undefined,
+      include: {
+        senderUser: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.commissionRule.findMany({
+      where: companyId ? { companyId } : undefined,
+      orderBy: { updatedAt: "desc" },
+    }),
+    db.bookingRequest.findMany({
+      where: companyId ? { companyId } : undefined,
+      select: {
+        companyId: true,
+        assignedToUserId: true,
+        status: true,
+        quotedTotalAmount: true,
+      },
+    }),
   ]);
 
-  const pipelineStatuses = getPipelineStatuses();
+  const membershipByUserId = new Map(
+    memberships.map((membership) => [membership.userId, membership]),
+  );
+
+  const branchStats = new Map<
+    string,
+    {
+      requestCount: number;
+      approvedRevenue: number;
+      openPipeline: number;
+    }
+  >();
+
+  const pipelineStatuses = new Set(["NEW", "CONTACTED", "OFFER_SENT"]);
+
+  for (const request of requests) {
+    const requestMembership =
+      membershipByUserId.get(request.assignedToUserId ?? "") ??
+      memberships.find((membership) => membership.companyId === request.companyId) ??
+      null;
+    const branchId = requestMembership?.branchId ?? null;
+
+    if (!branchId) {
+      continue;
+    }
+
+    const current = branchStats.get(branchId) ?? {
+      requestCount: 0,
+      approvedRevenue: 0,
+      openPipeline: 0,
+    };
+
+    current.requestCount += 1;
+    const totalAmount = decimalToNumber(request.quotedTotalAmount);
+
+    if (request.status === "APPROVED") {
+      current.approvedRevenue += totalAmount;
+    }
+
+    if (pipelineStatuses.has(request.status)) {
+      current.openPipeline += totalAmount;
+    }
+
+    branchStats.set(branchId, current);
+  }
+
+  const branchUserCounts = new Map<string, number>();
+
+  for (const membership of memberships) {
+    if (!membership.branchId || membership.status === "SUSPENDED") {
+      continue;
+    }
+
+    branchUserCounts.set(
+      membership.branchId,
+      (branchUserCounts.get(membership.branchId) ?? 0) + 1,
+    );
+  }
 
   const agencyStats = new Map<
     string,
@@ -79,95 +149,108 @@ async function syncAgenciesAndBranches() {
     }
   >();
 
-  for (const request of requests) {
-    const agencyId = mapOriginToAgencyId(request.origin);
-    const branchId = mapOriginToBranchId(request.origin);
+  for (const branch of branches) {
+    if (!branch.agencyId) {
+      continue;
+    }
 
-    const agencyStat = agencyStats.get(agencyId) ?? {
+    const branchStat = branchStats.get(branch.id) ?? {
       requestCount: 0,
       approvedRevenue: 0,
       openPipeline: 0,
     };
-    agencyStat.requestCount += 1;
-    if (request.status === "APPROVED") {
-      agencyStat.approvedRevenue += request.pricing.grandTotal;
-    }
-    if (pipelineStatuses.has(request.status)) {
-      agencyStat.openPipeline += request.pricing.grandTotal;
-    }
-    agencyStats.set(agencyId, agencyStat);
-
-    const branchStat = agencyStats.get(branchId) ?? {
+    const current = agencyStats.get(branch.agencyId) ?? {
       requestCount: 0,
       approvedRevenue: 0,
       openPipeline: 0,
     };
-    branchStat.requestCount += 1;
-    if (request.status === "APPROVED") {
-      branchStat.approvedRevenue += request.pricing.grandTotal;
-    }
-    if (pipelineStatuses.has(request.status)) {
-      branchStat.openPipeline += request.pricing.grandTotal;
-    }
-    agencyStats.set(branchId, branchStat);
+
+    current.requestCount += branchStat.requestCount;
+    current.approvedRevenue += branchStat.approvedRevenue;
+    current.openPipeline += branchStat.openPipeline;
+    agencyStats.set(branch.agencyId, current);
   }
 
-  const syncedAgencies = agencies
-    .map((agency) => {
-      const stat = agencyStats.get(agency.id);
-
-      if (!stat) {
-        return agency;
-      }
-
-      return {
-        ...agency,
-        requestCount: stat.requestCount,
-        approvedRevenue: stat.approvedRevenue,
-        openPipeline: stat.openPipeline,
-      };
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
-
-  const syncedBranches = branches
-    .map((branch) => {
-      const stat = agencyStats.get(branch.id);
-      const userCount = users.filter((user) => user.branchId === branch.id && user.status !== "PASSIVE")
-        .length;
-
-      return {
-        ...branch,
-        userCount,
-        requestCount: stat?.requestCount ?? branch.requestCount,
-        approvedRevenue: stat?.approvedRevenue ?? branch.approvedRevenue,
-      };
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
-
-  await Promise.all([
-    writeJsonFile(agenciesFilePath, syncedAgencies),
-    writeJsonFile(branchesFilePath, syncedBranches),
-  ]);
-
   return {
-    agencies: syncedAgencies,
-    branches: syncedBranches,
+    agencies,
+    branches,
+    memberships,
+    messages,
+    commissions,
+    branchStats,
+    branchUserCounts,
+    agencyStats,
   };
 }
 
 export async function getDemoAgencies() {
-  const { agencies } = await syncAgenciesAndBranches();
-  return agencies;
+  const companyId = await resolvePanelCompanyId();
+  const { agencies, agencyStats } = await getUsersMessagesSnapshot(companyId);
+
+  return agencies.map((agency) => {
+    const stat = agencyStats.get(agency.id);
+
+    return {
+      id: agency.id,
+      companyId: agency.companyId,
+      name: agency.name,
+      kind: agency.kind,
+      ownerName: agency.ownerName ?? "Atanmadi",
+      city: agency.city ?? "-",
+      status: agency.status satisfies DemoAgencyStatus,
+      requestCount: stat?.requestCount ?? 0,
+      approvedRevenue: stat?.approvedRevenue ?? decimalToNumber(agency.approvedRevenue),
+      openPipeline: stat?.openPipeline ?? decimalToNumber(agency.openPipeline),
+      note: agency.note ?? "",
+    };
+  });
 }
 
 export async function getDemoBranches() {
-  const { branches } = await syncAgenciesAndBranches();
-  return branches;
+  const companyId = await resolvePanelCompanyId();
+  const { branches, branchStats, branchUserCounts } = await getUsersMessagesSnapshot(companyId);
+
+  return branches.map((branch) => {
+    const stat = branchStats.get(branch.id);
+
+    return {
+      id: branch.id,
+      companyId: branch.companyId,
+      agencyId: branch.agencyId ?? "",
+      agencyName: branch.agency?.name ?? "Bagimsiz",
+      name: branch.name,
+      city: branch.city ?? "-",
+      phone: branch.phone ?? "-",
+      status: branch.status satisfies DemoBranchStatus,
+      userCount: branchUserCounts.get(branch.id) ?? 0,
+      requestCount: stat?.requestCount ?? 0,
+      approvedRevenue: stat?.approvedRevenue ?? 0,
+    };
+  });
 }
 
 export async function getDemoTeamUsers() {
-  const users = await readJsonFile(usersFilePath, seedDemoTeamUsers);
-  return users.sort((left, right) => left.fullName.localeCompare(right.fullName));
+  const companyId = await resolvePanelCompanyId();
+  const { memberships } = await getUsersMessagesSnapshot(companyId);
+
+  return memberships
+    .map((membership) => ({
+      id: membership.id,
+      companyId: membership.companyId,
+      fullName: membership.user.name,
+      username: membership.user.username,
+      email: membership.user.email,
+      phone: membership.user.phone ?? "-",
+      roleId: mapMembershipRoleToDemoRole(membership.role),
+      status: mapMembershipStatusToDemoStatus(membership.status),
+      agencyId: membership.branch?.agencyId ?? "",
+      agencyName: membership.branch?.agency?.name ?? "Bagimsiz",
+      branchId: membership.branchId ?? "",
+      branchName: membership.branch?.name ?? "Atanmamis",
+      responsibility: membership.responsibility ?? "Rol bazli erisim",
+      lastActiveAt: iso(membership.lastActiveAt ?? membership.user.lastLoginAt ?? membership.updatedAt),
+    }))
+    .sort((left, right) => left.fullName.localeCompare(right.fullName));
 }
 
 export async function getDemoRoles() {
@@ -176,13 +259,37 @@ export async function getDemoRoles() {
 }
 
 export async function getDemoInternalMessages() {
-  const messages = await readJsonFile(messagesFilePath, seedDemoInternalMessages);
-  return messages.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const companyId = await resolvePanelCompanyId();
+  const { messages } = await getUsersMessagesSnapshot(companyId);
+
+  return messages.map((message) => ({
+    id: message.id,
+    companyId: message.companyId,
+    senderName: message.senderUser?.name ?? "Sistem",
+    recipientLabel: message.recipientLabel,
+    subject: message.subject,
+    body: message.body,
+    status: mapMessageStatusToDemo(message.status),
+    priority: message.priority,
+    relatedModule: message.relatedModule ?? "Panel",
+    createdAt: iso(message.createdAt),
+  }));
 }
 
 export async function getDemoCommissionRates() {
-  const commissions = await readJsonFile(commissionsFilePath, seedDemoCommissionRates);
-  return commissions.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const companyId = await resolvePanelCompanyId();
+  const { commissions } = await getUsersMessagesSnapshot(companyId);
+
+  return commissions.map((commission) => ({
+    id: commission.id,
+    companyId: commission.companyId,
+    scopeType: mapCommissionScopeType(commission.scopeType),
+    scopeLabel: commission.scopeLabel,
+    percent: decimalToNumber(commission.percent),
+    payoutRule: commission.payoutRule,
+    active: commission.active,
+    updatedAt: iso(commission.updatedAt),
+  })) satisfies DemoCommissionRateRecord[];
 }
 
 export async function getDemoUsersMessagesOverview() {
@@ -204,37 +311,43 @@ export async function getDemoUsersMessagesOverview() {
 }
 
 export async function updateDemoAgencyStatus(agencyId: string, status: DemoAgencyStatus) {
-  const agencies = await getDemoAgencies();
-  const agencyIndex = agencies.findIndex((agency) => agency.id === agencyId);
+  const current = await db.agency.findUnique({
+    where: { id: agencyId },
+  });
 
-  if (agencyIndex === -1) {
+  if (!current) {
     throw new DemoUsersMessagesStoreError("Acenta bulunamadi.");
   }
 
-  agencies[agencyIndex] = {
-    ...agencies[agencyIndex],
-    status,
-  };
+  await assertPanelCompanyAccess(current.companyId);
 
-  await writeJsonFile(agenciesFilePath, agencies);
-  return agencies[agencyIndex];
+  const agency = await db.agency.update({
+    where: { id: agencyId },
+    data: { status },
+  });
+
+  const [stat] = await Promise.all([getDemoAgencies()]);
+  return stat.find((item) => item.id === agency.id) ?? null;
 }
 
 export async function updateDemoBranchStatus(branchId: string, status: DemoBranchStatus) {
-  const branches = await getDemoBranches();
-  const branchIndex = branches.findIndex((branch) => branch.id === branchId);
+  const current = await db.branch.findUnique({
+    where: { id: branchId },
+  });
 
-  if (branchIndex === -1) {
+  if (!current) {
     throw new DemoUsersMessagesStoreError("Sube bulunamadi.");
   }
 
-  branches[branchIndex] = {
-    ...branches[branchIndex],
-    status,
-  };
+  await assertPanelCompanyAccess(current.companyId);
 
-  await writeJsonFile(branchesFilePath, branches);
-  return branches[branchIndex];
+  const branch = await db.branch.update({
+    where: { id: branchId },
+    data: { status },
+  });
+
+  const branches = await getDemoBranches();
+  return branches.find((item) => item.id === branch.id) ?? null;
 }
 
 export async function updateDemoTeamUser(
@@ -244,38 +357,50 @@ export async function updateDemoTeamUser(
     roleId?: DemoRoleId;
   },
 ) {
-  const users = await getDemoTeamUsers();
-  const userIndex = users.findIndex((user) => user.id === userId);
+  const membership = await db.companyMembership.findUnique({
+    where: { id: userId },
+  });
 
-  if (userIndex === -1) {
+  if (!membership) {
     throw new DemoUsersMessagesStoreError("Kullanici bulunamadi.");
   }
 
-  users[userIndex] = {
-    ...users[userIndex],
-    ...(input.status ? { status: input.status } : {}),
-    ...(input.roleId ? { roleId: input.roleId } : {}),
-  };
+  await assertPanelCompanyAccess(membership.companyId);
 
-  await writeJsonFile(usersFilePath, users);
-  return users[userIndex];
+  await db.companyMembership.update({
+    where: { id: userId },
+    data: {
+      ...(input.status ? { status: mapDemoUserStatusToMembershipStatus(input.status) } : {}),
+      ...(input.roleId ? { role: mapDemoRoleToMembershipRole(input.roleId) } : {}),
+      ...(input.status === "ACTIVE" ? { acceptedAt: membership.acceptedAt ?? new Date() } : {}),
+    },
+  });
+
+  const users = await getDemoTeamUsers();
+  return users.find((user) => user.id === userId) ?? null;
 }
 
 export async function updateDemoInternalMessageStatus(messageId: string, status: DemoMessageStatus) {
-  const messages = await getDemoInternalMessages();
-  const messageIndex = messages.findIndex((message) => message.id === messageId);
+  const message = await db.internalMessage.findUnique({
+    where: { id: messageId },
+  });
 
-  if (messageIndex === -1) {
+  if (!message) {
     throw new DemoUsersMessagesStoreError("Mesaj bulunamadi.");
   }
 
-  messages[messageIndex] = {
-    ...messages[messageIndex],
-    status,
-  };
+  await assertPanelCompanyAccess(message.companyId);
 
-  await writeJsonFile(messagesFilePath, messages);
-  return messages[messageIndex];
+  await db.internalMessage.update({
+    where: { id: messageId },
+    data: {
+      status,
+      resolvedAt: status === "RESOLVED" ? new Date() : status === "ARCHIVED" ? new Date() : null,
+    },
+  });
+
+  const messages = await getDemoInternalMessages();
+  return messages.find((item) => item.id === messageId) ?? null;
 }
 
 export async function updateDemoCommissionRate(
@@ -285,10 +410,11 @@ export async function updateDemoCommissionRate(
     percent?: number;
   },
 ) {
-  const commissions = await getDemoCommissionRates();
-  const commissionIndex = commissions.findIndex((commission) => commission.id === commissionId);
+  const commission = await db.commissionRule.findUnique({
+    where: { id: commissionId },
+  });
 
-  if (commissionIndex === -1) {
+  if (!commission) {
     throw new DemoUsersMessagesStoreError("Komisyon kaydi bulunamadi.");
   }
 
@@ -296,13 +422,16 @@ export async function updateDemoCommissionRate(
     throw new DemoUsersMessagesStoreError("Komisyon orani 1 ile 99 arasinda olmalidir.");
   }
 
-  commissions[commissionIndex] = {
-    ...commissions[commissionIndex],
-    ...(input.active !== undefined ? { active: input.active } : {}),
-    ...(input.percent !== undefined ? { percent: input.percent } : {}),
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(commission.companyId);
 
-  await writeJsonFile(commissionsFilePath, commissions);
-  return commissions[commissionIndex];
+  await db.commissionRule.update({
+    where: { id: commissionId },
+    data: {
+      ...(input.active !== undefined ? { active: input.active } : {}),
+      ...(input.percent !== undefined ? { percent: input.percent } : {}),
+    },
+  });
+
+  const commissions = await getDemoCommissionRates();
+  return commissions.find((item) => item.id === commissionId) ?? null;
 }

@@ -6,6 +6,7 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { getResolvedStayPricing } from "@/lib/demo-operations";
 import { formatShortDate } from "@/lib/villa-catalog";
 import { findBlockedRange, getNightCount } from "@/lib/villa-availability";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 import {
   getDemoCoupons,
   getDemoDiscountCampaigns,
@@ -28,10 +29,11 @@ type RequestPageProps = {
 };
 
 export default async function RequestPage({ searchParams }: RequestPageProps) {
+  const company = await getCurrentPublicCompany();
   const params = await searchParams;
   const checkIn = params.checkIn ?? "";
   const checkOut = params.checkOut ?? "";
-  const villa = params.villa ? await getDemoVillaBySlug(params.villa) : null;
+  const villa = params.villa ? await getDemoVillaBySlug(params.villa, { companyId: company.id }) : null;
   const blockedRange =
     villa && checkIn && checkOut
       ? findBlockedRange(checkIn, checkOut, villa.availabilityRanges)
@@ -42,7 +44,11 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
     villa && checkIn && checkOut && nightCount > 0 && !blockedRange && !belowMinimumStay,
   );
   const pricingDependencies = isValidSelection
-    ? await Promise.all([getDemoPricingRecords(), getDemoDiscountCampaigns(), getDemoCoupons()])
+    ? await Promise.all([
+        getDemoPricingRecords({ companyId: company.id }),
+        getDemoDiscountCampaigns({ companyId: company.id }),
+        getDemoCoupons({ companyId: company.id }),
+      ])
     : null;
   const resolvedPricing =
     isValidSelection && villa && pricingDependencies
@@ -74,8 +80,8 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
       <div className="rounded-[2.3rem] border border-black/6 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:p-8">
         <SectionHeading
           eyebrow="Talep Formu"
-          title="Tarih secimi tamamlandiginda acilan modern talep ekrani"
-          description="Talep akisi yalnizca gecerli giris ve cikis secimiyle ilerler. Uygun olmayan tarih secimleri bu ekranin icine dahil edilmez."
+          title={`${company.shortName} icin tarih secimi tamamlandiginda acilan talep ekrani`}
+          description="Talep akisi yalnizca aktif firmanin gecerli giris ve cikis secimiyle ilerler. Uygun olmayan tarih secimleri bu ekranin icine dahil edilmez."
         />
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">

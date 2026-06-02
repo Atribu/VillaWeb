@@ -4,7 +4,7 @@ import { loginCredentials } from "@/lib/auth/users";
 
 export const metadata: Metadata = {
   title: "Panel Giris",
-  description: "Admin ve staff kullanicilari icin panel giris ekrani.",
+  description: "Super admin, firma admini ve firma personeli icin panel giris ekrani.",
 };
 
 export default function PanelLoginPage() {
@@ -19,20 +19,27 @@ export default function PanelLoginPage() {
             Admin tum paneli gorur, villa personeli sadece villa alanlarina erisir.
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-7 text-teal-50/85">
-            Bu ilk surumde iki sabit hesap tanimlandi. Sonraki adimda bunlari veritabanina
-            tasiyip adminin panelden personel ekleyebildigi yapaya gecirebiliriz.
+            Demo artik cok firmali calisiyor. Super admin tum firmalari gorur; firma adminleri ve
+            personeller ise sadece kendi sirket verilerini ve kendi web sitesini yonetir.
           </p>
 
           <div className="mt-10 grid gap-4">
             {loginCredentials.map((credential) => (
               <div
-                key={credential.role}
+                key={credential.username}
                 className="rounded-[1.75rem] border border-white/12 bg-white/10 p-5 backdrop-blur"
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-100">
-                  {credential.role === "ADMIN" ? "Admin Hesabi" : "Villa Personeli"}
+                  {credential.role === "SUPER_ADMIN"
+                    ? "Platform Yetkilisi"
+                    : credential.role === "ADMIN"
+                      ? "Firma Admini"
+                      : "Firma Personeli"}
                 </p>
                 <h2 className="mt-3 text-2xl font-semibold">{credential.displayName}</h2>
+                {credential.companyName ? (
+                  <p className="mt-3 text-sm text-teal-50/90">{credential.companyName}</p>
+                ) : null}
                 <p className="mt-4 text-sm">
                   <span className="font-semibold">Kullanici adi:</span> {credential.username}
                 </p>
@@ -52,8 +59,8 @@ export default function PanelLoginPage() {
             Kullanici adi ve sifre ile giris yap
           </h2>
           <p className="mt-4 text-sm leading-7 text-slate-600">
-            Admin girisinde tum menuler, personel girisinde ise sadece villa ekleme ve villa
-            yonetimi alanlari gorunur.
+            Super admin tum firmalari gorur. Firma admini kendi panelini ve kendi sitesini
+            yonetir, personel ise sadece yetkili oldugu villa alanlarini kullanir.
           </p>
 
           <LoginForm />

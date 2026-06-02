@@ -1,114 +1,187 @@
 import "server-only";
 
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import {
-  seedDemoDocumentLinks,
-  seedDemoExternalServices,
-  seedDemoShortcuts,
-  type DemoDocumentLinkStatus,
-  type DemoExternalServiceStatus,
-  type DemoShortcutStatus,
+import { db } from "@/lib/db";
+import type {
+  DemoDocumentLinkStatus,
+  DemoExternalServiceStatus,
+  DemoShortcutStatus,
 } from "@/lib/demo-external-links";
-
-const demoDataDirectory = path.join(process.cwd(), "data");
-const shortcutsFilePath = path.join(demoDataDirectory, "demo-shortcuts.json");
-const externalServicesFilePath = path.join(demoDataDirectory, "demo-external-services.json");
-const documentLinksFilePath = path.join(demoDataDirectory, "demo-document-links.json");
+import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
+import {
+  getDefaultCompanyId,
+  iso,
+  mapDemoExternalServiceStatusToPrisma,
+  mapDemoShortcutStatusToPrisma,
+  mapExternalServiceStatusToDemo,
+  mapShortcutStatusToDemo,
+} from "@/lib/server/prisma-demo-shared";
 
 export class DemoExternalLinksStoreError extends Error {}
 
-async function ensureJsonFile<T>(filePath: string, seedData: T) {
-  await mkdir(demoDataDirectory, { recursive: true });
-
-  try {
-    await access(filePath);
-  } catch {
-    await writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
-  }
+async function resolveExternalLinksCompanyId() {
+  return (await resolvePanelCompanyId()) ?? (await getDefaultCompanyId());
 }
 
-async function readJsonFile<T>(filePath: string, seedData: T): Promise<T> {
-  await ensureJsonFile(filePath, seedData);
-  const raw = await readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJsonFile<T>(filePath: string, value: T) {
-  await writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
+function mapDocumentLinkStatus(status: "ACTIVE" | "DRAFT" | "ARCHIVED"): DemoDocumentLinkStatus {
+  return status;
 }
 
 export async function getDemoShortcuts() {
-  const shortcuts = await readJsonFile(shortcutsFilePath, seedDemoShortcuts);
-  return shortcuts.sort((left, right) => left.title.localeCompare(right.title));
+  const companyId = await resolveExternalLinksCompanyId();
+
+  if (!companyId) {
+    return [];
+  }
+
+  const shortcuts = await db.shortcutLink.findMany({
+    where: { companyId },
+    orderBy: { title: "asc" },
+  });
+
+  return shortcuts.map((shortcut) => ({
+    id: shortcut.id,
+    title: shortcut.title,
+    url: shortcut.url,
+    category: shortcut.category,
+    description: shortcut.description ?? "",
+    status: mapShortcutStatusToDemo(shortcut.status),
+    updatedAt: iso(shortcut.updatedAt),
+  }));
 }
 
 export async function getDemoExternalServices() {
-  const services = await readJsonFile(externalServicesFilePath, seedDemoExternalServices);
-  return services.sort((left, right) => left.name.localeCompare(right.name));
+  const companyId = await resolveExternalLinksCompanyId();
+
+  if (!companyId) {
+    return [];
+  }
+
+  const services = await db.externalService.findMany({
+    where: { companyId },
+    orderBy: { name: "asc" },
+  });
+
+  return services.map((service) => ({
+    id: service.id,
+    name: service.name,
+    url: service.url,
+    ownerLabel: service.ownerLabel,
+    category: service.category,
+    status: mapExternalServiceStatusToDemo(service.status),
+    note: service.note ?? "",
+    updatedAt: iso(service.updatedAt),
+  }));
 }
 
 export async function getDemoDocumentLinks() {
-  const links = await readJsonFile(documentLinksFilePath, seedDemoDocumentLinks);
-  return links.sort((left, right) => left.title.localeCompare(right.title));
+  const companyId = await resolveExternalLinksCompanyId();
+
+  if (!companyId) {
+    return [];
+  }
+
+  const links = await db.documentLink.findMany({
+    where: { companyId },
+    orderBy: { title: "asc" },
+  });
+
+  return links.map((link) => ({
+    id: link.id,
+    title: link.title,
+    url: link.url,
+    category: link.category,
+    status: mapDocumentLinkStatus(link.status),
+    updatedAt: iso(link.updatedAt),
+  }));
 }
 
 export async function updateDemoShortcutStatus(shortcutId: string, status: DemoShortcutStatus) {
-  const shortcuts = await getDemoShortcuts();
-  const shortcutIndex = shortcuts.findIndex((shortcut) => shortcut.id === shortcutId);
+  const shortcut = await db.shortcutLink.findUnique({
+    where: { id: shortcutId },
+  });
 
-  if (shortcutIndex === -1) {
+  if (!shortcut) {
     throw new DemoExternalLinksStoreError("Kisayol bulunamadi.");
   }
 
-  shortcuts[shortcutIndex] = {
-    ...shortcuts[shortcutIndex],
-    status,
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(shortcut.companyId);
 
-  await writeJsonFile(shortcutsFilePath, shortcuts);
-  return shortcuts[shortcutIndex];
+  const updated = await db.shortcutLink.update({
+    where: { id: shortcutId },
+    data: {
+      status: mapDemoShortcutStatusToPrisma(status),
+    },
+  });
+
+  return {
+    id: updated.id,
+    title: updated.title,
+    url: updated.url,
+    category: updated.category,
+    description: updated.description ?? "",
+    status: mapShortcutStatusToDemo(updated.status),
+    updatedAt: iso(updated.updatedAt),
+  };
 }
 
 export async function updateDemoExternalServiceStatus(
   serviceId: string,
   status: DemoExternalServiceStatus,
 ) {
-  const services = await getDemoExternalServices();
-  const serviceIndex = services.findIndex((service) => service.id === serviceId);
+  const service = await db.externalService.findUnique({
+    where: { id: serviceId },
+  });
 
-  if (serviceIndex === -1) {
+  if (!service) {
     throw new DemoExternalLinksStoreError("Dis servis kaydi bulunamadi.");
   }
 
-  services[serviceIndex] = {
-    ...services[serviceIndex],
-    status,
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(service.companyId);
 
-  await writeJsonFile(externalServicesFilePath, services);
-  return services[serviceIndex];
+  const updated = await db.externalService.update({
+    where: { id: serviceId },
+    data: {
+      status: mapDemoExternalServiceStatusToPrisma(status),
+    },
+  });
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    url: updated.url,
+    ownerLabel: updated.ownerLabel,
+    category: updated.category,
+    status: mapExternalServiceStatusToDemo(updated.status),
+    note: updated.note ?? "",
+    updatedAt: iso(updated.updatedAt),
+  };
 }
 
 export async function updateDemoDocumentLinkStatus(
   documentLinkId: string,
   status: DemoDocumentLinkStatus,
 ) {
-  const links = await getDemoDocumentLinks();
-  const linkIndex = links.findIndex((link) => link.id === documentLinkId);
+  const link = await db.documentLink.findUnique({
+    where: { id: documentLinkId },
+  });
 
-  if (linkIndex === -1) {
+  if (!link) {
     throw new DemoExternalLinksStoreError("Dokuman baglantisi bulunamadi.");
   }
 
-  links[linkIndex] = {
-    ...links[linkIndex],
-    status,
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(link.companyId);
 
-  await writeJsonFile(documentLinksFilePath, links);
-  return links[linkIndex];
+  const updated = await db.documentLink.update({
+    where: { id: documentLinkId },
+    data: { status },
+  });
+
+  return {
+    id: updated.id,
+    title: updated.title,
+    url: updated.url,
+    category: updated.category,
+    status: mapDocumentLinkStatus(updated.status),
+    updatedAt: iso(updated.updatedAt),
+  };
 }

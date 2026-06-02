@@ -14,6 +14,7 @@ export type DemoRoleId =
 
 export type DemoAgencyRecord = {
   id: string;
+  companyId?: string;
   name: string;
   kind: "DIRECT_WEB" | "PARTNER" | "INTERNAL";
   ownerName: string;
@@ -27,6 +28,7 @@ export type DemoAgencyRecord = {
 
 export type DemoBranchRecord = {
   id: string;
+  companyId?: string;
   agencyId: string;
   agencyName: string;
   name: string;
@@ -40,6 +42,7 @@ export type DemoBranchRecord = {
 
 export type DemoTeamUserRecord = {
   id: string;
+  companyId?: string;
   fullName: string;
   username: string;
   email: string;
@@ -64,6 +67,7 @@ export type DemoRoleRecord = {
 
 export type DemoInternalMessageRecord = {
   id: string;
+  companyId?: string;
   senderName: string;
   recipientLabel: string;
   subject: string;
@@ -76,6 +80,7 @@ export type DemoInternalMessageRecord = {
 
 export type DemoCommissionRateRecord = {
   id: string;
+  companyId?: string;
   scopeType: "AGENCY" | "BRANCH" | "STAFF" | "WEB_DIRECT";
   scopeLabel: string;
   percent: number;

@@ -10,6 +10,9 @@ export type SessionUser = {
   username: string;
   displayName: string;
   role: AppRole;
+  companyId?: string;
+  companySlug?: string;
+  companyName?: string;
 };
 
 export type SessionPayload = SessionUser & {

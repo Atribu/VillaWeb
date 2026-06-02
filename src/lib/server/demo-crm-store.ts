@@ -1,12 +1,8 @@
 import "server-only";
 
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import {
   buildCrmOverview,
   buildDemoCustomers,
-  seedDemoReviews,
-  type DemoReviewRecord,
   type DemoReviewStatus,
 } from "@/lib/demo-crm";
 import {
@@ -15,29 +11,12 @@ import {
   getDemoRequests,
   DemoOperationsStoreError,
 } from "@/lib/server/demo-operations-store";
-
-const demoDataDirectory = path.join(process.cwd(), "data");
-const reviewFilePath = path.join(demoDataDirectory, "demo-reviews.json");
-
-async function ensureReviewFile() {
-  await mkdir(demoDataDirectory, { recursive: true });
-
-  try {
-    await access(reviewFilePath);
-  } catch {
-    await writeFile(reviewFilePath, JSON.stringify(seedDemoReviews, null, 2), "utf8");
-  }
-}
-
-async function readReviews() {
-  await ensureReviewFile();
-  const raw = await readFile(reviewFilePath, "utf8");
-  return JSON.parse(raw) as DemoReviewRecord[];
-}
-
-async function writeReviews(reviews: DemoReviewRecord[]) {
-  await writeFile(reviewFilePath, JSON.stringify(reviews, null, 2), "utf8");
-}
+import { db } from "@/lib/db";
+import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
+import {
+  mapDemoReviewStatusToPrisma,
+  mapReviewStatusToDemo,
+} from "@/lib/server/prisma-demo-shared";
 
 export async function getDemoCustomers() {
   const requests = await getDemoRequests();
@@ -45,26 +24,82 @@ export async function getDemoCustomers() {
 }
 
 export async function getDemoReviews() {
-  const reviews = await readReviews();
-  return reviews.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const companyId = await resolvePanelCompanyId();
+  const reviews = await db.guestReview.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return reviews.map((review) => ({
+    id: review.id,
+    companyId: review.companyId,
+    villaSlug: review.villa.slug,
+    villaTitle: review.villa.title,
+    guestName: review.guestName,
+    rating: review.rating,
+    comment: review.comment,
+    source: review.source,
+    status: mapReviewStatusToDemo(review.status),
+    createdAt: review.createdAt.toISOString(),
+    staffNote: review.staffNote ?? undefined,
+  }));
 }
 
 export async function updateDemoReviewStatus(reviewId: string, status: DemoReviewStatus) {
-  const reviews = await getDemoReviews();
-  const reviewIndex = reviews.findIndex((review) => review.id === reviewId);
+  const review = await db.guestReview.findUnique({
+    where: { id: reviewId },
+    select: { id: true, companyId: true },
+  });
 
-  if (reviewIndex === -1) {
+  if (!review) {
     throw new DemoOperationsStoreError("Yorum bulunamadi.");
   }
 
-  reviews[reviewIndex] = {
-    ...reviews[reviewIndex],
-    status,
+  await assertPanelCompanyAccess(review.companyId);
+
+  const updated = await db.guestReview.update({
+    where: { id: reviewId },
+    data: {
+      status: mapDemoReviewStatusToPrisma(status),
+      updatedAt: new Date(),
+      staffNote:
+        status === "PUBLISHED"
+          ? "Yorum yayina alindi."
+          : status === "HIDDEN"
+            ? "Yorum gizli moda alindi."
+            : "Yorum moderasyon bekliyor.",
+    },
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+  });
+
+  return {
+    id: updated.id,
+    companyId: updated.companyId,
+    villaSlug: updated.villa.slug,
+    villaTitle: updated.villa.title,
+    guestName: updated.guestName,
+    rating: updated.rating,
+    comment: updated.comment,
+    source: updated.source,
+    status: mapReviewStatusToDemo(updated.status),
+    createdAt: updated.createdAt.toISOString(),
+    staffNote: updated.staffNote ?? undefined,
   };
-
-  await writeReviews(reviews);
-
-  return reviews[reviewIndex];
 }
 
 export async function getDemoCrmOverview() {

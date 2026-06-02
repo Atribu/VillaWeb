@@ -1,44 +1,38 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { db } from "@/lib/db";
 import {
   VILLA_IMAGE_RULES,
   type AvailabilityRange,
   chooseCoverGradient,
   formatCurrency,
   normalizeVillaSlug,
-  seedVillaCatalog,
   type CatalogVilla,
 } from "@/lib/villa-catalog";
-import { getResolvedVillaPricing, parseCurrencyLabel } from "@/lib/demo-operations";
+import { getResolvedVillaPricing } from "@/lib/demo-operations";
+import { getUserSession } from "@/lib/auth/server-session";
+import {
+  assertPanelCompanyAccess,
+  resolvePanelCompanyId,
+} from "@/lib/server/demo-company-context";
+import {
+  dateKey,
+  decimalToNumber,
+  getDefaultCompanyId,
+  getPrimaryWebsiteIdForCompany,
+} from "@/lib/server/prisma-demo-shared";
 import {
   getDemoDiscountCampaigns,
   getDemoPricingRecords,
   getDemoRequests,
 } from "@/lib/server/demo-operations-store";
 
-const demoDataDirectory = path.join(process.cwd(), "data");
-const demoVillaFilePath = path.join(demoDataDirectory, "demo-villas.json");
 const demoUploadDirectory = path.join(process.cwd(), "public", "uploads", "villas");
 
 export class DemoVillaStoreError extends Error {}
-
-async function ensureDemoVillaStore() {
-  await mkdir(demoDataDirectory, { recursive: true });
-  await mkdir(demoUploadDirectory, { recursive: true });
-
-  try {
-    await access(demoVillaFilePath);
-  } catch {
-    await writeFile(demoVillaFilePath, JSON.stringify(seedVillaCatalog, null, 2), "utf8");
-  }
-}
-
-async function saveDemoVillas(villas: CatalogVilla[]) {
-  await writeFile(demoVillaFilePath, JSON.stringify(villas, null, 2), "utf8");
-}
 
 function sortAvailabilityRanges(ranges: AvailabilityRange[]) {
   return [...ranges].sort(
@@ -111,57 +105,138 @@ function validateImageFiles(files: File[]) {
   }
 }
 
-async function getStoredDemoVillas() {
-  await ensureDemoVillaStore();
-  const raw = await readFile(demoVillaFilePath, "utf8");
-  const villas = (JSON.parse(raw) as CatalogVilla[]).map((villa) => ({
-    ...villa,
-    availabilityRanges: sortAvailabilityRanges(villa.availabilityRanges ?? []),
-  }));
-
-  return villas.sort(
-    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-  );
+function mapAvailabilityRange(
+  range: {
+    id: string;
+    startsAt: Date;
+    endsAt: Date;
+    note: string | null;
+    blockType: "RESERVED" | "MAINTENANCE" | "UNAVAILABLE" | "OWNER_STAY";
+    sourceRequestId: string | null;
+  },
+): AvailabilityRange {
+  return {
+    id: range.id,
+    startDate: dateKey(range.startsAt),
+    endDate: dateKey(range.endsAt),
+    label: range.note ?? "Manuel blok",
+    status: range.blockType === "OWNER_STAY" ? "UNAVAILABLE" : range.blockType,
+    sourceRequestId: range.sourceRequestId ?? undefined,
+  };
 }
 
-export async function getDemoVillas() {
+async function queryVillas(input?: { companyId?: string | null; includeAll?: boolean }) {
+  const companyId = await resolvePanelCompanyId(input);
+
+  return db.villa.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      images: {
+        orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+      },
+      availabilityBlocks: {
+        orderBy: { startsAt: "asc" },
+      },
+      dailyMetrics: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getDemoVillas(input?: { companyId?: string | null; includeAll?: boolean }) {
   const [villas, pricingRecords, discountCampaigns, requests] = await Promise.all([
-    getStoredDemoVillas(),
-    getDemoPricingRecords(),
-    getDemoDiscountCampaigns(),
-    getDemoRequests(),
+    queryVillas(input),
+    getDemoPricingRecords(input),
+    getDemoDiscountCampaigns(input),
+    getDemoRequests(input),
   ]);
 
-  return villas.map((villa) => {
-    const resolvedPricing = getResolvedVillaPricing(villa, pricingRecords, discountCampaigns);
-    const liveRequestCount = requests.filter(
-      (request) => request.villaSlug === villa.slug && request.status !== "CANCELLED",
-    ).length;
-    const approvedRevenue = requests
-      .filter((request) => request.villaSlug === villa.slug && request.status === "APPROVED")
-      .reduce((sum, request) => sum + request.pricing.grandTotal, 0);
+  return villas.map((villa, index) => {
+    const baseVilla: CatalogVilla = {
+      id: villa.id,
+      companyId: villa.companyId,
+      title: villa.title,
+      slug: villa.slug,
+      locationLabel: villa.district ? `${villa.district}, ${villa.city}` : villa.city,
+      city: villa.city,
+      district: villa.district ?? villa.city,
+      badge: villa.badge ?? "Secili Villa",
+      category: villa.category ?? "Villa",
+      status: villa.status === "ACTIVE" ? "ACTIVE" : "DRAFT",
+      featured: villa.featured,
+      rating: decimalToNumber(villa.averageRating) || undefined,
+      reviewCount: villa.reviewCount || undefined,
+      isSuperhost: villa.isSuperhost,
+      shortDescription: villa.shortDescription ?? villa.description,
+      description: villa.description,
+      nightlyPrice: decimalToNumber(villa.nightlyBasePrice),
+      capacity: villa.capacity,
+      bedroomCount: villa.bedroomCount,
+      bathroomCount: villa.bathroomCount,
+      poolType: villa.poolType ?? "Ozel havuz",
+      imageCount: villa.images.length,
+      imageUrls: villa.images.map((image) => image.url),
+      coverImageUrl: villa.images.find((image) => image.isCover)?.url ?? villa.coverImageUrl ?? villa.images[0]?.url,
+      coverGradient: chooseCoverGradient(index),
+      seoTitle: villa.seoTitle ?? villa.title,
+      seoDescription: villa.seoDescription ?? villa.shortDescription ?? villa.description,
+      focusKeyword: villa.focusKeyword ?? villa.slug,
+      coverAlt: villa.coverAlt ?? villa.title,
+      viewCount: villa.dailyMetrics.reduce((sum, metric) => sum + metric.viewCount, 0),
+      requestCount: requests.filter((request) => request.villaSlug === villa.slug).length,
+      revenueLabel: formatCurrency(
+        requests
+          .filter((request) => request.villaSlug === villa.slug && request.status === "APPROVED")
+          .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
+      ),
+      createdAt: villa.createdAt.toISOString(),
+      availabilityRanges: sortAvailabilityRanges(
+        villa.availabilityBlocks.map((range) =>
+          mapAvailabilityRange({
+            id: range.id,
+            startsAt: range.startsAt,
+            endsAt: range.endsAt,
+            note: range.note,
+            blockType: range.blockType,
+            sourceRequestId: range.sourceRequestId,
+          }),
+        ),
+      ),
+    };
+
+    const resolvedPricing = getResolvedVillaPricing(baseVilla, pricingRecords, discountCampaigns);
 
     return {
-      ...villa,
+      ...baseVilla,
       nightlyPrice: resolvedPricing.baseNightlyPrice,
       discountedNightlyPrice: resolvedPricing.discountedNightlyPrice,
       cleaningFee: resolvedPricing.cleaningFee,
       minNightCount: resolvedPricing.minNightCount,
       activeDiscountTitle: resolvedPricing.activeDiscount?.title,
       activeDiscountPercent: resolvedPricing.activeDiscount?.percentOff,
-      requestCount: villa.requestCount + liveRequestCount,
-      revenueLabel: formatCurrency(parseCurrencyLabel(villa.revenueLabel) + approvedRevenue),
     } satisfies CatalogVilla;
   });
 }
 
-export async function getDemoVillaBySlug(slug: string) {
-  const villas = await getDemoVillas();
+export async function getDemoVillaBySlug(
+  slug: string,
+  input?: { companyId?: string | null; includeAll?: boolean },
+) {
+  const villas = await getDemoVillas(input);
   return villas.find((villa) => villa.slug === slug) ?? null;
 }
 
-export async function createDemoVillaFromFormData(formData: FormData) {
-  await ensureDemoVillaStore();
+export async function createDemoVillaFromFormData(
+  formData: FormData,
+  input?: { companyId?: string | null },
+) {
+  const resolvedCompanyId = (await resolvePanelCompanyId(input)) ?? (await getDefaultCompanyId());
+
+  if (!resolvedCompanyId) {
+    throw new DemoVillaStoreError("Villa icin firma scope belirlenemedi.");
+  }
+
+  await assertPanelCompanyAccess(resolvedCompanyId);
 
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
   const slugInput = getTextField(formData, "slug") || title;
@@ -218,9 +293,15 @@ export async function createDemoVillaFromFormData(formData: FormData) {
 
   validateImageFiles(files);
 
-  const existingVillas = await getStoredDemoVillas();
+  const existing = await db.villa.findFirst({
+    where: {
+      companyId: resolvedCompanyId,
+      slug,
+    },
+    select: { id: true },
+  });
 
-  if (existingVillas.some((villa) => villa.slug === slug)) {
+  if (existing) {
     throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
   }
 
@@ -238,44 +319,95 @@ export async function createDemoVillaFromFormData(formData: FormData) {
     imageUrls.push(`/uploads/villas/${slug}/${fileName}`);
   }
 
-  const createdAt = new Date().toISOString();
-  const createdVilla: CatalogVilla = {
-    id: `villa-${randomUUID().slice(0, 8)}`,
-    title,
-    slug,
+  const session = await getUserSession().catch(() => null);
+  const websiteId = await getPrimaryWebsiteIdForCompany(resolvedCompanyId);
+  const region = await db.region.findFirst({
+    where: {
+      companyId: resolvedCompanyId,
+      OR: [{ name: { equals: district, mode: "insensitive" } }, { name: { equals: city, mode: "insensitive" } }],
+    },
+    select: { id: true },
+  });
+
+  const villa = await db.villa.create({
+    data: {
+      companyId: resolvedCompanyId,
+      websiteId,
+      regionId: region?.id,
+      createdByUserId: session?.id,
+      title,
+      slug,
+      badge,
+      category,
+      shortDescription,
+      description,
+      city,
+      district,
+      address: `${district}, ${city}`,
+      capacity,
+      bedroomCount,
+      bathroomCount,
+      poolType,
+      nightlyBasePrice: nightlyPrice,
+      cleaningFee: 0,
+      minNightCount: 1,
+      currency: "TRY",
+      status,
+      featured,
+      averageRating: 0,
+      reviewCount: 0,
+      isSuperhost: false,
+      coverImageUrl: imageUrls[0],
+      coverAlt,
+      seoTitle,
+      seoDescription,
+      focusKeyword,
+      images: {
+        create: imageUrls.map((url, index) => ({
+          url,
+          storageKey: url.replace("/uploads/villas/", ""),
+          altText: index === 0 ? coverAlt : `${title} galeri gorseli ${index + 1}`,
+          sortOrder: index + 1,
+          isCover: index === 0,
+        })),
+      },
+    },
+  });
+
+  return {
+    id: villa.id,
+    companyId: villa.companyId,
+    title: villa.title,
+    slug: villa.slug,
     locationLabel: `${district}, ${city}`,
-    city,
-    district,
-    badge,
-    category,
-    status,
-    featured,
-    shortDescription,
-    description,
-    nightlyPrice,
+    city: villa.city,
+    district: villa.district ?? city,
+    badge: villa.badge ?? badge,
+    category: villa.category ?? category,
+    status: villa.status === "ACTIVE" ? "ACTIVE" : "DRAFT",
+    featured: villa.featured,
+    shortDescription: villa.shortDescription ?? shortDescription,
+    description: villa.description,
+    nightlyPrice: decimalToNumber(villa.nightlyBasePrice),
     discountedNightlyPrice,
-    capacity,
-    bedroomCount,
-    bathroomCount,
-    poolType,
+    capacity: villa.capacity,
+    bedroomCount: villa.bedroomCount,
+    bathroomCount: villa.bathroomCount,
+    poolType: villa.poolType ?? poolType,
     imageCount: imageUrls.length,
     imageUrls,
     coverImageUrl: imageUrls[0],
-    coverGradient: chooseCoverGradient(existingVillas.length),
-    seoTitle,
-    seoDescription,
-    focusKeyword,
-    coverAlt,
+    coverGradient: chooseCoverGradient(0),
+    seoTitle: villa.seoTitle ?? seoTitle,
+    seoDescription: villa.seoDescription ?? seoDescription,
+    focusKeyword: villa.focusKeyword ?? focusKeyword,
+    coverAlt: villa.coverAlt ?? coverAlt,
     viewCount: 0,
     requestCount: 0,
     revenueLabel: formatCurrency(0),
-    createdAt,
+    createdAt: villa.createdAt.toISOString(),
     availabilityRanges: [],
-  };
-
-  await saveDemoVillas([createdVilla, ...existingVillas]);
-
-  return createdVilla;
+  } satisfies CatalogVilla;
 }
 
 export async function addDemoVillaAvailability(input: {
@@ -286,19 +418,25 @@ export async function addDemoVillaAvailability(input: {
   status: AvailabilityRange["status"];
   sourceRequestId?: string;
 }) {
-  const villas = await getStoredDemoVillas();
-  const villaIndex = villas.findIndex((villa) => villa.slug === input.slug);
+  const villa = await db.villa.findFirst({
+    where: { slug: input.slug },
+    include: {
+      availabilityBlocks: true,
+    },
+  });
 
-  if (villaIndex === -1) {
+  if (!villa) {
     throw new DemoVillaStoreError("Villa bulunamadi.");
   }
+
+  await assertPanelCompanyAccess(villa.companyId);
 
   if (!input.startDate || !input.endDate) {
     throw new DemoVillaStoreError("Baslangic ve bitis tarihi zorunludur.");
   }
 
   const startDate = new Date(`${input.startDate}T00:00:00`);
-  const endDate = new Date(`${input.endDate}T00:00:00`);
+  const endDate = new Date(`${input.endDate}T23:59:59.999Z`);
 
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     throw new DemoVillaStoreError("Tarih alani gecerli degil.");
@@ -308,91 +446,99 @@ export async function addDemoVillaAvailability(input: {
     throw new DemoVillaStoreError("Bitis tarihi baslangic tarihinden sonra olmalidir.");
   }
 
-  const villa = villas[villaIndex];
-  const existingRanges = villa.availabilityRanges ?? [];
-  const overlaps = existingRanges.find((range) => {
-    const rangeStart = new Date(`${range.startDate}T00:00:00`);
-    const rangeEnd = new Date(`${range.endDate}T00:00:00`);
-
-    return startDate < rangeEnd && endDate > rangeStart;
-  });
+  const overlaps = villa.availabilityBlocks.find(
+    (range) => startDate < range.endsAt && endDate > range.startsAt,
+  );
 
   if (overlaps) {
     throw new DemoVillaStoreError(
-      `${overlaps.startDate} - ${overlaps.endDate} araliginda baska bir blok zaten kayitli.`,
+      `${dateKey(overlaps.startsAt)} - ${dateKey(overlaps.endsAt)} araliginda baska bir blok zaten kayitli.`,
     );
   }
 
-  const nextRange: AvailabilityRange = {
-    id: `availability-${randomUUID().slice(0, 8)}`,
-    startDate: input.startDate,
-    endDate: input.endDate,
-    label: input.label.trim() || "Manuel blok",
-    status: input.status,
-    sourceRequestId: input.sourceRequestId,
-  };
+  await db.villaAvailabilityBlock.create({
+    data: {
+      id: `availability-${randomUUID().slice(0, 8)}`,
+      villaId: villa.id,
+      createdByUserId: (await getUserSession().catch(() => null))?.id,
+      startsAt: startDate,
+      endsAt: endDate,
+      blockType: input.status,
+      note: input.label.trim() || "Manuel blok",
+      sourceRequestId: input.sourceRequestId,
+    },
+  });
 
-  const updatedVilla: CatalogVilla = {
-    ...villa,
-    availabilityRanges: sortAvailabilityRanges([...existingRanges, nextRange]),
-  };
+  const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId });
 
-  villas[villaIndex] = updatedVilla;
-  await saveDemoVillas(villas);
+  if (!updatedVilla) {
+    throw new DemoVillaStoreError("Villa uygunluk kaydi eklendikten sonra okunamadi.");
+  }
 
   return updatedVilla;
 }
 
 export async function deleteDemoVillaAvailability(input: { slug: string; rangeId: string }) {
-  const villas = await getStoredDemoVillas();
-  const villaIndex = villas.findIndex((villa) => villa.slug === input.slug);
+  const range = await db.villaAvailabilityBlock.findFirst({
+    where: {
+      id: input.rangeId,
+      villa: {
+        slug: input.slug,
+      },
+    },
+    include: {
+      villa: {
+        select: { companyId: true },
+      },
+    },
+  });
 
-  if (villaIndex === -1) {
-    throw new DemoVillaStoreError("Villa bulunamadi.");
-  }
-
-  const villa = villas[villaIndex];
-  const nextRanges = (villa.availabilityRanges ?? []).filter((range) => range.id !== input.rangeId);
-
-  if (nextRanges.length === (villa.availabilityRanges ?? []).length) {
+  if (!range) {
     throw new DemoVillaStoreError("Silinecek uygunluk kaydi bulunamadi.");
   }
 
-  villas[villaIndex] = {
-    ...villa,
-    availabilityRanges: sortAvailabilityRanges(nextRanges),
-  };
+  await assertPanelCompanyAccess(range.villa.companyId);
+  await db.villaAvailabilityBlock.delete({
+    where: { id: range.id },
+  });
 
-  await saveDemoVillas(villas);
+  const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: range.villa.companyId });
 
-  return villas[villaIndex];
+  if (!updatedVilla) {
+    throw new DemoVillaStoreError("Villa uygunluk kaydi silindikten sonra okunamadi.");
+  }
+
+  return updatedVilla;
 }
 
 export async function deleteDemoVillaAvailabilityByRequestId(input: {
   slug: string;
   requestId: string;
 }) {
-  const villas = await getStoredDemoVillas();
-  const villaIndex = villas.findIndex((villa) => villa.slug === input.slug);
+  const villa = await db.villa.findFirst({
+    where: { slug: input.slug },
+    select: { id: true, companyId: true },
+  });
 
-  if (villaIndex === -1) {
+  if (!villa) {
     throw new DemoVillaStoreError("Villa bulunamadi.");
   }
 
-  const villa = villas[villaIndex];
-  const existingRanges = villa.availabilityRanges ?? [];
+  await assertPanelCompanyAccess(villa.companyId);
 
-  const nextRanges = existingRanges.filter(
-    (range) => range.sourceRequestId !== input.requestId || range.status !== "RESERVED",
-  );
+  await db.villaAvailabilityBlock.deleteMany({
+    where: {
+      villaId: villa.id,
+      sourceRequestId: input.requestId,
+      blockType: "RESERVED",
+    },
+  });
 
-  // Idempotent davranış: zaten yoksa hata fırlatma.
-  villas[villaIndex] = {
-    ...villa,
-    availabilityRanges: sortAvailabilityRanges(nextRanges),
-  };
+  const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId });
 
-  await saveDemoVillas(villas);
+  if (!updatedVilla) {
+    throw new DemoVillaStoreError("Villa uygunluk kaydi guncellenemedi.");
+  }
 
-  return villas[villaIndex];
+  return updatedVilla;
 }

@@ -26,6 +26,7 @@ export type DemoReviewSource = "GOOGLE" | "DIRECT" | "WHATSAPP";
 
 export type DemoReviewRecord = {
   id: string;
+  companyId?: string;
   villaSlug: string;
   villaTitle: string;
   guestName: string;

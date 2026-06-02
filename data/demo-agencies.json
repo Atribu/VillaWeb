@@ -6,10 +6,11 @@
     "ownerName": "Pazarlama Ekibi",
     "city": "Istanbul",
     "status": "ACTIVE",
-    "requestCount": 3,
-    "approvedRevenue": 65970,
-    "openPipeline": 157261,
-    "note": "SEO ve organik kanallar uzerinden gelen dogrudan rezervasyon akislarini toplar."
+    "requestCount": 1,
+    "approvedRevenue": 0,
+    "openPipeline": 82566,
+    "note": "SEO ve organik kanallar uzerinden gelen dogrudan rezervasyon akislarini toplar.",
+    "companyId": "company-sahil-collection"
   },
   {
     "id": "agency-holiday-partners",
@@ -21,7 +22,8 @@
     "requestCount": 6,
     "approvedRevenue": 184000,
     "openPipeline": 2,
-    "note": "Partner acenta tarafinda komisyon bazli calisan distribusyon kanali."
+    "note": "Partner acenta tarafinda komisyon bazli calisan distribusyon kanali.",
+    "companyId": "company-sahil-collection"
   },
   {
     "id": "agency-merkez-rezervasyon",
@@ -30,9 +32,10 @@
     "ownerName": "Satis Masasi",
     "city": "Antalya",
     "status": "ACTIVE",
-    "requestCount": 0,
-    "approvedRevenue": 0,
-    "openPipeline": 0,
-    "note": "Telefon, WhatsApp ve panelden acilan manuel rezervasyonlar bu ekipten geciyor."
+    "requestCount": 2,
+    "approvedRevenue": 65970,
+    "openPipeline": 74695,
+    "note": "Telefon, WhatsApp ve panelden acilan manuel rezervasyonlar bu ekipten geciyor.",
+    "companyId": "company-villavera"
   }
 ]

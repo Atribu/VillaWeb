@@ -1,4 +1,5 @@
 import type { CatalogVilla } from "@/lib/villa-catalog";
+import { getFallbackCompanyIdForVillaSlug } from "@/lib/demo-companies";
 import { formatCurrency, seedVillaCatalog } from "@/lib/villa-catalog";
 import { getNightCount } from "@/lib/villa-availability";
 
@@ -12,6 +13,7 @@ export type RequestStatus =
 export type RequestOrigin = "PUBLIC_FORM" | "MANUAL_PANEL";
 
 export type DemoPricingRecord = {
+  companyId: string;
   villaSlug: string;
   baseNightlyPrice: number;
   cleaningFee: number;
@@ -21,6 +23,7 @@ export type DemoPricingRecord = {
 
 export type DemoDiscountCampaign = {
   id: string;
+  companyId: string;
   title: string;
   villaScope: "ALL" | string;
   percentOff: number;
@@ -33,6 +36,7 @@ export type DemoDiscountCampaign = {
 
 export type DemoCoupon = {
   id: string;
+  companyId: string;
   title: string;
   code: string;
   villaScope: "ALL" | string;
@@ -63,6 +67,7 @@ export type RequestPricingBreakdown = {
 
 export type DemoRequest = {
   id: string;
+  companyId: string;
   villaSlug: string;
   villaTitle: string;
   checkIn: string;
@@ -83,6 +88,7 @@ export type DemoRequestEventType = "CREATED" | "STATUS_CHANGED";
 
 export type DemoRequestEvent = {
   id: string;
+  companyId: string;
   requestId: string;
   villaSlug: string;
   villaTitle: string;
@@ -144,6 +150,7 @@ export const REQUEST_STATUS_OPTIONS: Array<{
 ];
 
 export const seedDemoPricingRecords: DemoPricingRecord[] = seedVillaCatalog.map((villa) => ({
+  companyId: villa.companyId,
   villaSlug: villa.slug,
   baseNightlyPrice: villa.nightlyPrice,
   cleaningFee: villa.capacity > 8 ? 4500 : villa.capacity > 4 ? 3000 : 1800,
@@ -154,6 +161,7 @@ export const seedDemoPricingRecords: DemoPricingRecord[] = seedVillaCatalog.map(
 export const seedDemoDiscountCampaigns: DemoDiscountCampaign[] = [
   {
     id: "discount-soleia-spring",
+    companyId: "company-villavera",
     title: "Ilkbahar Deniz Manzarasi Kampanyasi",
     villaScope: "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
     percentOff: 14,
@@ -165,6 +173,7 @@ export const seedDemoDiscountCampaigns: DemoDiscountCampaign[] = [
   },
   {
     id: "discount-palm-family",
+    companyId: "company-sahil-collection",
     title: "Ailelere Ozel Nisan Avantaji",
     villaScope: "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
     percentOff: 11,
@@ -176,6 +185,7 @@ export const seedDemoDiscountCampaigns: DemoDiscountCampaign[] = [
   },
   {
     id: "discount-marea-groups",
+    companyId: "company-sahil-collection",
     title: "Grup Rezervasyon Yaz Oncesi",
     villaScope: "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand",
     percentOff: 12,
@@ -190,6 +200,7 @@ export const seedDemoDiscountCampaigns: DemoDiscountCampaign[] = [
 export const seedDemoCoupons: DemoCoupon[] = [
   {
     id: "coupon-yazbasliyor",
+    companyId: "company-villavera",
     title: "Yaz Basliyor Kuponu",
     code: "YAZBASLIYOR10",
     villaScope: "ALL",
@@ -203,6 +214,7 @@ export const seedDemoCoupons: DemoCoupon[] = [
   },
   {
     id: "coupon-balayi",
+    companyId: "company-villavera",
     title: "Balayi Ozel Kod",
     code: "BALAYI7",
     villaScope: "kas-balayi-icin-muhafazakar-villa-verde-cove",
@@ -219,6 +231,7 @@ export const seedDemoCoupons: DemoCoupon[] = [
 export const seedDemoRequests: DemoRequest[] = [
   {
     id: "request-001",
+    companyId: "company-villavera",
     villaSlug: "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
     villaTitle: "Villa Soleia Lagoon",
     checkIn: "2026-04-22",
@@ -250,6 +263,7 @@ export const seedDemoRequests: DemoRequest[] = [
   },
   {
     id: "request-002",
+    companyId: "company-sahil-collection",
     villaSlug: "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
     villaTitle: "Villa Palm Serenity",
     checkIn: "2026-04-18",
@@ -277,6 +291,7 @@ export const seedDemoRequests: DemoRequest[] = [
   },
   {
     id: "request-003",
+    companyId: "company-villavera",
     villaSlug: "kas-balayi-icin-muhafazakar-villa-verde-cove",
     villaTitle: "Villa Verde Cove",
     checkIn: "2026-05-10",
@@ -312,6 +327,7 @@ export function buildSeedRequestEvents(requests: DemoRequest[]) {
     const origin = request.origin ?? "PUBLIC_FORM";
     const createdEvent: DemoRequestEvent = {
       id: `event-${request.id}-created`,
+      companyId: request.companyId,
       requestId: request.id,
       villaSlug: request.villaSlug,
       villaTitle: request.villaTitle,
@@ -334,6 +350,7 @@ export function buildSeedRequestEvents(requests: DemoRequest[]) {
     const statusEventDate = new Date(createdAt.getTime() + 1000 * 60 * 35).toISOString();
     const statusEvent: DemoRequestEvent = {
       id: `event-${request.id}-status`,
+      companyId: request.companyId,
       requestId: request.id,
       villaSlug: request.villaSlug,
       villaTitle: request.villaTitle,
@@ -404,6 +421,7 @@ export function getBasePricingRecord(
 ): DemoPricingRecord {
   return (
     pricingRecords.find((record) => record.villaSlug === villa.slug) ?? {
+      companyId: villa.companyId ?? getFallbackCompanyIdForVillaSlug(villa.slug),
       villaSlug: villa.slug,
       baseNightlyPrice: villa.nightlyPrice,
       cleaningFee: 0,

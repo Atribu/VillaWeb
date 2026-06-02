@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { signOutUser } from "@/lib/auth/actions";
+import { getDemoCompanySiteHref } from "@/lib/demo-companies";
 import { PanelSidebar } from "@/components/panel/panel-sidebar";
 import { getUserSession } from "@/lib/auth/server-session";
 
 export default async function ProtectedPanelLayout({ children }: { children: ReactNode }) {
   const session = await getUserSession();
   const role = session?.role ?? "STAFF";
+  const companyName = session?.companyName ?? "Demo Platform";
+  const panelBrand = role === "SUPER_ADMIN" ? "VillaHub" : (session?.companyName ?? "Firma Paneli");
+  const siteHref = session?.companySlug ? getDemoCompanySiteHref(session.companySlug) : "/";
   const todayLabel = new Intl.DateTimeFormat("tr-TR", {
     day: "numeric",
     month: "long",
@@ -37,21 +41,28 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
           <div className="flex items-center gap-6">
             <Link href="/" className="block">
               <p className="font-display text-4xl font-semibold tracking-tight">
-                Villa<span className="text-white/80">Vera</span>
+                {role === "SUPER_ADMIN" ? "Villa" : panelBrand.split(" ")[0]}
+                <span className="text-white/80">
+                  {role === "SUPER_ADMIN" ? "Hub" : panelBrand.split(" ").slice(1).join(" ")}
+                </span>
               </p>
             </Link>
 
             <div className="hidden items-center gap-3 text-sm xl:flex">
               <span className="font-semibold">Backoffice</span>
               <span className="rounded-full bg-white/14 px-3 py-1 text-xs font-medium text-white/90">
-                {role === "ADMIN" ? "Admin Tam Yetki" : "Villa Personeli"}
+                {role === "SUPER_ADMIN"
+                  ? "Platform Super Admin"
+                  : role === "ADMIN"
+                    ? `${companyName} Admin`
+                    : `${companyName} Personel`}
               </span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 xl:justify-end">
             <div className="rounded-md bg-white/12 px-3 py-2 text-sm font-medium text-white/95">
-              Demo Kur Paneli
+              {role === "SUPER_ADMIN" ? "Coklu Firma Demo Paneli" : companyName}
             </div>
             <div className="flex min-w-[260px] items-center overflow-hidden rounded-md border border-[#205d87] bg-white text-slate-700 shadow-inner">
               <div className="border-r border-slate-200 bg-[#f6f8fa] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -73,7 +84,7 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
 
             <div className="flex items-center gap-2">
               <Link
-                href="/"
+                href={siteHref}
                 className="rounded-md bg-white/12 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/18"
               >
                 Site
@@ -108,13 +119,15 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
               <div className="flex items-center gap-3">
                 <div className="h-3 w-3 rounded-full bg-[#2b78ad]" />
                 <p className="text-xl font-semibold text-[#4f5565]">
-                  {role === "ADMIN"
-                    ? "VillaVera backoffice sistemine hos geldiniz"
-                    : "Villa operasyon ekranina hos geldiniz"}
+                  {role === "SUPER_ADMIN"
+                    ? "Platform firmalari ve operasyon merkezine hos geldiniz"
+                    : role === "ADMIN"
+                      ? `${companyName} backoffice sistemine hos geldiniz`
+                      : `${companyName} villa operasyon ekranina hos geldiniz`}
                 </p>
               </div>
               <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#7a8796]">
-                Demo operasyon paneli
+                {role === "SUPER_ADMIN" ? "Platform kontrol merkezi" : "Firma bazli demo panel"}
               </span>
             </div>
           </div>

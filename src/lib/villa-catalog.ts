@@ -20,6 +20,7 @@ export type AvailabilityRange = {
 
 export type CatalogVilla = {
   id: string;
+  companyId: string;
   title: string;
   slug: string;
   locationLabel: string;
@@ -70,6 +71,7 @@ const coverGradients = [
 export const seedVillaCatalog: CatalogVilla[] = [
   {
     id: "villa-soleia-lagoon",
+    companyId: "company-villavera",
     title: "Villa Soleia Lagoon",
     slug: "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
     locationLabel: "Kalkan, Antalya",
@@ -128,6 +130,7 @@ export const seedVillaCatalog: CatalogVilla[] = [
   },
   {
     id: "villa-palm-serenity",
+    companyId: "company-sahil-collection",
     title: "Villa Palm Serenity",
     slug: "fethiye-ozel-havuzlu-aile-villasi-palm-serenity",
     locationLabel: "Fethiye, Mugla",
@@ -186,6 +189,7 @@ export const seedVillaCatalog: CatalogVilla[] = [
   },
   {
     id: "villa-verde-cove",
+    companyId: "company-villavera",
     title: "Villa Verde Cove",
     slug: "kas-balayi-icin-muhafazakar-villa-verde-cove",
     locationLabel: "Kas, Antalya",
@@ -243,6 +247,7 @@ export const seedVillaCatalog: CatalogVilla[] = [
   },
   {
     id: "villa-marea-grand",
+    companyId: "company-sahil-collection",
     title: "Villa Marea Grand",
     slug: "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand",
     locationLabel: "Bodrum, Mugla",

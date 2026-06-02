@@ -1,20 +1,28 @@
 import Link from "next/link";
 import { navigation } from "@/lib/site-data";
+import { getDemoCompanySiteHref } from "@/lib/demo-companies";
 import { Container } from "@/components/ui/container";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const company = await getCurrentPublicCompany();
+
   return (
     <header className="sticky top-0 z-50 border-b border-black/6 bg-[rgba(255,255,255,0.92)] backdrop-blur-xl">
       <Container className="py-4">
         <div className="flex items-center justify-between gap-5">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href={getDemoCompanySiteHref(company.slug)} className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-coral)] text-sm font-bold text-white shadow-sm">
-              VV
+              {company.shortName
+                .split(" ")
+                .map((item) => item[0])
+                .join("")
+                .slice(0, 2)}
             </div>
             <div>
-              <p className="text-xl font-semibold tracking-tight text-slate-900">VillaVera</p>
+              <p className="text-xl font-semibold tracking-tight text-slate-900">{company.shortName}</p>
               <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">
-                Villa Collection
+                {company.tagline}
               </p>
             </div>
           </Link>
@@ -35,10 +43,10 @@ export function SiteHeader() {
 
           <div className="hidden items-center gap-3 md:flex">
             <a
-              href="tel:+908500000000"
+              href={`tel:${company.phone.replace(/\s+/g, "")}`}
               className="rounded-full border border-black/8 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
             >
-              +90 850 000 00 00
+              {company.phone}
             </a>
             <Link
               href="/panel/giris"
@@ -47,7 +55,7 @@ export function SiteHeader() {
               Panel
             </Link>
             <Link
-              href="/talep"
+              href={getDemoCompanySiteHref(company.slug, "/talep")}
               className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
             >
               Talep Olustur
@@ -60,7 +68,7 @@ export function SiteHeader() {
             {navigation.map((item) => (
               <Link
                 key={item.href}
-                href={item.href}
+                href={getDemoCompanySiteHref(company.slug, item.href)}
                 className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
               >
                 {item.label}
@@ -69,7 +77,7 @@ export function SiteHeader() {
           </nav>
 
           <div className="rounded-full bg-[var(--color-coral-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-            Reklamsiz buyume icin SEO odakli kurgu
+            {company.accentLabel}
           </div>
         </div>
       </Container>

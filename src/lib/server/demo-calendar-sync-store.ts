@@ -1,58 +1,114 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import {
-  seedDemoChannelMappings,
-  seedDemoIcalSources,
-  seedDemoSyncLogs,
-  type DemoCalendarSourceStatus,
-  type DemoSyncLogRecord,
-  type DemoSyncMode,
-  type DemoSyncOutcome,
+import { db } from "@/lib/db";
+import type {
+  DemoCalendarSourceStatus,
+  DemoSyncMode,
+  DemoSyncOutcome,
 } from "@/lib/demo-calendar-sync";
-
-const demoDataDirectory = path.join(process.cwd(), "data");
-const sourcesFilePath = path.join(demoDataDirectory, "demo-ical-sources.json");
-const mappingsFilePath = path.join(demoDataDirectory, "demo-channel-mappings.json");
-const logsFilePath = path.join(demoDataDirectory, "demo-sync-logs.json");
+import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
+import {
+  iso,
+  mapCalendarSourceStatusToDemo,
+  mapDemoCalendarSourceStatusToPrisma,
+  mapDemoSyncModeToPrisma,
+  mapSyncModeToDemo,
+  mapSyncOutcomeToDemo,
+} from "@/lib/server/prisma-demo-shared";
 
 export class DemoCalendarSyncStoreError extends Error {}
 
-async function ensureJsonFile<T>(filePath: string, seedData: T) {
-  await mkdir(demoDataDirectory, { recursive: true });
-
-  try {
-    await access(filePath);
-  } catch {
-    await writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
-  }
-}
-
-async function readJsonFile<T>(filePath: string, seedData: T): Promise<T> {
-  await ensureJsonFile(filePath, seedData);
-  const raw = await readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJsonFile<T>(filePath: string, value: T) {
-  await writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
-
 export async function getDemoIcalSources() {
-  const sources = await readJsonFile(sourcesFilePath, seedDemoIcalSources);
-  return sources.sort((left, right) => right.lastSyncedAt.localeCompare(left.lastSyncedAt));
+  const companyId = await resolvePanelCompanyId();
+
+  const sources = await db.calendarSyncSource.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: [{ lastSyncedAt: "desc" }, { updatedAt: "desc" }],
+  });
+
+  return sources.map((source) => ({
+    id: source.id,
+    companyId: source.companyId,
+    villaSlug: source.villa.slug,
+    villaTitle: source.villa.title,
+    channelName: source.channelName,
+    sourceUrl: source.sourceUrl,
+    direction: source.direction,
+    active: source.active,
+    status: mapCalendarSourceStatusToDemo(source.status),
+    lastSyncedAt: iso(source.lastSyncedAt),
+  }));
 }
 
 export async function getDemoChannelMappings() {
-  const mappings = await readJsonFile(mappingsFilePath, seedDemoChannelMappings);
-  return mappings.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const companyId = await resolvePanelCompanyId();
+
+  const mappings = await db.calendarSyncMapping.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return mappings.map((mapping) => ({
+    id: mapping.id,
+    companyId: mapping.companyId,
+    villaSlug: mapping.villa.slug,
+    villaTitle: mapping.villa.title,
+    channelName: mapping.channelName,
+    remoteCalendarName: mapping.remoteCalendarName,
+    syncMode: mapSyncModeToDemo(mapping.syncMode),
+    active: mapping.active,
+    updatedAt: iso(mapping.updatedAt),
+  }));
 }
 
 export async function getDemoSyncLogs() {
-  const logs = await readJsonFile(logsFilePath, seedDemoSyncLogs);
-  return logs.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const companyId = await resolvePanelCompanyId();
+
+  const logs = await db.calendarSyncLog.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+      source: {
+        select: { id: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return logs.map((log) => ({
+    id: log.id,
+    companyId: log.companyId,
+    sourceId: log.source?.id ?? "",
+    villaSlug: log.villa.slug,
+    villaTitle: log.villa.title,
+    channelName: log.channelName,
+    outcome: mapSyncOutcomeToDemo(log.outcome),
+    eventCount: log.eventCount,
+    message: log.message,
+    createdAt: iso(log.createdAt),
+  }));
 }
 
 export async function updateDemoIcalSource(
@@ -62,35 +118,76 @@ export async function updateDemoIcalSource(
     status?: DemoCalendarSourceStatus;
   },
 ) {
-  const sources = await getDemoIcalSources();
-  const sourceIndex = sources.findIndex((source) => source.id === sourceId);
+  const current = await db.calendarSyncSource.findUnique({
+    where: { id: sourceId },
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+  });
 
-  if (sourceIndex === -1) {
+  if (!current) {
     throw new DemoCalendarSyncStoreError("iCal kaynagi bulunamadi.");
   }
 
-  sources[sourceIndex] = {
-    ...sources[sourceIndex],
-    ...(input.active !== undefined ? { active: input.active } : {}),
-    ...(input.status ? { status: input.status } : {}),
-  };
+  await assertPanelCompanyAccess(current.companyId);
 
-  await writeJsonFile(sourcesFilePath, sources);
-  return sources[sourceIndex];
+  const source = await db.calendarSyncSource.update({
+    where: { id: sourceId },
+    data: {
+      ...(input.active !== undefined ? { active: input.active } : {}),
+      ...(input.status ? { status: mapDemoCalendarSourceStatusToPrisma(input.status) } : {}),
+    },
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+  });
+
+  return {
+    id: source.id,
+    companyId: source.companyId,
+    villaSlug: source.villa.slug,
+    villaTitle: source.villa.title,
+    channelName: source.channelName,
+    sourceUrl: source.sourceUrl,
+    direction: source.direction,
+    active: source.active,
+    status: mapCalendarSourceStatusToDemo(source.status),
+    lastSyncedAt: iso(source.lastSyncedAt),
+  };
 }
 
 export async function runDemoCalendarSync(sourceId: string) {
-  const [sources, logs] = await Promise.all([getDemoIcalSources(), getDemoSyncLogs()]);
-  const sourceIndex = sources.findIndex((source) => source.id === sourceId);
+  const source = await db.calendarSyncSource.findUnique({
+    where: { id: sourceId },
+    include: {
+      villa: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+        },
+      },
+    },
+  });
 
-  if (sourceIndex === -1) {
+  if (!source) {
     throw new DemoCalendarSyncStoreError("Senkron baslatilacak kaynak bulunamadi.");
   }
 
-  const source = sources[sourceIndex];
-  const createdAt = new Date().toISOString();
-  const outcome: DemoSyncOutcome =
-    source.status === "ERROR" ? "WARNING" : source.status === "WARNING" ? "SUCCESS" : "SUCCESS";
+  await assertPanelCompanyAccess(source.companyId);
+
+  const createdAt = new Date();
+  const outcome: DemoSyncOutcome = source.status === "ERROR" ? "WARNING" : "SUCCESS";
   const nextStatus: DemoCalendarSourceStatus = outcome === "SUCCESS" ? "HEALTHY" : "WARNING";
   const eventCount = source.direction === "IMPORT" ? 2 : 1;
   const message =
@@ -98,34 +195,73 @@ export async function runDemoCalendarSync(sourceId: string) {
       ? "Kanal takvimindeki yeni bloklar iceri aktariildi ve kontrol tamamlandi."
       : "Dis kanal icin guncel export linki tekrar yayinlandi.";
 
-  sources[sourceIndex] = {
-    ...source,
-    status: nextStatus,
-    lastSyncedAt: createdAt,
-  };
-
-  const log: DemoSyncLogRecord = {
-    id: `sync-log-${randomUUID().slice(0, 8)}`,
-    sourceId: source.id,
-    villaSlug: source.villaSlug,
-    villaTitle: source.villaTitle,
-    channelName: source.channelName,
-    outcome,
-    eventCount,
-    message,
-    createdAt,
-  };
-
-  logs.unshift(log);
-
-  await Promise.all([
-    writeJsonFile(sourcesFilePath, sources),
-    writeJsonFile(logsFilePath, logs),
+  const [updatedSource, log] = await db.$transaction([
+    db.calendarSyncSource.update({
+      where: { id: sourceId },
+      data: {
+        status: mapDemoCalendarSourceStatusToPrisma(nextStatus),
+        lastSyncedAt: createdAt,
+      },
+      include: {
+        villa: {
+          select: {
+            slug: true,
+            title: true,
+          },
+        },
+      },
+    }),
+    db.calendarSyncLog.create({
+      data: {
+        id: `sync-log-${randomUUID().slice(0, 8)}`,
+        companyId: source.companyId,
+        sourceId: source.id,
+        villaId: source.villa.id,
+        channelName: source.channelName,
+        outcome,
+        eventCount,
+        message,
+        createdAt,
+      },
+      include: {
+        villa: {
+          select: {
+            slug: true,
+            title: true,
+          },
+        },
+        source: {
+          select: { id: true },
+        },
+      },
+    }),
   ]);
 
   return {
-    source: sources[sourceIndex],
-    log,
+    source: {
+      id: updatedSource.id,
+      companyId: updatedSource.companyId,
+      villaSlug: updatedSource.villa.slug,
+      villaTitle: updatedSource.villa.title,
+      channelName: updatedSource.channelName,
+      sourceUrl: updatedSource.sourceUrl,
+      direction: updatedSource.direction,
+      active: updatedSource.active,
+      status: mapCalendarSourceStatusToDemo(updatedSource.status),
+      lastSyncedAt: iso(updatedSource.lastSyncedAt),
+    },
+    log: {
+      id: log.id,
+      companyId: log.companyId,
+      sourceId: log.source?.id ?? "",
+      villaSlug: log.villa.slug,
+      villaTitle: log.villa.title,
+      channelName: log.channelName,
+      outcome: mapSyncOutcomeToDemo(log.outcome),
+      eventCount: log.eventCount,
+      message: log.message,
+      createdAt: iso(log.createdAt),
+    },
   };
 }
 
@@ -136,20 +272,49 @@ export async function updateDemoChannelMapping(
     syncMode?: DemoSyncMode;
   },
 ) {
-  const mappings = await getDemoChannelMappings();
-  const mappingIndex = mappings.findIndex((mapping) => mapping.id === mappingId);
+  const current = await db.calendarSyncMapping.findUnique({
+    where: { id: mappingId },
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+  });
 
-  if (mappingIndex === -1) {
+  if (!current) {
     throw new DemoCalendarSyncStoreError("Kanal eslestirmesi bulunamadi.");
   }
 
-  mappings[mappingIndex] = {
-    ...mappings[mappingIndex],
-    ...(input.active !== undefined ? { active: input.active } : {}),
-    ...(input.syncMode ? { syncMode: input.syncMode } : {}),
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(current.companyId);
 
-  await writeJsonFile(mappingsFilePath, mappings);
-  return mappings[mappingIndex];
+  const mapping = await db.calendarSyncMapping.update({
+    where: { id: mappingId },
+    data: {
+      ...(input.active !== undefined ? { active: input.active } : {}),
+      ...(input.syncMode ? { syncMode: mapDemoSyncModeToPrisma(input.syncMode) } : {}),
+    },
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+  });
+
+  return {
+    id: mapping.id,
+    companyId: mapping.companyId,
+    villaSlug: mapping.villa.slug,
+    villaTitle: mapping.villa.title,
+    channelName: mapping.channelName,
+    remoteCalendarName: mapping.remoteCalendarName,
+    syncMode: mapSyncModeToDemo(mapping.syncMode),
+    active: mapping.active,
+    updatedAt: iso(mapping.updatedAt),
+  };
 }

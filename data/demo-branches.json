@@ -9,7 +9,8 @@
     "status": "PAUSED",
     "userCount": 0,
     "requestCount": 6,
-    "approvedRevenue": 184000
+    "approvedRevenue": 184000,
+    "companyId": "company-sahil-collection"
   },
   {
     "id": "branch-digital-desk",
@@ -20,8 +21,9 @@
     "phone": "+90 212 401 10 10",
     "status": "ACTIVE",
     "userCount": 2,
-    "requestCount": 3,
-    "approvedRevenue": 65970
+    "requestCount": 1,
+    "approvedRevenue": 0,
+    "companyId": "company-sahil-collection"
   },
   {
     "id": "branch-central-desk",
@@ -32,7 +34,8 @@
     "phone": "+90 242 520 20 20",
     "status": "ACTIVE",
     "userCount": 4,
-    "requestCount": 0,
-    "approvedRevenue": 0
+    "requestCount": 2,
+    "approvedRevenue": 65970,
+    "companyId": "company-villavera"
   }
 ]

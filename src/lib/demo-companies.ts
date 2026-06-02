@@ -1,0 +1,96 @@
+export const DEMO_COMPANY_COOKIE_NAME = "villaweb_public_company";
+
+export type DemoCompanyRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  shortName: string;
+  panelLabel: string;
+  tagline: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  primaryDomain: string;
+  supportHours: string;
+  accentLabel: string;
+  heroTitle: string;
+  heroDescription: string;
+};
+
+export const demoCompanies: DemoCompanyRecord[] = [
+  {
+    id: "seed-company-villavera",
+    slug: "villavera",
+    name: "VillaVera Collection",
+    shortName: "VillaVera",
+    panelLabel: "VillaVera Backoffice",
+    tagline: "Premium villa koleksiyonu",
+    phone: "+90 850 000 00 00",
+    whatsapp: "+90 555 000 00 00",
+    email: "merhaba@villavera.com",
+    primaryDomain: "villavera.demo",
+    supportHours: "Her gun 09:00 - 22:00",
+    accentLabel: "Deniz manzarali ve balayi odakli seckiler",
+    heroTitle: "Deniz manzarali, premium ve donusum odakli villa vitrini.",
+    heroDescription:
+      "VillaVera; Kalkan ve Kas odakli premium seckileri, balayi segmenti ve SEO guclu landing kurgusuyla talep toplar.",
+  },
+  {
+    id: "seed-company-sahil",
+    slug: "sahil-collection",
+    name: "Sahil Collection Villas",
+    shortName: "Sahil Collection",
+    panelLabel: "Sahil Collection Panel",
+    tagline: "Aile ve grup villalari",
+    phone: "+90 850 222 11 22",
+    whatsapp: "+90 554 222 11 22",
+    email: "rezervasyon@sahilcollection.com",
+    primaryDomain: "sahilcollection.demo",
+    supportHours: "Hafta ici 09:00 - 20:00",
+    accentLabel: "Aile ve grup konaklamalarinda operasyon agirlikli portfoy",
+    heroTitle: "Aileler ve kalabalik gruplar icin kurumsal villa vitrini.",
+    heroDescription:
+      "Sahil Collection; Fethiye ve Bodrum odakli genis kapasite villalari, kampanya kurgusu ve operasyon takibiyle satisa hazir durur.",
+  },
+];
+
+const fallbackCompanyByVillaSlug: Record<string, string> = {
+  "kalkan-deniz-manzarali-luks-villa-soleia-lagoon": "seed-company-villavera",
+  "kas-balayi-icin-muhafazakar-villa-verde-cove": "seed-company-villavera",
+  "fethiye-ozel-havuzlu-aile-villasi-palm-serenity": "seed-company-sahil",
+  "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand": "seed-company-sahil",
+};
+
+export function getDemoCompanies() {
+  return demoCompanies;
+}
+
+export function getDefaultDemoCompany() {
+  return demoCompanies[0];
+}
+
+export function getDemoCompanyById(companyId?: string | null) {
+  if (!companyId) {
+    return null;
+  }
+
+  return demoCompanies.find((company) => company.id === companyId) ?? null;
+}
+
+export function getDemoCompanyBySlug(companySlug?: string | null) {
+  if (!companySlug) {
+    return null;
+  }
+
+  const normalizedSlug = companySlug.trim().toLowerCase();
+  return demoCompanies.find((company) => company.slug === normalizedSlug) ?? null;
+}
+
+export function getFallbackCompanyIdForVillaSlug(villaSlug: string) {
+  return fallbackCompanyByVillaSlug[villaSlug] ?? getDefaultDemoCompany().id;
+}
+
+export function getDemoCompanySiteHref(companySlug: string, pathname = "/") {
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return `${normalizedPath}?company=${companySlug}`;
+}

@@ -6,6 +6,7 @@ import { Container } from "@/components/ui/container";
 import { formatCurrency } from "@/lib/villa-catalog";
 import { VillaAvailabilityCard } from "@/components/villas/villa-availability-card";
 import { PublicVillaCard } from "@/components/villas/public-villa-card";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 import { getDemoVillaBySlug, getDemoVillas } from "@/lib/server/demo-villa-store";
 
 type PageProps = {
@@ -42,13 +43,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function VillaDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const villa = await getDemoVillaBySlug(slug);
+  const company = await getCurrentPublicCompany();
+  const villa = await getDemoVillaBySlug(slug, { companyId: company.id });
 
   if (!villa) {
     notFound();
   }
 
-  const allVillas = await getDemoVillas();
+  const allVillas = await getDemoVillas({ companyId: company.id });
   const relatedVillas = allVillas
     .filter((item) => item.slug !== villa.slug && item.city === villa.city)
     .slice(0, 3);
@@ -109,7 +111,7 @@ export default async function VillaDetailPage({ params }: PageProps) {
                   {villa.badge}
                 </span>
                 <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
-                  {villa.category}
+                  {villa.category} · {company.shortName}
                 </span>
                 {villa.featured ? (
                   <span className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">

@@ -4,11 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://villaweb.example"),
   title: {
-    default: "VillaVera | Premium Villa Kiralama Deneyimi",
-    template: "%s | VillaVera",
+    default: "VillaWeb | Cok Firmali Villa Platformu",
+    template: "%s | VillaWeb",
   },
   description:
-    "SEO odakli, premium vitrine sahip villa kiralama platformu. Ozel villalari inceleyin, tarih secin ve hizli talep olusturun.",
+    "SEO odakli, cok firmali vitrine sahip villa kiralama platformu. Firma bazli portfoyleri inceleyin, tarih secin ve talep olusturun.",
   keywords: [
     "villa kiralama",
     "premium villa",
@@ -18,16 +18,16 @@ export const metadata: Metadata = {
     "ozel havuzlu villa",
   ],
   openGraph: {
-    title: "VillaVera | Premium Villa Kiralama Deneyimi",
+    title: "VillaWeb | Cok Firmali Villa Platformu",
     description:
-      "SEO odakli, premium vitrine sahip villa kiralama platformu. Ozel villalari inceleyin, tarih secin ve hizli talep olusturun.",
+      "SEO odakli, cok firmali vitrine sahip villa kiralama platformu. Firma bazli portfoyleri inceleyin, tarih secin ve talep olusturun.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "VillaVera | Premium Villa Kiralama Deneyimi",
+    title: "VillaWeb | Cok Firmali Villa Platformu",
     description:
-      "Premium villa vitrinini, kampanyalari ve talep odakli kiralama akisini kesfedin.",
+      "Firma bazli villa vitrinlerini, kampanyalari ve talep odakli kiralama akisini kesfedin.",
   },
 };
 

@@ -9,6 +9,7 @@ import {
   getFeaturedVillaCatalog,
   getVillaQuickStats,
 } from "@/lib/villa-catalog";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export const metadata: Metadata = {
@@ -37,7 +38,8 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const villas = await getDemoVillas();
+  const company = await getCurrentPublicCompany();
+  const villas = await getDemoVillas({ companyId: company.id });
   const featuredVillas = getFeaturedVillaCatalog(villas);
   const quickStats = getVillaQuickStats(villas);
 
@@ -92,15 +94,13 @@ export default async function HomePage() {
             <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--color-coral)]">
-                  SEO Odakli Villa Koleksiyonu
+                  {company.shortName} Demo Vitrini
                 </p>
                 <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-                  Akici ve modern bir arayuzle, kurumsal guven veren villa kiralama deneyimi.
+                  {company.heroTitle}
                 </h1>
                 <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-                  VillaVera; premium vitrin, tarih secimli talep akisi ve panel destekli fiyat
-                  yonetimiyle reklam olmadan buyumeye uygun, modern bir villa kiralama deneyimi
-                  sunar.
+                  {company.heroDescription}
                 </p>
 
                 <div className="mt-8 rounded-[1.8rem] border border-black/6 bg-white p-3 shadow-[0_10px_26px_rgba(15,23,42,0.06)]">

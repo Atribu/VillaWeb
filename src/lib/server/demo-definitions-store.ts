@@ -1,108 +1,182 @@
 import "server-only";
 
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import {
-  seedDemoParameterGroups,
-  seedDemoRegionAirportRecords,
-  type DemoDefinitionStatus,
-} from "@/lib/demo-definitions";
+import { db } from "@/lib/db";
+import type { DemoDefinitionStatus } from "@/lib/demo-definitions";
 import { getDemoVillas } from "@/lib/server/demo-villa-store";
-
-const demoDataDirectory = path.join(process.cwd(), "data");
-const regionsFilePath = path.join(demoDataDirectory, "demo-region-airports.json");
-const parameterGroupsFilePath = path.join(demoDataDirectory, "demo-parameter-groups.json");
+import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
+import {
+  getDefaultCompanyId,
+  iso,
+  mapDefinitionStatusToDemo,
+  mapDemoDefinitionStatusToPrisma,
+} from "@/lib/server/prisma-demo-shared";
 
 export class DemoDefinitionsStoreError extends Error {}
 
-async function ensureJsonFile<T>(filePath: string, seedData: T) {
-  await mkdir(demoDataDirectory, { recursive: true });
-
-  try {
-    await access(filePath);
-  } catch {
-    await writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
-  }
-}
-
-async function readJsonFile<T>(filePath: string, seedData: T): Promise<T> {
-  await ensureJsonFile(filePath, seedData);
-  const raw = await readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJsonFile<T>(filePath: string, value: T) {
-  await writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
-
-async function syncRegionVillaCounts() {
-  const [regions, villas] = await Promise.all([
-    readJsonFile(regionsFilePath, seedDemoRegionAirportRecords),
-    getDemoVillas(),
-  ]);
-
-  const syncedRegions = regions.map((region) => ({
-    ...region,
-    villaCount: villas.filter(
-      (villa) =>
-        villa.city.toLowerCase() === region.city.toLowerCase() &&
-        region.districtScope.some(
-          (district) => district.toLowerCase() === villa.district.toLowerCase(),
-        ),
-    ).length,
-  }));
-
-  await writeJsonFile(regionsFilePath, syncedRegions);
-  return syncedRegions.sort((left, right) => left.regionLabel.localeCompare(right.regionLabel));
+async function resolveDefinitionsCompanyId() {
+  return (await resolvePanelCompanyId()) ?? (await getDefaultCompanyId());
 }
 
 export async function getDemoRegionAirportRecords() {
-  return syncRegionVillaCounts();
+  const companyId = await resolveDefinitionsCompanyId();
+
+  if (!companyId) {
+    return [];
+  }
+
+  const [regions, villas] = await Promise.all([
+    db.region.findMany({
+      where: { OR: [{ companyId }, { companyId: null }] },
+      include: {
+        airports: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+      orderBy: [{ city: "asc" }, { name: "asc" }],
+    }),
+    getDemoVillas({ companyId }),
+  ]);
+
+  return regions.map((region) => {
+    const airport = region.airports[0] ?? null;
+    const villaCount = villas.filter((villa) => {
+      if (villa.city.toLowerCase() !== region.city.toLowerCase()) {
+        return false;
+      }
+
+      if (region.districtScope.length === 0) {
+        return true;
+      }
+
+      return region.districtScope.some(
+        (district) => district.toLowerCase() === (villa.district ?? "").toLowerCase(),
+      );
+    }).length;
+
+    return {
+      id: region.id,
+      regionLabel: region.name,
+      city: region.city,
+      districtScope: region.districtScope,
+      airportCode: airport?.code ?? "-",
+      airportName: airport?.name ?? "Bagli havalimani yok",
+      driveMinutes: airport?.driveMinutes ?? 0,
+      status: mapDefinitionStatusToDemo(region.status),
+      villaCount,
+      updatedAt: iso(region.updatedAt),
+    };
+  });
 }
 
 export async function getDemoParameterGroups() {
-  const groups = await readJsonFile(parameterGroupsFilePath, seedDemoParameterGroups);
-  return groups.sort((left, right) => left.label.localeCompare(right.label));
+  const companyId = await resolveDefinitionsCompanyId();
+
+  if (!companyId) {
+    return [];
+  }
+
+  const groups = await db.parameterGroup.findMany({
+    where: { companyId },
+    orderBy: { label: "asc" },
+  });
+
+  return groups.map((group) => ({
+    id: group.id,
+    label: group.label,
+    scope: group.scope,
+    itemCount: group.itemCount,
+    sampleItems: group.sampleItems,
+    status: mapDefinitionStatusToDemo(group.status),
+    note: group.note ?? "",
+    updatedAt: iso(group.updatedAt),
+  }));
 }
 
 export async function updateDemoRegionAirportStatus(
   regionId: string,
   status: DemoDefinitionStatus,
 ) {
-  const regions = await getDemoRegionAirportRecords();
-  const regionIndex = regions.findIndex((region) => region.id === regionId);
+  const region = await db.region.findUnique({
+    where: { id: regionId },
+  });
 
-  if (regionIndex === -1) {
+  if (!region) {
     throw new DemoDefinitionsStoreError("Bolge kaydi bulunamadi.");
   }
 
-  regions[regionIndex] = {
-    ...regions[regionIndex],
-    status,
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(region.companyId);
 
-  await writeJsonFile(regionsFilePath, regions);
-  return regions[regionIndex];
+  const updated = await db.region.update({
+    where: { id: regionId },
+    data: {
+      status: mapDemoDefinitionStatusToPrisma(status),
+    },
+    include: {
+      airports: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  const airport = updated.airports[0] ?? null;
+  const villas = await getDemoVillas({ companyId: updated.companyId ?? undefined });
+  const villaCount = villas.filter((villa) => {
+    if (villa.city.toLowerCase() !== updated.city.toLowerCase()) {
+      return false;
+    }
+
+    if (updated.districtScope.length === 0) {
+      return true;
+    }
+
+    return updated.districtScope.some(
+      (district) => district.toLowerCase() === (villa.district ?? "").toLowerCase(),
+    );
+  }).length;
+
+  return {
+    id: updated.id,
+    regionLabel: updated.name,
+    city: updated.city,
+    districtScope: updated.districtScope,
+    airportCode: airport?.code ?? "-",
+    airportName: airport?.name ?? "Bagli havalimani yok",
+    driveMinutes: airport?.driveMinutes ?? 0,
+    status: mapDefinitionStatusToDemo(updated.status),
+    villaCount,
+    updatedAt: iso(updated.updatedAt),
+  };
 }
 
 export async function updateDemoParameterGroupStatus(
   groupId: string,
   status: DemoDefinitionStatus,
 ) {
-  const groups = await getDemoParameterGroups();
-  const groupIndex = groups.findIndex((group) => group.id === groupId);
+  const group = await db.parameterGroup.findUnique({
+    where: { id: groupId },
+  });
 
-  if (groupIndex === -1) {
+  if (!group) {
     throw new DemoDefinitionsStoreError("Parametre grubu bulunamadi.");
   }
 
-  groups[groupIndex] = {
-    ...groups[groupIndex],
-    status,
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(group.companyId);
 
-  await writeJsonFile(parameterGroupsFilePath, groups);
-  return groups[groupIndex];
+  const updated = await db.parameterGroup.update({
+    where: { id: groupId },
+    data: {
+      status: mapDemoDefinitionStatusToPrisma(status),
+    },
+  });
+
+  return {
+    id: updated.id,
+    label: updated.label,
+    scope: updated.scope,
+    itemCount: updated.itemCount,
+    sampleItems: updated.sampleItems,
+    status: mapDefinitionStatusToDemo(updated.status),
+    note: updated.note ?? "",
+    updatedAt: iso(updated.updatedAt),
+  };
 }

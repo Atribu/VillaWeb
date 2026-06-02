@@ -55,6 +55,14 @@ const panelEntries: PanelNavEntry[] = [
     roles: ["ADMIN"],
   },
   {
+    type: "link",
+    id: "companies",
+    label: "Firmalar",
+    href: "/panel/firmalar",
+    icon: "globe",
+    roles: ["SUPER_ADMIN"],
+  },
+  {
     type: "group",
     id: "reservations",
     label: "Rezervasyonlar",
@@ -398,15 +406,23 @@ function pathMatches(href: string, pathname: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function roleCanAccess(requiredRoles: AppRole[], currentRole: AppRole) {
+  if (requiredRoles.includes(currentRole)) {
+    return true;
+  }
+
+  return currentRole === "SUPER_ADMIN" && requiredRoles.includes("ADMIN");
+}
+
 export function getPanelNavigation(role: AppRole) {
   return panelEntries
-    .filter((entry) => entry.roles.includes(role))
+    .filter((entry) => roleCanAccess(entry.roles, role))
     .map((entry) => {
       if (entry.type === "link") {
         return entry;
       }
 
-      const visibleItems = entry.items.filter((item) => item.roles.includes(role));
+      const visibleItems = entry.items.filter((item) => roleCanAccess(item.roles, role));
 
       return {
         ...entry,
@@ -417,19 +433,23 @@ export function getPanelNavigation(role: AppRole) {
 }
 
 export function getPanelHomePath(role: AppRole) {
-  return role === "ADMIN" ? "/panel" : "/panel/villalar";
+  return role === "STAFF" ? "/panel/villalar" : "/panel";
 }
 
 export function canAccessPanelPath(role: AppRole, pathname: string) {
-  if (role === "ADMIN") {
+  if (role === "SUPER_ADMIN") {
     return true;
   }
 
-  if (pathname === "/panel") {
-    return false;
-  }
+  const navigation = getPanelNavigation(role);
 
-  return pathname.startsWith("/panel/villalar");
+  return navigation.some((entry) => {
+    if (entry.type === "link") {
+      return pathMatches(entry.href, pathname);
+    }
+
+    return entry.items.some((item) => pathMatches(item.href, pathname));
+  });
 }
 
 export function getPanelEntryState(pathname: string, entry: PanelNavEntry) {

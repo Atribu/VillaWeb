@@ -1,9 +1,8 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { formatCurrency, type CatalogVilla } from "@/lib/villa-catalog";
+import { db } from "@/lib/db";
+import { formatCurrency, normalizeVillaSlug, type CatalogVilla } from "@/lib/villa-catalog";
 import {
   buildSeedRequestEvents,
   DEMO_REFERENCE_DATE,
@@ -19,109 +18,352 @@ import {
   normalizeCouponCode,
   parseCurrencyLabel,
   REQUEST_STATUS_OPTIONS,
-  seedDemoCoupons,
-  seedDemoDiscountCampaigns,
-  seedDemoPricingRecords,
-  seedDemoRequestEvents,
-  seedDemoRequests,
 } from "@/lib/demo-operations";
 import {
   buildOperationTasksForApprovedRequest,
   type DemoOperationTask,
   type DemoOperationTaskStatus,
 } from "@/lib/demo-operations-workflow";
-
-const demoDataDirectory = path.join(process.cwd(), "data");
-const pricingFilePath = path.join(demoDataDirectory, "demo-pricing.json");
-const discountFilePath = path.join(demoDataDirectory, "demo-discounts.json");
-const couponFilePath = path.join(demoDataDirectory, "demo-coupons.json");
-const requestFilePath = path.join(demoDataDirectory, "demo-requests.json");
-const requestEventFilePath = path.join(demoDataDirectory, "demo-request-events.json");
-const operationTaskFilePath = path.join(demoDataDirectory, "demo-operation-tasks.json");
+import {
+  assertPanelCompanyAccess,
+  resolvePanelCompanyId,
+} from "@/lib/server/demo-company-context";
+import { getDemoVillaBySlug } from "@/lib/server/demo-villa-store";
+import {
+  dateKey,
+  decimalToNumber,
+  getDefaultCompanyId,
+  getPrimaryWebsiteIdForCompany,
+  mapBookingStatusToDemo,
+  mapCampaignStatusToActive,
+  mapCouponStatusToActive,
+  mapDemoOperationStatusToPrisma,
+  mapDemoOriginToSource,
+  mapDemoStatusToBooking,
+  mapOperationStatusToDemo,
+  mapRequestSourceToDemo,
+} from "@/lib/server/prisma-demo-shared";
 
 export class DemoOperationsStoreError extends Error {}
 
-async function ensureJsonFile<T>(filePath: string, seedData: T) {
-  await mkdir(demoDataDirectory, { recursive: true });
+async function queryScopedVillas(input?: { companyId?: string | null; includeAll?: boolean }) {
+  const companyId = await resolvePanelCompanyId(input);
 
-  try {
-    await access(filePath);
-  } catch {
-    await writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
-  }
-}
-
-async function readJsonFile<T>(filePath: string, seedData: T): Promise<T> {
-  await ensureJsonFile(filePath, seedData);
-  const raw = await readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJsonFile<T>(filePath: string, value: T) {
-  await writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
-
-export async function getDemoPricingRecords() {
-  const pricingRecords = await readJsonFile(pricingFilePath, seedDemoPricingRecords);
-  return pricingRecords.sort((left, right) => left.villaSlug.localeCompare(right.villaSlug));
-}
-
-export async function getDemoDiscountCampaigns() {
-  const discounts = await readJsonFile(discountFilePath, seedDemoDiscountCampaigns);
-  return discounts.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-}
-
-export async function getDemoCoupons() {
-  const coupons = await readJsonFile(couponFilePath, seedDemoCoupons);
-  return coupons.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-}
-
-export async function getDemoRequests() {
-  const requests = await readJsonFile(requestFilePath, seedDemoRequests);
-  return requests.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-}
-
-export async function getDemoRequestEvents() {
-  try {
-    await access(requestEventFilePath);
-  } catch {
-    const requests = await getDemoRequests();
-    await writeJsonFile(requestEventFilePath, buildSeedRequestEvents(requests));
-  }
-
-  const events = await readJsonFile(requestEventFilePath, seedDemoRequestEvents);
-  return events.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-}
-
-export async function getDemoOperationTasks() {
-  try {
-    await access(operationTaskFilePath);
-  } catch {
-    const requests = await getDemoRequests();
-    const seedTasks = requests
-      .filter((request) => request.status === "APPROVED")
-      .flatMap((request) => buildOperationTasksForApprovedRequest(request));
-    await writeJsonFile(operationTaskFilePath, seedTasks);
-  }
-
-  const tasks = await readJsonFile(operationTaskFilePath, [] as DemoOperationTask[]);
-  return tasks.sort((left, right) => {
-    if (left.scheduledDate === right.scheduledDate) {
-      return left.createdAt.localeCompare(right.createdAt);
-    }
-
-    return left.scheduledDate.localeCompare(right.scheduledDate);
+  return db.villa.findMany({
+    where: companyId ? { companyId } : undefined,
+    select: {
+      id: true,
+      companyId: true,
+      slug: true,
+      title: true,
+      nightlyBasePrice: true,
+      cleaningFee: true,
+      minNightCount: true,
+    },
+    orderBy: { createdAt: "desc" },
   });
 }
 
-async function appendDemoRequestEvent(event: DemoRequestEvent) {
-  const events = await getDemoRequestEvents();
-  events.unshift(event);
-  await writeJsonFile(requestEventFilePath, events);
+export async function getDemoPricingRecords(input?: {
+  companyId?: string | null;
+  includeAll?: boolean;
+}) {
+  const villas = await queryScopedVillas(input);
+
+  return villas
+    .map((villa) => ({
+      companyId: villa.companyId,
+      villaSlug: villa.slug,
+      baseNightlyPrice: decimalToNumber(villa.nightlyBasePrice),
+      cleaningFee: decimalToNumber(villa.cleaningFee),
+      minNightCount: villa.minNightCount,
+      updatedAt: DEMO_REFERENCE_DATE,
+    }) satisfies DemoPricingRecord)
+    .sort((left, right) => left.villaSlug.localeCompare(right.villaSlug));
 }
 
-async function writeDemoOperationTasks(tasks: DemoOperationTask[]) {
-  await writeJsonFile(operationTaskFilePath, tasks);
+export async function getDemoDiscountCampaigns(input?: {
+  companyId?: string | null;
+  includeAll?: boolean;
+}) {
+  const companyId = await resolvePanelCompanyId(input);
+  const campaigns = await db.campaign.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      villas: {
+        include: {
+          villa: {
+            select: { slug: true },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return campaigns.map((campaign) => ({
+    id: campaign.id,
+    companyId: campaign.companyId,
+    title: campaign.name,
+    villaScope: campaign.villas[0]?.villa.slug ?? "ALL",
+    percentOff: decimalToNumber(campaign.discountValue),
+    startDate: dateKey(campaign.startsAt),
+    endDate: dateKey(campaign.endsAt),
+    note: campaign.note ?? "",
+    active: mapCampaignStatusToActive(campaign.status),
+    createdAt: campaign.createdAt.toISOString(),
+  })) satisfies DemoDiscountCampaign[];
+}
+
+export async function getDemoCoupons(input?: { companyId?: string | null; includeAll?: boolean }) {
+  const companyId = await resolvePanelCompanyId(input);
+  const coupons = await db.coupon.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      villas: {
+        include: {
+          villa: {
+            select: { slug: true },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return coupons.map((coupon) => ({
+    id: coupon.id,
+    companyId: coupon.companyId,
+    title: coupon.title,
+    code: coupon.code,
+    villaScope: coupon.villas[0]?.villa.slug ?? "ALL",
+    percentOff: decimalToNumber(coupon.discountValue),
+    startDate: dateKey(coupon.startsAt),
+    endDate: dateKey(coupon.endsAt),
+    usageLimit: coupon.usageLimit ?? 9999,
+    usageCount: coupon.usedCount,
+    active: mapCouponStatusToActive(coupon.status),
+    createdAt: coupon.createdAt.toISOString(),
+  })) satisfies DemoCoupon[];
+}
+
+async function mapBookingRequestsToDemoRequests(
+  requests: Array<{
+    id: string;
+    companyId: string;
+    status: import("@prisma/client").BookingRequestStatus;
+    source: import("@prisma/client").RequestSource;
+    fullName: string;
+    phone: string;
+    email: string | null;
+    guestCount: number;
+    checkIn: Date;
+    checkOut: Date;
+    message: string | null;
+    couponCodeText: string | null;
+    quotedBaseAmount: { toNumber(): number } | null;
+    quotedCleaningFee: { toNumber(): number } | null;
+    quotedTotalAmount: { toNumber(): number } | null;
+    createdAt: Date;
+    villa: {
+      slug: string;
+      title: string;
+    };
+  }>,
+  options?: { companyId?: string | null; includeAll?: boolean },
+) {
+  const [pricingRecords, discounts, coupons] = await Promise.all([
+    getDemoPricingRecords(options),
+    getDemoDiscountCampaigns(options),
+    getDemoCoupons(options),
+  ]);
+
+  const villaCache = new Map<string, CatalogVilla | null>();
+
+  const demoRequests: DemoRequest[] = [];
+
+  for (const request of requests) {
+    let catalogVilla = villaCache.get(request.villa.slug);
+
+    if (catalogVilla === undefined) {
+      catalogVilla = await getDemoVillaBySlug(request.villa.slug, {
+        companyId: request.companyId,
+      });
+      villaCache.set(request.villa.slug, catalogVilla);
+    }
+
+    if (!catalogVilla) {
+      continue;
+    }
+
+    const resolved = getResolvedStayPricing({
+      villa: catalogVilla,
+      pricingRecords,
+      discounts,
+      coupons,
+      checkIn: dateKey(request.checkIn),
+      checkOut: dateKey(request.checkOut),
+      couponCode: request.couponCodeText ?? undefined,
+    });
+
+    const pricing = {
+      ...resolved.pricing,
+      subtotal: request.quotedBaseAmount
+        ? decimalToNumber(request.quotedBaseAmount)
+        : resolved.pricing.subtotal,
+      cleaningFee: request.quotedCleaningFee
+        ? decimalToNumber(request.quotedCleaningFee)
+        : resolved.pricing.cleaningFee,
+      grandTotal: request.quotedTotalAmount
+        ? decimalToNumber(request.quotedTotalAmount)
+        : resolved.pricing.grandTotal,
+      couponCode: request.couponCodeText ?? resolved.pricing.couponCode,
+    };
+
+    demoRequests.push({
+      id: request.id,
+      companyId: request.companyId,
+      villaSlug: request.villa.slug,
+      villaTitle: request.villa.title,
+      checkIn: dateKey(request.checkIn),
+      checkOut: dateKey(request.checkOut),
+      guestCount: request.guestCount,
+      fullName: request.fullName,
+      phone: request.phone,
+      email: request.email ?? "",
+      message: request.message ?? "",
+      couponCode: request.couponCodeText ?? undefined,
+      origin: mapRequestSourceToDemo(request.source),
+      status: mapBookingStatusToDemo(request.status),
+      createdAt: request.createdAt.toISOString(),
+      pricing,
+    });
+  }
+
+  return demoRequests.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function getDemoRequests(input?: { companyId?: string | null; includeAll?: boolean }) {
+  const companyId = await resolvePanelCompanyId(input);
+  const requests = await db.bookingRequest.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return mapBookingRequestsToDemoRequests(requests, input);
+}
+
+export async function getDemoRequestEvents(input?: {
+  companyId?: string | null;
+  includeAll?: boolean;
+}) {
+  const companyId = await resolvePanelCompanyId(input);
+  const [requests, histories] = await Promise.all([
+    getDemoRequests(input),
+    db.bookingRequestStatusHistory.findMany({
+      where: companyId
+        ? {
+            bookingRequest: {
+              companyId,
+            },
+          }
+        : undefined,
+      include: {
+        bookingRequest: {
+          select: {
+            id: true,
+            companyId: true,
+            villa: {
+              select: {
+                slug: true,
+                title: true,
+              },
+            },
+            source: true,
+            fullName: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const createdEvents = buildSeedRequestEvents(requests).filter((event) => event.eventType === "CREATED");
+  const statusEvents: DemoRequestEvent[] = histories.map((history) => ({
+    id: history.id,
+    companyId: history.bookingRequest.companyId,
+    requestId: history.bookingRequestId,
+    villaSlug: history.bookingRequest.villa.slug,
+    villaTitle: history.bookingRequest.villa.title,
+    eventType: "STATUS_CHANGED",
+    status: mapBookingStatusToDemo(history.newStatus),
+    title: "Talep durumu guncellendi",
+    detail:
+      history.note ??
+      `${history.bookingRequest.fullName} kaydi ${getRequestStatusLabel(
+        mapBookingStatusToDemo(history.newStatus),
+      )} durumuna alindi.`,
+    actorLabel: "Operasyon ekibi",
+    origin: mapRequestSourceToDemo(history.bookingRequest.source),
+    createdAt: history.createdAt.toISOString(),
+  }));
+
+  return [...createdEvents, ...statusEvents].sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt),
+  );
+}
+
+export async function getDemoOperationTasks(input?: {
+  companyId?: string | null;
+  includeAll?: boolean;
+}) {
+  const companyId = await resolvePanelCompanyId(input);
+  const tasks = await db.operationTask.findMany({
+    where: companyId ? { companyId } : undefined,
+    include: {
+      bookingRequest: {
+        select: {
+          id: true,
+          fullName: true,
+        },
+      },
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
+  });
+
+  return tasks.map((task) => ({
+    id: task.id,
+    companyId: task.companyId,
+    requestId: task.bookingRequestId ?? "",
+    villaSlug: task.villa?.slug ?? "",
+    villaTitle: task.villa?.title ?? "-",
+    guestName: task.bookingRequest?.fullName ?? "-",
+    taskType: task.taskType,
+    title: task.title,
+    detail: task.detail ?? "",
+    scheduledDate: dateKey(task.scheduledAt),
+    scheduledTimeLabel: task.scheduledTimeLabel ?? "Planlandi",
+    assignee: task.assigneeLabel ?? "Operasyon Ekibi",
+    supplierName: task.supplierName ?? undefined,
+    priority: task.priority,
+    status: mapOperationStatusToDemo(task.status),
+    source: task.sourceLabel === "MANUAL" ? "MANUAL" : "AUTO_RESERVATION",
+    createdAt: task.createdAt.toISOString(),
+  })) satisfies DemoOperationTask[];
 }
 
 export async function getDemoRequestById(requestId: string) {
@@ -130,51 +372,106 @@ export async function getDemoRequestById(requestId: string) {
 }
 
 export async function syncOperationTasksForApprovedRequest(request: DemoRequest) {
-  const existingTasks = await getDemoOperationTasks();
-  const requestTasks = existingTasks.filter((task) => task.requestId === request.id);
+  const existingTasks = await db.operationTask.findMany({
+    where: { bookingRequestId: request.id },
+    select: { id: true },
+  });
 
-  if (requestTasks.length > 0) {
-    return requestTasks;
+  if (existingTasks.length > 0) {
+    return getDemoOperationTasks({ companyId: request.companyId }).then((tasks) =>
+      tasks.filter((task) => task.requestId === request.id),
+    );
+  }
+
+  const bookingRequest = await db.bookingRequest.findUnique({
+    where: { id: request.id },
+    include: {
+      villa: true,
+    },
+  });
+
+  if (!bookingRequest) {
+    throw new DemoOperationsStoreError("Onayli talep bulunamadi.");
   }
 
   const nextTasks = buildOperationTasksForApprovedRequest(request);
-  await writeDemoOperationTasks([...existingTasks, ...nextTasks]);
-  return nextTasks;
+
+  await db.$transaction(
+    nextTasks.map((task) =>
+      db.operationTask.create({
+        data: {
+          id: task.id,
+          companyId: task.companyId,
+          bookingRequestId: bookingRequest.id,
+          villaId: bookingRequest.villaId,
+          taskType: task.taskType,
+          status: mapDemoOperationStatusToPrisma(task.status),
+          priority: task.priority,
+          title: task.title,
+          detail: task.detail,
+          scheduledAt: new Date(`${task.scheduledDate}T12:00:00.000Z`),
+          scheduledTimeLabel: task.scheduledTimeLabel,
+          assigneeLabel: task.assignee,
+          supplierName: task.supplierName,
+          sourceLabel: task.source,
+          completedAt: task.status === "DONE" ? new Date() : null,
+        },
+      }),
+    ),
+  );
+
+  return getDemoOperationTasks({ companyId: request.companyId }).then((tasks) =>
+    tasks.filter((task) => task.requestId === request.id),
+  );
 }
 
 export async function deleteOperationTasksByRequestId(requestId: string) {
-  const tasks = await getDemoOperationTasks();
-  const nextTasks = tasks.filter((task) => task.requestId !== requestId);
-
-  if (nextTasks.length === tasks.length) {
-    return;
-  }
-
-  await writeDemoOperationTasks(nextTasks);
+  await db.operationTask.deleteMany({
+    where: { bookingRequestId: requestId },
+  });
 }
 
 export async function updateDemoOperationTaskStatus(
   taskId: string,
   status: DemoOperationTaskStatus,
 ) {
-  const tasks = await getDemoOperationTasks();
-  const taskIndex = tasks.findIndex((task) => task.id === taskId);
+  const task = await db.operationTask.findUnique({
+    where: { id: taskId },
+    select: {
+      id: true,
+      companyId: true,
+    },
+  });
 
-  if (taskIndex === -1) {
+  if (!task) {
     throw new DemoOperationsStoreError("Gorev bulunamadi.");
   }
 
-  tasks[taskIndex] = {
-    ...tasks[taskIndex],
-    status,
-  };
+  await assertPanelCompanyAccess(task.companyId);
 
-  await writeDemoOperationTasks(tasks);
+  await db.operationTask.update({
+    where: { id: taskId },
+    data: {
+      status: mapDemoOperationStatusToPrisma(status),
+      completedAt: status === "DONE" ? new Date() : null,
+    },
+  });
 
-  return tasks[taskIndex];
+  const tasks = await getDemoOperationTasks({ companyId: task.companyId });
+  const updated = tasks.find((item) => item.id === taskId);
+
+  if (!updated) {
+    throw new DemoOperationsStoreError("Guncel operasyon gorevi okunamadi.");
+  }
+
+  return updated;
 }
 
-export async function upsertDemoPricingRecord(input: DemoPricingRecord) {
+export async function upsertDemoPricingRecord(
+  input: Omit<DemoPricingRecord, "companyId"> & {
+    companyId?: string;
+  },
+) {
   if (input.baseNightlyPrice <= 0) {
     throw new DemoOperationsStoreError("Gecelik fiyat sifirdan buyuk olmalidir.");
   }
@@ -187,23 +484,43 @@ export async function upsertDemoPricingRecord(input: DemoPricingRecord) {
     throw new DemoOperationsStoreError("Minimum gece en az 1 olmalidir.");
   }
 
-  const pricingRecords = await getDemoPricingRecords();
-  const currentIndex = pricingRecords.findIndex((record) => record.villaSlug === input.villaSlug);
-  const nextRecord = { ...input, updatedAt: new Date().toISOString() };
+  const villa = await db.villa.findFirst({
+    where: {
+      slug: input.villaSlug,
+      ...(input.companyId ? { companyId: input.companyId } : {}),
+    },
+    select: {
+      id: true,
+      companyId: true,
+    },
+  });
 
-  if (currentIndex === -1) {
-    pricingRecords.push(nextRecord);
-  } else {
-    pricingRecords[currentIndex] = nextRecord;
+  if (!villa) {
+    throw new DemoOperationsStoreError("Fiyat guncellenecek villa bulunamadi.");
   }
 
-  await writeJsonFile(pricingFilePath, pricingRecords);
+  await assertPanelCompanyAccess(villa.companyId);
 
-  return nextRecord;
+  await db.villa.update({
+    where: { id: villa.id },
+    data: {
+      nightlyBasePrice: input.baseNightlyPrice,
+      cleaningFee: input.cleaningFee,
+      minNightCount: input.minNightCount,
+    },
+  });
+
+  return {
+    ...input,
+    companyId: villa.companyId,
+    updatedAt: new Date().toISOString(),
+  } satisfies DemoPricingRecord;
 }
 
 export async function createDemoDiscountCampaign(
-  input: Omit<DemoDiscountCampaign, "id" | "createdAt">,
+  input: Omit<DemoDiscountCampaign, "id" | "createdAt" | "companyId"> & {
+    companyId?: string;
+  },
 ) {
   if (!input.title.trim()) {
     throw new DemoOperationsStoreError("Kampanya basligi zorunludur.");
@@ -217,52 +534,118 @@ export async function createDemoDiscountCampaign(
     throw new DemoOperationsStoreError("Bitis tarihi baslangic tarihinden sonra olmalidir.");
   }
 
-  const discounts = await getDemoDiscountCampaigns();
-  const nextDiscount: DemoDiscountCampaign = {
-    ...input,
-    id: `discount-${randomUUID().slice(0, 8)}`,
-    createdAt: new Date().toISOString(),
-  };
+  const companyId = input.companyId ?? (await resolvePanelCompanyId()) ?? (await getDefaultCompanyId());
 
-  discounts.unshift(nextDiscount);
-  await writeJsonFile(discountFilePath, discounts);
+  if (!companyId) {
+    throw new DemoOperationsStoreError("Kampanya icin firma scope belirlenemedi.");
+  }
 
-  return nextDiscount;
+  await assertPanelCompanyAccess(companyId);
+
+  const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
+
+  const created = await db.campaign.create({
+    data: {
+      companyId,
+      websiteId,
+      createdByUserId: null,
+      name: input.title.trim(),
+      slug: normalizeVillaSlug(input.title),
+      status: input.active ? "ACTIVE" : "PAUSED",
+      discountMethod: "PERCENTAGE",
+      discountValue: input.percentOff,
+      startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
+      endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
+      bannerLabel: input.title.trim(),
+      note: input.note.trim(),
+      villas:
+        input.villaScope === "ALL"
+          ? undefined
+          : {
+              create: {
+                villa: {
+                  connect: {
+                    companyId_slug: {
+                      companyId,
+                      slug: input.villaScope,
+                    },
+                  },
+                },
+              },
+            },
+    },
+    include: {
+      villas: {
+        include: { villa: { select: { slug: true } } },
+      },
+    },
+  });
+
+  return {
+    id: created.id,
+    companyId: created.companyId,
+    title: created.name,
+    villaScope: created.villas[0]?.villa.slug ?? "ALL",
+    percentOff: decimalToNumber(created.discountValue),
+    startDate: dateKey(created.startsAt),
+    endDate: dateKey(created.endsAt),
+    note: created.note ?? "",
+    active: mapCampaignStatusToActive(created.status),
+    createdAt: created.createdAt.toISOString(),
+  } satisfies DemoDiscountCampaign;
 }
 
 export async function updateDemoDiscountCampaign(
   discountId: string,
   input: Partial<Pick<DemoDiscountCampaign, "active">>,
 ) {
-  const discounts = await getDemoDiscountCampaigns();
-  const discountIndex = discounts.findIndex((discount) => discount.id === discountId);
+  const current = await db.campaign.findUnique({
+    where: { id: discountId },
+    select: { id: true, companyId: true },
+  });
 
-  if (discountIndex === -1) {
+  if (!current) {
     throw new DemoOperationsStoreError("Kampanya bulunamadi.");
   }
 
-  discounts[discountIndex] = {
-    ...discounts[discountIndex],
-    ...input,
-  };
+  await assertPanelCompanyAccess(current.companyId);
 
-  await writeJsonFile(discountFilePath, discounts);
+  await db.campaign.update({
+    where: { id: discountId },
+    data: {
+      status: input.active ? "ACTIVE" : "PAUSED",
+    },
+  });
 
-  return discounts[discountIndex];
+  const discounts = await getDemoDiscountCampaigns({ companyId: current.companyId });
+  const updated = discounts.find((discount) => discount.id === discountId);
+
+  if (!updated) {
+    throw new DemoOperationsStoreError("Guncel kampanya okunamadi.");
+  }
+
+  return updated;
 }
 
 export async function deleteDemoDiscountCampaign(discountId: string) {
-  const discounts = await getDemoDiscountCampaigns();
-  const nextDiscounts = discounts.filter((discount) => discount.id !== discountId);
+  const current = await db.campaign.findUnique({
+    where: { id: discountId },
+    select: { id: true, companyId: true },
+  });
 
-  if (nextDiscounts.length === discounts.length) {
+  if (!current) {
     throw new DemoOperationsStoreError("Silinecek kampanya bulunamadi.");
   }
 
-  await writeJsonFile(discountFilePath, nextDiscounts);
+  await assertPanelCompanyAccess(current.companyId);
+  await db.campaign.delete({ where: { id: discountId } });
 }
 
-export async function createDemoCoupon(input: Omit<DemoCoupon, "id" | "createdAt" | "usageCount">) {
+export async function createDemoCoupon(
+  input: Omit<DemoCoupon, "id" | "createdAt" | "usageCount" | "companyId"> & {
+    companyId?: string;
+  },
+) {
   const code = normalizeCouponCode(input.code);
 
   if (!input.title.trim()) {
@@ -285,53 +668,122 @@ export async function createDemoCoupon(input: Omit<DemoCoupon, "id" | "createdAt
     throw new DemoOperationsStoreError("Bitis tarihi baslangic tarihinden sonra olmalidir.");
   }
 
-  const coupons = await getDemoCoupons();
+  const companyId = input.companyId ?? (await resolvePanelCompanyId()) ?? (await getDefaultCompanyId());
 
-  if (coupons.some((coupon) => coupon.code === code)) {
+  if (!companyId) {
+    throw new DemoOperationsStoreError("Kupon icin firma scope belirlenemedi.");
+  }
+
+  await assertPanelCompanyAccess(companyId);
+
+  const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
+
+  const existing = await db.coupon.findFirst({
+    where: { companyId, code },
+    select: { id: true },
+  });
+
+  if (existing) {
     throw new DemoOperationsStoreError("Bu kupon kodu zaten kayitli.");
   }
 
-  const nextCoupon: DemoCoupon = {
-    ...input,
-    code,
-    id: `coupon-${randomUUID().slice(0, 8)}`,
-    usageCount: 0,
-    createdAt: new Date().toISOString(),
-  };
+  const created = await db.coupon.create({
+    data: {
+      companyId,
+      websiteId,
+      code,
+      title: input.title.trim(),
+      description: "",
+      status: input.active ? "ACTIVE" : "PAUSED",
+      discountMethod: "PERCENTAGE",
+      discountValue: input.percentOff,
+      startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
+      endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
+      usageLimit: input.usageLimit,
+      usedCount: 0,
+      minimumStayNights: 1,
+      minimumOrderAmount: 0,
+      isPublic: true,
+      villas:
+        input.villaScope === "ALL"
+          ? undefined
+          : {
+              create: {
+                villa: {
+                  connect: {
+                    companyId_slug: {
+                      companyId,
+                      slug: input.villaScope,
+                    },
+                  },
+                },
+              },
+            },
+    },
+    include: {
+      villas: {
+        include: { villa: { select: { slug: true } } },
+      },
+    },
+  });
 
-  coupons.unshift(nextCoupon);
-  await writeJsonFile(couponFilePath, coupons);
-
-  return nextCoupon;
+  return {
+    id: created.id,
+    companyId: created.companyId,
+    title: created.title,
+    code: created.code,
+    villaScope: created.villas[0]?.villa.slug ?? "ALL",
+    percentOff: decimalToNumber(created.discountValue),
+    startDate: dateKey(created.startsAt),
+    endDate: dateKey(created.endsAt),
+    usageLimit: created.usageLimit ?? 9999,
+    usageCount: created.usedCount,
+    active: mapCouponStatusToActive(created.status),
+    createdAt: created.createdAt.toISOString(),
+  } satisfies DemoCoupon;
 }
 
 export async function updateDemoCoupon(couponId: string, input: Partial<Pick<DemoCoupon, "active">>) {
-  const coupons = await getDemoCoupons();
-  const couponIndex = coupons.findIndex((coupon) => coupon.id === couponId);
+  const current = await db.coupon.findUnique({
+    where: { id: couponId },
+    select: { id: true, companyId: true },
+  });
 
-  if (couponIndex === -1) {
+  if (!current) {
     throw new DemoOperationsStoreError("Kupon bulunamadi.");
   }
 
-  coupons[couponIndex] = {
-    ...coupons[couponIndex],
-    ...input,
-  };
+  await assertPanelCompanyAccess(current.companyId);
 
-  await writeJsonFile(couponFilePath, coupons);
+  await db.coupon.update({
+    where: { id: couponId },
+    data: {
+      status: input.active ? "ACTIVE" : "PAUSED",
+    },
+  });
 
-  return coupons[couponIndex];
+  const coupons = await getDemoCoupons({ companyId: current.companyId });
+  const updated = coupons.find((coupon) => coupon.id === couponId);
+
+  if (!updated) {
+    throw new DemoOperationsStoreError("Guncel kupon okunamadi.");
+  }
+
+  return updated;
 }
 
 export async function deleteDemoCoupon(couponId: string) {
-  const coupons = await getDemoCoupons();
-  const nextCoupons = coupons.filter((coupon) => coupon.id !== couponId);
+  const current = await db.coupon.findUnique({
+    where: { id: couponId },
+    select: { id: true, companyId: true },
+  });
 
-  if (nextCoupons.length === coupons.length) {
+  if (!current) {
     throw new DemoOperationsStoreError("Silinecek kupon bulunamadi.");
   }
 
-  await writeJsonFile(couponFilePath, nextCoupons);
+  await assertPanelCompanyAccess(current.companyId);
+  await db.coupon.delete({ where: { id: couponId } });
 }
 
 export async function validateDemoCoupon(input: {
@@ -341,9 +793,9 @@ export async function validateDemoCoupon(input: {
   checkOut: string;
 }) {
   const [pricingRecords, discounts, coupons] = await Promise.all([
-    getDemoPricingRecords(),
-    getDemoDiscountCampaigns(),
-    getDemoCoupons(),
+    getDemoPricingRecords({ companyId: input.villa.companyId }),
+    getDemoDiscountCampaigns({ companyId: input.villa.companyId }),
+    getDemoCoupons({ companyId: input.villa.companyId }),
   ]);
   const coupon = getEligibleCoupon(coupons, {
     code: input.code,
@@ -382,12 +834,13 @@ export async function createDemoRequest(input: {
   origin?: "PUBLIC_FORM" | "MANUAL_PANEL";
   actorLabel?: string;
 }) {
-  const [pricingRecords, discounts, coupons, requests] = await Promise.all([
-    getDemoPricingRecords(),
-    getDemoDiscountCampaigns(),
-    getDemoCoupons(),
-    getDemoRequests(),
+  const [pricingRecords, discounts, coupons, websiteId] = await Promise.all([
+    getDemoPricingRecords({ companyId: input.villa.companyId }),
+    getDemoDiscountCampaigns({ companyId: input.villa.companyId }),
+    getDemoCoupons({ companyId: input.villa.companyId }),
+    getPrimaryWebsiteIdForCompany(input.villa.companyId),
   ]);
+
   const resolved = getResolvedStayPricing({
     villa: input.villa,
     pricingRecords,
@@ -403,91 +856,115 @@ export async function createDemoRequest(input: {
     throw new DemoOperationsStoreError("Kupon kodu bu talep icin gecerli degil.");
   }
 
-  const createdRequest: DemoRequest = {
-    id: `request-${randomUUID().slice(0, 8)}`,
-    villaSlug: input.villa.slug,
-    villaTitle: input.villa.title,
-    checkIn: input.checkIn,
-    checkOut: input.checkOut,
-    guestCount: input.guestCount,
-    fullName: input.fullName.trim(),
-    phone: input.phone.trim(),
-    email: input.email.trim(),
-    message: input.message.trim(),
-    couponCode: resolved.coupon?.code,
-    origin: input.origin ?? "PUBLIC_FORM",
-    status: "NEW",
-    createdAt: new Date().toISOString(),
-    pricing: resolved.pricing,
-  };
+  const createdId = `request-${randomUUID().slice(0, 8)}`;
 
-  requests.unshift(createdRequest);
-  await writeJsonFile(requestFilePath, requests);
-  await appendDemoRequestEvent({
-    id: `event-${randomUUID().slice(0, 8)}`,
-    requestId: createdRequest.id,
-    villaSlug: createdRequest.villaSlug,
-    villaTitle: createdRequest.villaTitle,
-    eventType: "CREATED",
-    status: createdRequest.status,
-    title:
-      createdRequest.origin === "MANUAL_PANEL"
-        ? "Panelden yeni rezervasyon kaydi acildi"
-        : "Public formdan yeni talep olustu",
-    detail: `${createdRequest.fullName} icin ${createdRequest.checkIn} - ${createdRequest.checkOut} araliginda ${createdRequest.guestCount} misafirlik kayit acildi.`,
-    actorLabel: input.actorLabel ?? (createdRequest.origin === "MANUAL_PANEL" ? "Panel kullanicisi" : "Public form"),
-    origin: createdRequest.origin ?? "PUBLIC_FORM",
-    createdAt: createdRequest.createdAt,
+  await db.$transaction(async (tx) => {
+    await tx.bookingRequest.create({
+      data: {
+        id: createdId,
+        companyId: input.villa.companyId,
+        websiteId,
+        villaId: input.villa.id,
+        status: "NEW",
+        source: mapDemoOriginToSource(input.origin),
+        fullName: input.fullName.trim(),
+        phone: input.phone.trim(),
+        email: input.email.trim(),
+        guestCount: input.guestCount,
+        checkIn: new Date(`${input.checkIn}T15:00:00.000Z`),
+        checkOut: new Date(`${input.checkOut}T10:00:00.000Z`),
+        message: input.message.trim(),
+        couponCodeText: resolved.coupon?.code ?? null,
+        quotedBaseAmount: resolved.pricing.subtotal,
+        quotedDiscountAmount:
+          resolved.pricing.activeDiscountTotal + resolved.pricing.couponDiscountTotal,
+        quotedCleaningFee: resolved.pricing.cleaningFee,
+        quotedTotalAmount: resolved.pricing.grandTotal,
+      },
+    });
+
+    if (resolved.coupon) {
+      await tx.coupon.update({
+        where: { id: resolved.coupon.id },
+        data: {
+          usedCount: {
+            increment: 1,
+          },
+        },
+      });
+
+      await tx.couponRedemption.create({
+        data: {
+          id: `redemption-${randomUUID().slice(0, 8)}`,
+          couponId: resolved.coupon.id,
+          bookingRequestId: createdId,
+          discountAmount: resolved.pricing.couponDiscountTotal,
+        },
+      });
+    }
   });
 
-  if (resolved.coupon) {
-    const nextCoupons = coupons.map((coupon) =>
-      coupon.id === resolved.coupon?.id
-        ? {
-            ...coupon,
-            usageCount: coupon.usageCount + 1,
-          }
-        : coupon,
-    );
+  const created = await getDemoRequestById(createdId);
 
-    await writeJsonFile(couponFilePath, nextCoupons);
+  if (!created) {
+    throw new DemoOperationsStoreError("Talep olusturuldu ancak geri okunamadi.");
   }
 
-  return createdRequest;
+  return created;
 }
 
 export async function updateDemoRequestStatus(requestId: string, status: RequestStatus) {
-  const requests = await getDemoRequests();
-  const requestIndex = requests.findIndex((request) => request.id === requestId);
+  const current = await db.bookingRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      source: true,
+      fullName: true,
+      villa: {
+        select: {
+          slug: true,
+          title: true,
+        },
+      },
+    },
+  });
 
-  if (requestIndex === -1) {
+  if (!current) {
     throw new DemoOperationsStoreError("Guncellenecek talep bulunamadi.");
   }
 
-  const previousStatus = requests[requestIndex].status;
-  requests[requestIndex] = {
-    ...requests[requestIndex],
-    status,
-  };
+  await assertPanelCompanyAccess(current.companyId);
 
-  await writeJsonFile(requestFilePath, requests);
-  await appendDemoRequestEvent({
-    id: `event-${randomUUID().slice(0, 8)}`,
-    requestId: requests[requestIndex].id,
-    villaSlug: requests[requestIndex].villaSlug,
-    villaTitle: requests[requestIndex].villaTitle,
-    eventType: "STATUS_CHANGED",
-    status,
-    title: "Talep durumu guncellendi",
-    detail: `${requests[requestIndex].fullName} kaydi ${getRequestStatusLabel(
-      previousStatus,
-    )} durumundan ${getRequestStatusLabel(status)} durumuna alindi.`,
-    actorLabel: "Operasyon ekibi",
-    origin: requests[requestIndex].origin ?? "PUBLIC_FORM",
-    createdAt: new Date().toISOString(),
+  const nextStatus = mapDemoStatusToBooking(status);
+
+  await db.$transaction(async (tx) => {
+    await tx.bookingRequest.update({
+      where: { id: requestId },
+      data: {
+        status: nextStatus,
+      },
+    });
+
+    await tx.bookingRequestStatusHistory.create({
+      data: {
+        id: `history-${randomUUID().slice(0, 8)}`,
+        bookingRequestId: requestId,
+        oldStatus: current.status,
+        newStatus: nextStatus,
+        note: `${current.fullName} kaydi ${getRequestStatusLabel(status)} durumuna alindi.`,
+      },
+    });
   });
 
-  return requests[requestIndex];
+  const updated = await getDemoRequestById(requestId);
+
+  if (!updated) {
+    throw new DemoOperationsStoreError("Talep durumu guncellendi ancak geri okunamadi.");
+  }
+
+  return updated;
 }
 
 export function buildDemoReports(input: {
@@ -574,21 +1051,27 @@ export function buildDemoReports(input: {
       {
         label: "Onayli gelir",
         value: formatCurrency(approvedRevenue),
-        detail: `${approvedRequests.length} onayli kayit`,
+        detail: `${approvedRequests.length} kazanilan rezervasyon`,
       },
       {
         label: "Kupon kullanimi",
         value: String(totalCouponUsage),
-        detail: `${input.coupons.filter((coupon) => coupon.active).length} aktif kupon`,
+        detail: `${input.coupons.length} aktif kupon`,
       },
     ],
+    topPerformers: {
+      topViewedVilla,
+      topRequestedVilla,
+      topRevenueVilla,
+    },
     topMetrics: {
       topViewedVilla,
       topRequestedVilla,
       topRevenueVilla,
-      activeDiscountCount: input.discounts.filter((discount) => discount.active).length,
+      activeDiscountCount: input.discounts.filter((campaign) => campaign.active).length,
     },
     requestDistribution,
+    discountCount: input.discounts.filter((campaign) => campaign.active).length,
     revenueByVilla,
     monthlyTrend,
   };

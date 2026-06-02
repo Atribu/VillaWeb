@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { PublicVillaCard } from "@/components/villas/public-villa-card";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export const metadata: Metadata = {
@@ -24,12 +25,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function VillasPage() {
-  const villaCatalog = await getDemoVillas();
+  const company = await getCurrentPublicCompany();
+  const villaCatalog = await getDemoVillas({ companyId: company.id });
 
   const villaListJsonLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: "VillaVera Villa Koleksiyonu",
+    name: `${company.shortName} Villa Koleksiyonu`,
     itemListElement: villaCatalog.map((villa, index) => ({
       "@type": "ListItem",
       position: index + 1,
@@ -52,8 +54,8 @@ export default async function VillasPage() {
       <div className="rounded-[2.3rem] border border-black/6 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:p-8">
         <SectionHeading
           eyebrow="Villa Koleksiyonu"
-          title="Temiz listeleme, SEO destekli guclu detay yapisi"
-          description="Filtre hissi veren chip alanlari, premium kart tasarimi ve konuma gore karar vermeyi kolaylastiran kurgu ile modern bir listeleme deneyimi."
+          title={`${company.shortName} icin firma bazli portfoy listeleme`}
+          description="Filtre hissi veren chip alanlari, premium kart tasarimi ve sadece aktif firmanin portfoyunu gosteren cok firmali demo kurgu."
         />
 
         <div className="mt-8 rounded-[1.6rem] border border-black/6 bg-[var(--color-slate-soft)] p-4">

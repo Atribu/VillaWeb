@@ -6,6 +6,7 @@ export type DemoSyncOutcome = "SUCCESS" | "WARNING" | "ERROR";
 
 export type DemoIcalSourceRecord = {
   id: string;
+  companyId?: string;
   villaSlug: string;
   villaTitle: string;
   channelName: string;
@@ -18,6 +19,7 @@ export type DemoIcalSourceRecord = {
 
 export type DemoChannelMappingRecord = {
   id: string;
+  companyId?: string;
   villaSlug: string;
   villaTitle: string;
   channelName: string;
@@ -29,6 +31,7 @@ export type DemoChannelMappingRecord = {
 
 export type DemoSyncLogRecord = {
   id: string;
+  companyId?: string;
   sourceId: string;
   villaSlug: string;
   villaTitle: string;

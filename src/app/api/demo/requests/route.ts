@@ -6,6 +6,7 @@ import {
   createDemoRequest,
   DemoOperationsStoreError,
 } from "@/lib/server/demo-operations-store";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 import { transitionDemoRequestStatus } from "@/lib/server/demo-request-lifecycle";
 import { revalidateDemoExperience } from "@/lib/server/demo-revalidate";
 
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     const couponCode = String(payload.couponCode ?? "").trim();
     const initialStatus = payload.initialStatus ?? "NEW";
     const origin = payload.origin ?? "PUBLIC_FORM";
+    const company = origin === "MANUAL_PANEL" ? null : await getCurrentPublicCompany();
 
     if (!REQUEST_STATUS_OPTIONS.some((option) => option.value === initialStatus)) {
       throw new DemoOperationsStoreError("Gecersiz rezervasyon durumu secildi.");
@@ -60,7 +62,10 @@ export async function POST(request: Request) {
       throw new DemoOperationsStoreError("Misafir sayisi en az 1 olmalidir.");
     }
 
-    const villa = await getDemoVillaBySlug(villaSlug);
+    const villa = await getDemoVillaBySlug(
+      villaSlug,
+      company ? { companyId: company.id } : undefined,
+    );
 
     if (!villa) {
       throw new DemoOperationsStoreError("Talep icin secilen villa bulunamadi.");

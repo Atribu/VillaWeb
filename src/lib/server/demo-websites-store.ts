@@ -1,56 +1,82 @@
 import "server-only";
 
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import {
-  seedDemoLandingPages,
-  seedDemoSeoContents,
-  seedDemoWebsites,
-  type DemoLandingStatus,
-  type DemoSeoContentStatus,
-  type DemoWebsiteStatus,
+import type {
+  DemoLandingStatus,
+  DemoSeoContentStatus,
+  DemoWebsiteStatus,
 } from "@/lib/demo-websites";
-
-const demoDataDirectory = path.join(process.cwd(), "data");
-const websitesFilePath = path.join(demoDataDirectory, "demo-websites.json");
-const landingsFilePath = path.join(demoDataDirectory, "demo-landing-pages.json");
-const seoContentsFilePath = path.join(demoDataDirectory, "demo-seo-contents.json");
+import { db } from "@/lib/db";
+import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
+import {
+  mapDemoWebsiteStatusToPrisma,
+  mapSeoStatusToDemo,
+  mapWebsiteStatusToDemo,
+} from "@/lib/server/prisma-demo-shared";
 
 export class DemoWebsitesStoreError extends Error {}
 
-async function ensureJsonFile<T>(filePath: string, seedData: T) {
-  await mkdir(demoDataDirectory, { recursive: true });
-
-  try {
-    await access(filePath);
-  } catch {
-    await writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
-  }
-}
-
-async function readJsonFile<T>(filePath: string, seedData: T): Promise<T> {
-  await ensureJsonFile(filePath, seedData);
-  const raw = await readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJsonFile<T>(filePath: string, value: T) {
-  await writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
+function mapSeoContentTypeToDemo(type: "BLOG" | "LANDING" | "CATEGORY" | "PAGE") {
+  return type === "PAGE" ? ("CATEGORY" as const) : type;
 }
 
 export async function getDemoWebsites() {
-  const websites = await readJsonFile(websitesFilePath, seedDemoWebsites);
-  return websites.sort((left, right) => left.name.localeCompare(right.name));
+  const companyId = await resolvePanelCompanyId();
+  const websites = await db.companyWebsite.findMany({
+    where: companyId ? { companyId } : undefined,
+    orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
+  });
+
+  return websites.map((website) => ({
+    id: website.id,
+    companyId: website.companyId,
+    name: website.name,
+    domain: website.domain ?? "",
+    locale: website.locale,
+    status: mapWebsiteStatusToDemo(website.status),
+    primaryChannel: website.primaryChannel ?? "SEO + Direkt Talep",
+    default: website.isPrimary,
+    updatedAt: website.updatedAt.toISOString(),
+  }));
 }
 
 export async function getDemoLandingPages() {
-  const landings = await readJsonFile(landingsFilePath, seedDemoLandingPages);
-  return landings.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const companyId = await resolvePanelCompanyId();
+  const landings = await db.landingPage.findMany({
+    where: companyId ? { companyId } : undefined,
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return landings.map((landing) => ({
+    id: landing.id,
+    companyId: landing.companyId,
+    title: landing.title,
+    slug: landing.slug,
+    targetRegion: landing.targetRegion ?? "-",
+    focusKeyword: landing.focusKeyword ?? "-",
+    status: landing.status,
+    leadCount: landing.leadCount,
+    updatedAt: landing.updatedAt.toISOString(),
+  }));
 }
 
 export async function getDemoSeoContents() {
-  const contents = await readJsonFile(seoContentsFilePath, seedDemoSeoContents);
-  return contents.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const companyId = await resolvePanelCompanyId();
+  const contents = await db.seoContent.findMany({
+    where: companyId ? { companyId } : undefined,
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return contents.map((content) => ({
+    id: content.id,
+    companyId: content.companyId,
+    title: content.title,
+    contentType: mapSeoContentTypeToDemo(content.contentType),
+    targetUrl: content.targetUrl,
+    primaryKeyword: content.primaryKeyword,
+    status: mapSeoStatusToDemo(content.status),
+    seoScore: content.seoScore ?? 0,
+    updatedAt: content.updatedAt.toISOString(),
+  }));
 }
 
 export async function updateDemoWebsite(
@@ -60,55 +86,62 @@ export async function updateDemoWebsite(
     default?: boolean;
   },
 ) {
-  const websites = await getDemoWebsites();
-  const websiteIndex = websites.findIndex((website) => website.id === websiteId);
+  const website = await db.companyWebsite.findUnique({
+    where: { id: websiteId },
+    select: { id: true, companyId: true },
+  });
 
-  if (websiteIndex === -1) {
+  if (!website) {
     throw new DemoWebsitesStoreError("Site kaydi bulunamadi.");
   }
 
-  let nextWebsites = websites.map((website) => ({ ...website }));
+  await assertPanelCompanyAccess(website.companyId);
 
-  if (input.default) {
-    nextWebsites = nextWebsites.map((website) => ({
-      ...website,
-      default: website.id === websiteId,
-    }));
-  }
+  await db.$transaction(async (tx) => {
+    if (input.default) {
+      await tx.companyWebsite.updateMany({
+        where: { companyId: website.companyId },
+        data: { isPrimary: false },
+      });
+    }
 
-  const current = nextWebsites[websiteIndex];
-  nextWebsites[websiteIndex] = {
-    ...current,
-    ...(input.status ? { status: input.status } : {}),
-    ...(input.default !== undefined ? { default: input.default } : {}),
-    updatedAt: new Date().toISOString(),
-  };
+    await tx.companyWebsite.update({
+      where: { id: websiteId },
+      data: {
+        status: input.status ? mapDemoWebsiteStatusToPrisma(input.status) : undefined,
+        isPrimary: input.default ?? undefined,
+      },
+    });
+  });
 
-  await writeJsonFile(websitesFilePath, nextWebsites);
-  return nextWebsites[websiteIndex];
+  const websites = await getDemoWebsites();
+  return websites.find((item) => item.id === websiteId) ?? null;
 }
 
 export async function updateDemoLandingPage(
   landingId: string,
   input: {
-    status?: DemoLandingStatus;
+    status: DemoLandingStatus;
   },
 ) {
-  const landings = await getDemoLandingPages();
-  const landingIndex = landings.findIndex((landing) => landing.id === landingId);
+  const landing = await db.landingPage.findUnique({
+    where: { id: landingId },
+    select: { id: true, companyId: true },
+  });
 
-  if (landingIndex === -1) {
+  if (!landing) {
     throw new DemoWebsitesStoreError("Landing sayfasi bulunamadi.");
   }
 
-  landings[landingIndex] = {
-    ...landings[landingIndex],
-    ...(input.status ? { status: input.status } : {}),
-    updatedAt: new Date().toISOString(),
-  };
+  await assertPanelCompanyAccess(landing.companyId);
 
-  await writeJsonFile(landingsFilePath, landings);
-  return landings[landingIndex];
+  await db.landingPage.update({
+    where: { id: landingId },
+    data: { status: input.status },
+  });
+
+  const landings = await getDemoLandingPages();
+  return landings.find((item) => item.id === landingId) ?? null;
 }
 
 export async function updateDemoSeoContent(
@@ -118,24 +151,25 @@ export async function updateDemoSeoContent(
     seoScore?: number;
   },
 ) {
-  const contents = await getDemoSeoContents();
-  const contentIndex = contents.findIndex((content) => content.id === contentId);
+  const content = await db.seoContent.findUnique({
+    where: { id: contentId },
+    select: { id: true, companyId: true },
+  });
 
-  if (contentIndex === -1) {
+  if (!content) {
     throw new DemoWebsitesStoreError("SEO icerigi bulunamadi.");
   }
 
-  if (input.seoScore !== undefined && (input.seoScore < 0 || input.seoScore > 100)) {
-    throw new DemoWebsitesStoreError("SEO skoru 0 ile 100 arasinda olmalidir.");
-  }
+  await assertPanelCompanyAccess(content.companyId);
 
-  contents[contentIndex] = {
-    ...contents[contentIndex],
-    ...(input.status ? { status: input.status } : {}),
-    ...(input.seoScore !== undefined ? { seoScore: input.seoScore } : {}),
-    updatedAt: new Date().toISOString(),
-  };
+  await db.seoContent.update({
+    where: { id: contentId },
+    data: {
+      status: input.status ?? undefined,
+      seoScore: input.seoScore ?? undefined,
+    },
+  });
 
-  await writeJsonFile(seoContentsFilePath, contents);
-  return contents[contentIndex];
+  const contents = await getDemoSeoContents();
+  return contents.find((item) => item.id === contentId) ?? null;
 }

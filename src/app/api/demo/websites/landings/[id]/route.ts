@@ -26,7 +26,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new DemoWebsitesStoreError("Gecerli bir landing durumu secilmelidir.");
     }
 
-    const landing = await updateDemoLandingPage(id, payload);
+    const landing = await updateDemoLandingPage(id, { status: payload.status });
     return NextResponse.json({ landing });
   } catch (error) {
     if (error instanceof DemoWebsitesStoreError) {

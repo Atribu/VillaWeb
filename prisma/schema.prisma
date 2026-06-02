@@ -7,35 +7,85 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  STAFF
+enum PlatformRole {
+  PLATFORM_OWNER
+  PLATFORM_ADMIN
+  COMPANY_USER
+}
+
+enum CompanyStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum MembershipRole {
+  COMPANY_ADMIN
+  SALES
+  OPERATIONS
+  FINANCE
+  CRM
+  CONTENT
+  VILLA_MANAGER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum WebsiteStatus {
+  LIVE
+  STAGING
+  PAUSED
 }
 
 enum VillaStatus {
   DRAFT
   ACTIVE
-  PASSIVE
+  PAUSED
+  ARCHIVED
 }
 
 enum AvailabilityBlockType {
-  AVAILABLE
-  UNAVAILABLE
-  MAINTENANCE
   RESERVED
+  MAINTENANCE
+  UNAVAILABLE
+  OWNER_STAY
 }
 
-enum DiscountType {
+enum PricingRuleType {
+  BASE
+  SEASONAL
+  WEEKEND
+  SPECIAL_EVENT
+}
+
+enum DiscountMethod {
   PERCENTAGE
-  FIXED
+  FIXED_AMOUNT
 }
 
-enum AppointmentRequestStatus {
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum CouponStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
+
+enum BookingRequestStatus {
   NEW
   CONTACT_PENDING
   CONTACTED
   OFFER_SENT
-  CONFIRMED
+  APPROVED
   CANCELLED
 }
 
@@ -43,6 +93,194 @@ enum RequestSource {
   WEB
   PANEL
   PHONE
+  AGENCY
+}
+
+enum OperationTaskType {
+  RESERVATION_TRACK
+  SUPPLIER_APPROVAL
+  REMINDER
+  CHECK_IN
+  CHECK_OUT
+  CLEANING
+}
+
+enum OperationTaskStatus {
+  PENDING
+  READY
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIALLY_PAID
+  CANCELLED
+}
+
+enum PaymentType {
+  DEPOSIT
+  BALANCE
+  REFUND
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum CashDirection {
+  INCOME
+  EXPENSE
+}
+
+enum CashEntrySource {
+  AUTO_PAYMENT
+  MANUAL
+  REFUND
+  ADJUSTMENT
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  PENDING
+  HIDDEN
+}
+
+enum ReviewSource {
+  GOOGLE
+  DIRECT
+  WHATSAPP
+}
+
+enum CalendarDirection {
+  IMPORT
+  EXPORT
+}
+
+enum CalendarSourceStatus {
+  HEALTHY
+  WARNING
+  ERROR
+}
+
+enum SyncMode {
+  IMPORT_ONLY
+  TWO_WAY
+}
+
+enum SyncOutcome {
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum AgencyKind {
+  DIRECT_WEB
+  PARTNER
+  INTERNAL
+}
+
+enum AgencyStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum BranchStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum MessageStatus {
+  NEW
+  READ
+  RESOLVED
+  ARCHIVED
+}
+
+enum MessagePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CommissionScopeType {
+  AGENCY
+  BRANCH
+  USER
+  WEB_DIRECT
+}
+
+enum LandingPageStatus {
+  DRAFT
+  LIVE
+  REVISION
+}
+
+enum ResourceDefinitionStatus {
+  ACTIVE
+  DRAFT
+  PASSIVE
+}
+
+enum CurrencyRateStatus {
+  LIVE
+  MANUAL
+  STALE
+}
+
+enum PaymentMethodStatus {
+  ACTIVE
+  PASSIVE
+}
+
+enum CacheGroupStatus {
+  HEALTHY
+  WARMING
+  STALE
+}
+
+enum DocumentAssetStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum ShortcutStatus {
+  ACTIVE
+  HIDDEN
+}
+
+enum ExternalServiceStatus {
+  ACTIVE
+  WARNING
+  OFFLINE
+}
+
+enum SeoContentType {
+  BLOG
+  LANDING
+  CATEGORY
+  PAGE
+}
+
+enum SeoContentStatus {
+  PLANNED
+  IN_PROGRESS
+  PUBLISHED
 }
 
 enum BlogPostStatus {
@@ -51,310 +289,971 @@ enum BlogPostStatus {
   ARCHIVED
 }
 
+model PlatformSetting {
+  id                 String   @id @default(cuid())
+  platformName       String
+  defaultCurrency    String   @default("TRY")
+  defaultLocale      String   @default("tr-TR")
+  defaultTimezone    String   @default("Europe/Istanbul")
+  supportEmail       String?
+  supportPhone       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Company {
+  id                 String                @id @default(cuid())
+  slug               String                @unique
+  legalName          String
+  publicName         String
+  shortName          String?
+  panelName          String?
+  status             CompanyStatus         @default(ACTIVE)
+  primaryEmail       String?
+  primaryPhone       String?
+  whatsappNumber     String?
+  supportHours       String?
+  primaryDomain      String?               @unique
+  timezone           String                @default("Europe/Istanbul")
+  locale             String                @default("tr-TR")
+  currency           String                @default("TRY")
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  memberships        CompanyMembership[]
+  settings           CompanySetting?
+  websites           CompanyWebsite[]
+  currencyRates      CurrencyRate[]
+  paymentMethods     PaymentMethod[]
+  cacheGroups        CacheGroup[]
+  documents          DocumentAsset[]
+  shortcuts          ShortcutLink[]
+  externalServices   ExternalService[]
+  documentLinks      DocumentLink[]
+  parameterGroups    ParameterGroup[]
+  regions            Region[]
+  villas             Villa[]
+  campaigns          Campaign[]
+  coupons            Coupon[]
+  bookingRequests    BookingRequest[]
+  operationTasks     OperationTask[]
+  invoices           Invoice[]
+  payments           Payment[]
+  cashEntries        CashLedgerEntry[]
+  reviews            GuestReview[]
+  agencies           Agency[]
+  branches           Branch[]
+  messages           InternalMessage[]
+  commissionRules    CommissionRule[]
+  landingPages       LandingPage[]
+  seoContents        SeoContent[]
+  blogPosts          BlogPost[]
+  syncSources        CalendarSyncSource[]
+  syncMappings       CalendarSyncMapping[]
+  syncLogs           CalendarSyncLog[]
+  auditLogs          AuditLog[]
+}
+
 model User {
-  id                     String                            @id @default(cuid())
-  name                   String
-  email                  String                            @unique
-  passwordHash           String                            @map("password_hash")
-  role                   Role
-  isActive               Boolean                           @default(true) @map("is_active")
-  createdAt              DateTime                          @default(now()) @map("created_at")
-  updatedAt              DateTime                          @updatedAt @map("updated_at")
-  createdVillas          Villa[]
-  availabilityBlocks     VillaAvailabilityBlock[]
-  seasonalPrices         VillaSeasonalPrice[]
-  villaDiscounts         VillaDiscount[]
-  statusHistoryChanges   AppointmentRequestStatusHistory[]
-
-  @@map("users")
+  id                 String                @id @default(cuid())
+  username           String                @unique
+  email              String                @unique
+  name               String
+  phone              String?
+  passwordHash       String
+  platformRole       PlatformRole          @default(COMPANY_USER)
+  isActive           Boolean               @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  memberships        CompanyMembership[]
+  sessions           AuthSession[]
+  resetTokens        PasswordResetToken[]
+  villasCreated      Villa[]
+  availabilityBlocksCreated VillaAvailabilityBlock[]
+  campaignsCreated   Campaign[]
+  couponsCreated     Coupon[]
+  requestsAssigned   BookingRequest[]      @relation("AssignedRequests")
+  statusChanges      BookingRequestStatusHistory[]
+  tasksAssigned      OperationTask[]
+  cashEntriesCreated CashLedgerEntry[]
+  messagesSent       InternalMessage[]
+  auditLogs          AuditLog[]
 }
 
-model Villa {
-  id                     String                  @id @default(cuid())
-  title                  String
-  slug                   String                  @unique
-  shortDescription       String?                 @map("short_description")
-  description            String
-  city                   String
-  district               String?
-  address                String?
-  latitude               Decimal?                @db.Decimal(10, 7)
-  longitude              Decimal?                @db.Decimal(10, 7)
-  capacity               Int
-  bedroomCount           Int                     @map("bedroom_count")
-  bathroomCount          Int                     @map("bathroom_count")
-  poolType               String?                 @map("pool_type")
-  nightlyBasePrice       Decimal                 @db.Decimal(10, 2) @map("nightly_base_price")
-  currency               String                  @default("TRY")
-  status                 VillaStatus             @default(DRAFT)
-  featured               Boolean                 @default(false)
-  seoTitle               String?                 @map("seo_title")
-  seoDescription         String?                 @map("seo_description")
-  seoKeywords            String?                 @map("seo_keywords")
-  createdByUserId        String                  @map("created_by_user_id")
-  createdAt              DateTime                @default(now()) @map("created_at")
-  updatedAt              DateTime                @updatedAt @map("updated_at")
-  createdBy              User                    @relation(fields: [createdByUserId], references: [id])
-  images                 VillaImage[]
-  amenities              VillaAmenity[]
-  availabilityBlocks     VillaAvailabilityBlock[]
-  seasonalPrices         VillaSeasonalPrice[]
-  discounts              VillaDiscount[]
-  appointmentRequests    AppointmentRequest[]
-  viewEvents             VillaViewEvent[]
-  liveSessions           VillaLiveSession[]
-  revenueRecords         RevenueRecord[]
-  dailyMetrics           VillaDailyMetric[]
+model AuthSession {
+  id                 String   @id @default(cuid())
+  userId             String
+  token              String   @unique
+  expiresAt          DateTime
+  ipAddress          String?
+  userAgent          String?
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([city, district])
-  @@index([status, featured])
-  @@map("villas")
+  @@index([userId, expiresAt])
 }
 
-model VillaImage {
-  id                     String    @id @default(cuid())
-  villaId                String    @map("villa_id")
-  url                    String
-  altText                String?   @map("alt_text")
-  sortOrder              Int       @default(0) @map("sort_order")
-  isCover                Boolean   @default(false) @map("is_cover")
-  createdAt              DateTime  @default(now()) @map("created_at")
-  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+model PasswordResetToken {
+  id                 String   @id @default(cuid())
+  userId             String
+  token              String   @unique
+  expiresAt          DateTime
+  usedAt             DateTime?
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([villaId, sortOrder])
-  @@map("villa_images")
+  @@index([userId, expiresAt])
+}
+
+model CompanyMembership {
+  id                 String            @id @default(cuid())
+  companyId          String
+  userId             String
+  branchId           String?
+  role               MembershipRole
+  status             MembershipStatus  @default(INVITED)
+  isPrimary          Boolean           @default(true)
+  responsibility     String?
+  lastActiveAt       DateTime?
+  invitedAt          DateTime          @default(now())
+  acceptedAt         DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  company            Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch             Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, userId])
+  @@index([companyId, role, status])
+}
+
+model CompanySetting {
+  id                 String   @id @default(cuid())
+  companyId          String   @unique
+  siteName           String
+  defaultTitle       String?
+  defaultDescription String?
+  primaryPhone       String?
+  primaryEmail       String?
+  address            String?
+  whatsappNumber     String?
+  accentLabel        String?
+  heroTitle          String?
+  heroDescription    String?
+  instagramUrl       String?
+  facebookUrl        String?
+  seoIndexable       Boolean  @default(true)
+  allowCoupons       Boolean  @default(true)
+  allowManualQuotes  Boolean  @default(true)
+  leadResponseMinutes Int     @default(20)
+  defaultMinNightCount Int    @default(3)
+  defaultCleaningLeadHours Int @default(6)
+  requestReminderHours Int    @default(12)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CompanyWebsite {
+  id                 String        @id @default(cuid())
+  companyId          String
+  name               String
+  slug               String
+  domain             String?
+  locale             String        @default("tr-TR")
+  isPrimary          Boolean       @default(false)
+  status             WebsiteStatus @default(STAGING)
+  primaryChannel     String?
+  brandHeadline      String?
+  metaTitle          String?
+  metaDescription    String?
+  themeKey           String?
+  logoUrl            String?
+  faviconUrl         String?
+  analyticsKey       String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  villas             Villa[]
+  campaigns          Campaign[]
+  coupons            Coupon[]
+  bookingRequests    BookingRequest[]
+  landingPages       LandingPage[]
+  seoContents        SeoContent[]
+  blogPosts          BlogPost[]
+
+  @@unique([companyId, slug])
+}
+
+model Region {
+  id                 String    @id @default(cuid())
+  companyId          String?
+  name               String
+  city               String
+  districtScope      String[]  @default([])
+  status             ResourceDefinitionStatus @default(ACTIVE)
+  countryCode        String    @default("TR")
+  latitude           Decimal?  @db.Decimal(10, 7)
+  longitude          Decimal?  @db.Decimal(10, 7)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  company            Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  airports           Airport[]
+  villas             Villa[]
+
+  @@unique([companyId, name, city])
+}
+
+model Airport {
+  id                 String   @id @default(cuid())
+  regionId           String?
+  name               String
+  code               String   @unique
+  city               String
+  driveMinutes       Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  region             Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull)
 }
 
 model Amenity {
-  id                     String        @id @default(cuid())
-  name                   String        @unique
-  icon                   String?
-  villas                 VillaAmenity[]
+  id                 String        @id @default(cuid())
+  key                String        @unique
+  label              String
+  icon               String?
+  category           String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  villas             VillaAmenity[]
+}
 
-  @@map("amenities")
+model Villa {
+  id                 String                  @id @default(cuid())
+  companyId          String
+  websiteId          String?
+  regionId           String?
+  createdByUserId    String?
+  title              String
+  slug               String
+  badge              String?
+  category           String?
+  shortDescription   String?
+  description        String
+  city               String
+  district           String?
+  address            String?
+  latitude           Decimal?                @db.Decimal(10, 7)
+  longitude          Decimal?                @db.Decimal(10, 7)
+  capacity           Int
+  bedroomCount       Int
+  bathroomCount      Int
+  poolType           String?
+  nightlyBasePrice   Decimal                 @db.Decimal(12, 2)
+  cleaningFee        Decimal                 @default(0) @db.Decimal(12, 2)
+  minNightCount      Int                     @default(1)
+  currency           String                  @default("TRY")
+  status             VillaStatus             @default(DRAFT)
+  featured           Boolean                 @default(false)
+  averageRating      Decimal?                @db.Decimal(3, 2)
+  reviewCount        Int                     @default(0)
+  isSuperhost        Boolean                 @default(false)
+  coverImageUrl      String?
+  coverAlt           String?
+  seoTitle           String?
+  seoDescription     String?
+  focusKeyword       String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website            CompanyWebsite?         @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+  region             Region?                 @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  createdByUser      User?                   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  images             VillaImage[]
+  amenities          VillaAmenity[]
+  availabilityBlocks VillaAvailabilityBlock[]
+  pricingRules       VillaPricingRule[]
+  campaignLinks      CampaignVilla[]
+  couponLinks        CouponVilla[]
+  bookingRequests    BookingRequest[]
+  operationTasks     OperationTask[]
+  reviews            GuestReview[]
+  viewEvents         VillaViewEvent[]
+  liveSessions       VillaLiveSession[]
+  dailyMetrics       VillaDailyMetric[]
+  syncSources        CalendarSyncSource[]
+  syncMappings       CalendarSyncMapping[]
+  syncLogs           CalendarSyncLog[]
+
+  @@unique([companyId, slug])
+  @@index([companyId, status, featured])
+}
+
+model VillaImage {
+  id                 String   @id @default(cuid())
+  villaId            String
+  url                String
+  storageKey         String?
+  altText            String?
+  sortOrder          Int      @default(0)
+  isCover            Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  villa              Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@index([villaId, sortOrder])
 }
 
 model VillaAmenity {
-  id                     String    @id @default(cuid())
-  villaId                String    @map("villa_id")
-  amenityId              String    @map("amenity_id")
-  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
-  amenity                 Amenity   @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid())
+  villaId            String
+  amenityId          String
+  villa              Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  amenity            Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
 
   @@unique([villaId, amenityId])
-  @@map("villa_amenities")
 }
 
 model VillaAvailabilityBlock {
-  id                     String                @id @default(cuid())
-  villaId                String                @map("villa_id")
-  startDate              DateTime              @map("start_date")
-  endDate                DateTime              @map("end_date")
-  blockType              AvailabilityBlockType @map("block_type")
-  note                   String?
-  createdByUserId        String?               @map("created_by_user_id")
-  createdAt              DateTime              @default(now()) @map("created_at")
-  villa                   Villa                 @relation(fields: [villaId], references: [id], onDelete: Cascade)
-  createdBy               User?                 @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  id                 String                @id @default(cuid())
+  villaId            String
+  createdByUserId    String?
+  startsAt           DateTime
+  endsAt             DateTime
+  blockType          AvailabilityBlockType
+  note               String?
+  sourceRequestId    String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  villa              Villa                 @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  createdByUser      User?                 @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
 
-  @@index([villaId, startDate, endDate])
-  @@map("villa_availability_blocks")
+  @@index([villaId, startsAt, endsAt])
 }
 
-model VillaSeasonalPrice {
-  id                     String    @id @default(cuid())
-  villaId                String    @map("villa_id")
-  startDate              DateTime  @map("start_date")
-  endDate                DateTime  @map("end_date")
-  nightlyPrice           Decimal   @db.Decimal(10, 2) @map("nightly_price")
-  minNights              Int?      @map("min_nights")
-  maxNights              Int?      @map("max_nights")
-  createdByUserId        String?   @map("created_by_user_id")
-  createdAt              DateTime  @default(now()) @map("created_at")
-  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
-  createdBy               User?     @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+model VillaPricingRule {
+  id                 String          @id @default(cuid())
+  villaId            String
+  title              String
+  ruleType           PricingRuleType
+  startsAt           DateTime
+  endsAt             DateTime
+  nightlyPrice       Decimal         @db.Decimal(12, 2)
+  cleaningFee        Decimal?        @db.Decimal(12, 2)
+  minNightCount      Int?
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  villa              Villa           @relation(fields: [villaId], references: [id], onDelete: Cascade)
 
-  @@index([villaId, startDate, endDate])
-  @@map("villa_seasonal_prices")
+  @@index([villaId, startsAt, endsAt, isActive])
 }
 
-model VillaDiscount {
-  id                     String        @id @default(cuid())
-  villaId                String        @map("villa_id")
-  name                   String
-  discountType           DiscountType  @map("discount_type")
-  discountValue          Decimal       @db.Decimal(10, 2) @map("discount_value")
-  startAt                DateTime      @map("start_at")
-  endAt                  DateTime      @map("end_at")
-  label                  String?
-  isActive               Boolean       @default(true) @map("is_active")
-  createdByUserId        String?       @map("created_by_user_id")
-  createdAt              DateTime      @default(now()) @map("created_at")
-  villa                   Villa         @relation(fields: [villaId], references: [id], onDelete: Cascade)
-  createdBy               User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+model Campaign {
+  id                 String          @id @default(cuid())
+  companyId          String
+  websiteId          String?
+  createdByUserId    String?
+  name               String
+  slug               String
+  status             CampaignStatus  @default(DRAFT)
+  discountMethod     DiscountMethod
+  discountValue      Decimal         @db.Decimal(12, 2)
+  startsAt           DateTime
+  endsAt             DateTime
+  bannerLabel        String?
+  note               String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website            CompanyWebsite? @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+  createdByUser      User?           @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  villas             CampaignVilla[]
 
-  @@index([villaId, startAt, endAt])
-  @@map("villa_discounts")
+  @@unique([companyId, slug])
+  @@index([companyId, status, startsAt, endsAt])
 }
 
-model CouponCode {
-  id                     String             @id @default(cuid())
-  code                   String             @unique
-  description            String?
-  discountType           DiscountType       @map("discount_type")
-  discountValue          Decimal            @db.Decimal(10, 2) @map("discount_value")
-  startAt                DateTime           @map("start_at")
-  endAt                  DateTime           @map("end_at")
-  usageLimit             Int?               @map("usage_limit")
-  usedCount              Int                @default(0) @map("used_count")
-  isActive               Boolean            @default(true) @map("is_active")
-  createdAt              DateTime           @default(now()) @map("created_at")
-  redemptions            CouponRedemption[]
+model CampaignVilla {
+  id                 String   @id @default(cuid())
+  campaignId         String
+  villaId            String
+  campaign           Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  villa              Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
 
-  @@index([isActive, startAt, endAt])
-  @@map("coupon_codes")
+  @@unique([campaignId, villaId])
+}
+
+model Coupon {
+  id                 String          @id @default(cuid())
+  companyId          String
+  websiteId          String?
+  createdByUserId    String?
+  code               String
+  title              String
+  description        String?
+  status             CouponStatus    @default(ACTIVE)
+  discountMethod     DiscountMethod
+  discountValue      Decimal         @db.Decimal(12, 2)
+  startsAt           DateTime
+  endsAt             DateTime
+  usageLimit         Int?
+  usedCount          Int             @default(0)
+  minimumStayNights  Int?
+  minimumOrderAmount Decimal?        @db.Decimal(12, 2)
+  isPublic           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website            CompanyWebsite? @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+  createdByUser      User?           @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  villas             CouponVilla[]
+  redemptions        CouponRedemption[]
+
+  @@unique([companyId, code])
+  @@index([companyId, status, startsAt, endsAt])
+}
+
+model CouponVilla {
+  id                 String   @id @default(cuid())
+  couponId           String
+  villaId            String
+  coupon             Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  villa              Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, villaId])
+}
+
+model BookingRequest {
+  id                    String                       @id @default(cuid())
+  companyId             String
+  websiteId             String?
+  villaId               String
+  assignedToUserId      String?
+  status                BookingRequestStatus        @default(NEW)
+  source                RequestSource               @default(WEB)
+  channelLabel          String?
+  fullName              String
+  phone                 String
+  email                 String?
+  guestCount            Int
+  checkIn               DateTime
+  checkOut              DateTime
+  preferredContactDate  DateTime?
+  preferredContactRange String?
+  message               String?
+  couponCodeText        String?
+  quotedBaseAmount      Decimal?                    @db.Decimal(12, 2)
+  quotedDiscountAmount  Decimal?                    @db.Decimal(12, 2)
+  quotedCleaningFee     Decimal?                    @db.Decimal(12, 2)
+  quotedTotalAmount     Decimal?                    @db.Decimal(12, 2)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  company               Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website               CompanyWebsite?             @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+  villa                 Villa                       @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  assignedToUser        User?                       @relation("AssignedRequests", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  statusHistory         BookingRequestStatusHistory[]
+  couponRedemption      CouponRedemption?
+  operationTasks        OperationTask[]
+  invoice               Invoice?
+  payments              Payment[]
+  cashEntries           CashLedgerEntry[]
+  review                GuestReview?
+
+  @@index([companyId, status, createdAt])
+  @@index([villaId, checkIn, checkOut])
 }
 
 model CouponRedemption {
-  id                     String             @id @default(cuid())
-  couponId               String             @map("coupon_id")
-  appointmentRequestId   String?            @unique @map("appointment_request_id")
-  discountAmount         Decimal            @db.Decimal(10, 2) @map("discount_amount")
-  createdAt              DateTime           @default(now()) @map("created_at")
-  coupon                  CouponCode         @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  appointmentRequest      AppointmentRequest? @relation(fields: [appointmentRequestId], references: [id], onDelete: SetNull)
-
-  @@map("coupon_redemptions")
+  id                 String         @id @default(cuid())
+  couponId           String
+  bookingRequestId   String         @unique
+  discountAmount     Decimal        @db.Decimal(12, 2)
+  createdAt          DateTime       @default(now())
+  coupon             Coupon         @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  bookingRequest     BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
 }
 
-model AppointmentRequest {
-  id                       String                            @id @default(cuid())
-  villaId                  String                            @map("villa_id")
-  fullName                 String                            @map("full_name")
-  phone                    String
-  email                    String?
-  guestCount               Int                               @map("guest_count")
-  stayStartDate            DateTime                          @map("stay_start_date")
-  stayEndDate              DateTime                          @map("stay_end_date")
-  preferredContactDate     DateTime?                         @map("preferred_contact_date")
-  preferredContactTimeRange String?                          @map("preferred_contact_time_range")
-  message                  String?
-  couponCodeText           String?                           @map("coupon_code_text")
-  estimatedBaseAmount      Decimal?                          @db.Decimal(10, 2) @map("estimated_base_amount")
-  estimatedDiscountAmount  Decimal?                          @db.Decimal(10, 2) @map("estimated_discount_amount")
-  estimatedFinalAmount     Decimal?                          @db.Decimal(10, 2) @map("estimated_final_amount")
-  status                   AppointmentRequestStatus          @default(NEW)
-  source                   RequestSource                     @default(WEB)
-  createdAt                DateTime                          @default(now()) @map("created_at")
-  updatedAt                DateTime                          @updatedAt @map("updated_at")
-  villa                     Villa                             @relation(fields: [villaId], references: [id], onDelete: Cascade)
-  statusHistory             AppointmentRequestStatusHistory[]
-  couponRedemption          CouponRedemption?
-  revenueRecords            RevenueRecord[]
+model BookingRequestStatusHistory {
+  id                 String               @id @default(cuid())
+  bookingRequestId   String
+  oldStatus          BookingRequestStatus?
+  newStatus          BookingRequestStatus
+  changedByUserId    String?
+  note               String?
+  createdAt          DateTime             @default(now())
+  bookingRequest     BookingRequest       @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
+  changedByUser      User?                @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
 
-  @@index([villaId, status])
-  @@index([stayStartDate, stayEndDate])
-  @@map("appointment_requests")
+  @@index([bookingRequestId, createdAt])
 }
 
-model AppointmentRequestStatusHistory {
-  id                     String                    @id @default(cuid())
-  appointmentRequestId   String                    @map("appointment_request_id")
-  oldStatus              AppointmentRequestStatus? @map("old_status")
-  newStatus              AppointmentRequestStatus  @map("new_status")
-  changedByUserId        String?                   @map("changed_by_user_id")
-  createdAt              DateTime                  @default(now()) @map("created_at")
-  appointmentRequest      AppointmentRequest         @relation(fields: [appointmentRequestId], references: [id], onDelete: Cascade)
-  changedBy               User?                      @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+model OperationTask {
+  id                 String              @id @default(cuid())
+  companyId          String
+  bookingRequestId   String?
+  villaId            String?
+  assigneeUserId     String?
+  taskType           OperationTaskType
+  status             OperationTaskStatus @default(PENDING)
+  priority           TaskPriority        @default(MEDIUM)
+  title              String
+  detail             String?
+  scheduledAt        DateTime
+  scheduledTimeLabel String?
+  assigneeLabel      String?
+  supplierName       String?
+  sourceLabel        String?
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bookingRequest     BookingRequest?     @relation(fields: [bookingRequestId], references: [id], onDelete: SetNull)
+  villa              Villa?              @relation(fields: [villaId], references: [id], onDelete: SetNull)
+  assigneeUser       User?               @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
 
-  @@index([appointmentRequestId, createdAt])
-  @@map("appointment_request_status_history")
+  @@index([companyId, status, scheduledAt])
+  @@index([villaId, taskType])
+}
+
+model Invoice {
+  id                 String         @id @default(cuid())
+  companyId          String
+  bookingRequestId   String?        @unique
+  invoiceNumber      String
+  status             InvoiceStatus  @default(DRAFT)
+  issueDate          DateTime
+  dueDate            DateTime
+  subtotal           Decimal        @default(0) @db.Decimal(12, 2)
+  discountTotal      Decimal        @default(0) @db.Decimal(12, 2)
+  taxTotal           Decimal        @default(0) @db.Decimal(12, 2)
+  cleaningFee        Decimal        @default(0) @db.Decimal(12, 2)
+  totalAmount        Decimal        @db.Decimal(12, 2)
+  paidTotal          Decimal        @default(0) @db.Decimal(12, 2)
+  currency           String         @default("TRY")
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bookingRequest     BookingRequest? @relation(fields: [bookingRequestId], references: [id], onDelete: SetNull)
+  payments           Payment[]
+  cashEntries        CashLedgerEntry[]
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId, status, dueDate])
+}
+
+model Payment {
+  id                 String        @id @default(cuid())
+  companyId          String
+  invoiceId          String
+  bookingRequestId   String?
+  paymentType        PaymentType
+  status             PaymentStatus @default(PENDING)
+  title              String?
+  method             String
+  amount             Decimal       @db.Decimal(12, 2)
+  currency           String        @default("TRY")
+  dueDate            DateTime?
+  paidAt             DateTime?
+  externalReference  String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice            Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  bookingRequest     BookingRequest? @relation(fields: [bookingRequestId], references: [id], onDelete: SetNull)
+  cashEntries        CashLedgerEntry[]
+
+  @@index([companyId, status, dueDate])
+}
+
+model CashLedgerEntry {
+  id                 String          @id @default(cuid())
+  companyId          String
+  paymentId          String?
+  invoiceId          String?
+  bookingRequestId   String?
+  createdByUserId    String?
+  direction          CashDirection
+  category           String
+  title              String
+  note               String?
+  amount             Decimal         @db.Decimal(12, 2)
+  currency           String          @default("TRY")
+  entryDate          DateTime
+  source             CashEntrySource
+  createdAt          DateTime        @default(now())
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  payment            Payment?        @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  invoice            Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  bookingRequest     BookingRequest? @relation(fields: [bookingRequestId], references: [id], onDelete: SetNull)
+  createdByUser      User?           @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, entryDate, direction])
+}
+
+model GuestReview {
+  id                 String        @id @default(cuid())
+  companyId          String
+  villaId            String
+  bookingRequestId   String?       @unique
+  guestName          String
+  rating             Int
+  source             ReviewSource
+  status             ReviewStatus  @default(PENDING)
+  comment            String
+  staffNote          String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  villa              Villa         @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  bookingRequest     BookingRequest? @relation(fields: [bookingRequestId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, createdAt])
 }
 
 model VillaViewEvent {
-  id                     String    @id @default(cuid())
-  villaId                String    @map("villa_id")
-  sessionId              String    @map("session_id")
-  userAgent              String?   @map("user_agent")
-  referer                String?
-  createdAt              DateTime  @default(now()) @map("created_at")
-  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid())
+  villaId            String
+  sessionId          String
+  userAgent          String?
+  referer            String?
+  createdAt          DateTime @default(now())
+  villa              Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
 
   @@index([villaId, createdAt])
   @@index([sessionId])
-  @@map("villa_view_events")
 }
 
 model VillaLiveSession {
-  id                     String    @id @default(cuid())
-  villaId                String    @map("villa_id")
-  sessionId              String    @map("session_id")
-  lastSeenAt             DateTime  @map("last_seen_at")
-  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid())
+  villaId            String
+  sessionId          String
+  lastSeenAt         DateTime
+  villa              Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
 
   @@unique([villaId, sessionId])
   @@index([lastSeenAt])
-  @@map("villa_live_sessions")
-}
-
-model RevenueRecord {
-  id                     String              @id @default(cuid())
-  villaId                String              @map("villa_id")
-  appointmentRequestId   String?             @map("appointment_request_id")
-  amount                 Decimal             @db.Decimal(12, 2)
-  currency               String              @default("TRY")
-  recordedAt             DateTime            @map("recorded_at")
-  villa                   Villa               @relation(fields: [villaId], references: [id], onDelete: Cascade)
-  appointmentRequest      AppointmentRequest? @relation(fields: [appointmentRequestId], references: [id], onDelete: SetNull)
-
-  @@index([villaId, recordedAt])
-  @@map("revenue_records")
 }
 
 model VillaDailyMetric {
-  id                     String    @id @default(cuid())
-  villaId                String    @map("villa_id")
-  metricDate             DateTime  @map("metric_date")
-  viewCount              Int       @default(0) @map("view_count")
-  requestCount           Int       @default(0) @map("request_count")
-  couponUsageCount       Int       @default(0) @map("coupon_usage_count")
-  revenueTotal           Decimal   @default(0) @db.Decimal(12, 2) @map("revenue_total")
-  villa                   Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid())
+  villaId            String
+  metricDate         DateTime
+  viewCount          Int      @default(0)
+  requestCount       Int      @default(0)
+  approvedCount      Int      @default(0)
+  couponUsageCount   Int      @default(0)
+  revenueTotal       Decimal  @default(0) @db.Decimal(12, 2)
+  villa              Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
 
   @@unique([villaId, metricDate])
-  @@map("villa_daily_metrics")
+}
+
+model Agency {
+  id                 String       @id @default(cuid())
+  companyId          String
+  name               String
+  kind               AgencyKind
+  ownerName          String?
+  city               String?
+  status             AgencyStatus @default(ACTIVE)
+  note               String?
+  approvedRevenue    Decimal      @default(0) @db.Decimal(12, 2)
+  openPipeline       Decimal      @default(0) @db.Decimal(12, 2)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branches           Branch[]
+
+  @@unique([companyId, name])
+}
+
+model Branch {
+  id                 String       @id @default(cuid())
+  companyId          String
+  agencyId           String?
+  name               String
+  city               String?
+  phone              String?
+  status             BranchStatus @default(ACTIVE)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agency             Agency?      @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  memberships        CompanyMembership[]
+
+  @@unique([companyId, name])
+}
+
+model InternalMessage {
+  id                 String          @id @default(cuid())
+  companyId          String
+  senderUserId       String?
+  recipientLabel     String
+  subject            String
+  body               String
+  status             MessageStatus   @default(NEW)
+  priority           MessagePriority @default(MEDIUM)
+  relatedModule      String?
+  createdAt          DateTime        @default(now())
+  resolvedAt         DateTime?
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  senderUser         User?           @relation(fields: [senderUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, createdAt])
+}
+
+model CommissionRule {
+  id                 String              @id @default(cuid())
+  companyId          String
+  scopeType          CommissionScopeType
+  scopeRefId         String?
+  scopeLabel         String
+  percent            Decimal             @db.Decimal(5, 2)
+  payoutRule         String
+  active             Boolean             @default(true)
+  updatedAt          DateTime            @updatedAt
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, scopeType, active])
+}
+
+model LandingPage {
+  id                 String            @id @default(cuid())
+  companyId          String
+  websiteId          String?
+  title              String
+  slug               String
+  targetRegion       String?
+  focusKeyword       String?
+  status             LandingPageStatus @default(DRAFT)
+  heroText           String?
+  leadCount          Int               @default(0)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  company            Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website            CompanyWebsite?   @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, slug])
+  @@index([companyId, status, updatedAt])
+}
+
+model SeoContent {
+  id                 String           @id @default(cuid())
+  companyId          String
+  websiteId          String?
+  title              String
+  contentType        SeoContentType
+  targetUrl          String
+  primaryKeyword     String
+  status             SeoContentStatus @default(PLANNED)
+  seoScore           Int?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  company            Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website            CompanyWebsite?  @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, updatedAt])
 }
 
 model BlogPost {
-  id                     String         @id @default(cuid())
-  title                  String
-  slug                   String         @unique
-  excerpt                String?
-  content                String
-  coverImage             String?        @map("cover_image")
-  seoTitle               String?        @map("seo_title")
-  seoDescription         String?        @map("seo_description")
-  publishedAt            DateTime?      @map("published_at")
-  status                 BlogPostStatus @default(DRAFT)
-  createdAt              DateTime       @default(now()) @map("created_at")
-  updatedAt              DateTime       @updatedAt @map("updated_at")
+  id                 String         @id @default(cuid())
+  companyId          String
+  websiteId          String?
+  title              String
+  slug               String
+  excerpt            String?
+  content            String
+  coverImageUrl      String?
+  seoTitle           String?
+  seoDescription     String?
+  status             BlogPostStatus @default(DRAFT)
+  publishedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  website            CompanyWebsite? @relation(fields: [websiteId], references: [id], onDelete: SetNull)
 
-  @@map("blog_posts")
+  @@unique([companyId, slug])
+  @@index([companyId, status, publishedAt])
 }
 
-model SiteSettings {
-  id                     String    @id @default(cuid())
-  siteName               String    @default("VillaVera") @map("site_name")
-  defaultTitle           String?   @map("default_title")
-  defaultDescription     String?   @map("default_description")
-  phone                  String?
-  email                  String?
-  address                String?
-  instagramUrl           String?   @map("instagram_url")
-  facebookUrl            String?   @map("facebook_url")
-  whatsappNumber         String?   @map("whatsapp_number")
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+model CalendarSyncSource {
+  id                 String               @id @default(cuid())
+  companyId          String
+  villaId            String
+  channelName        String
+  sourceUrl          String
+  direction          CalendarDirection
+  active             Boolean              @default(true)
+  status             CalendarSourceStatus @default(HEALTHY)
+  lastSyncedAt       DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  villa              Villa                @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  logs               CalendarSyncLog[]
 
-  @@map("site_settings")
+  @@unique([companyId, villaId, channelName, direction])
+}
+
+model CalendarSyncMapping {
+  id                 String    @id @default(cuid())
+  companyId          String
+  villaId            String
+  channelName        String
+  remoteCalendarName String
+  syncMode           SyncMode
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  villa              Villa     @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, villaId, channelName])
+}
+
+model CalendarSyncLog {
+  id                 String      @id @default(cuid())
+  companyId          String
+  sourceId           String?
+  villaId            String
+  channelName        String
+  outcome            SyncOutcome
+  eventCount         Int         @default(0)
+  message            String
+  createdAt          DateTime    @default(now())
+  company            Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  source             CalendarSyncSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  villa              Villa       @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+}
+
+model AuditLog {
+  id                 String   @id @default(cuid())
+  companyId          String?
+  actorUserId        String?
+  action             String
+  entityType         String
+  entityId           String?
+  summary            String
+  metadata           Json?
+  ipAddress          String?
+  createdAt          DateTime @default(now())
+  company            Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actorUser          User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model CurrencyRate {
+  id                 String              @id @default(cuid())
+  companyId          String
+  code               String
+  label              String
+  buyRate            Decimal             @db.Decimal(12, 4)
+  sellRate           Decimal             @db.Decimal(12, 4)
+  sourceLabel        String
+  status             CurrencyRateStatus  @default(LIVE)
+  updatedAt          DateTime            @updatedAt
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, code])
+}
+
+model PaymentMethod {
+  id                  String               @id @default(cuid())
+  companyId           String
+  label               String
+  provider            String
+  feePercent          Decimal              @db.Decimal(5, 2)
+  settlementDays      Int
+  status              PaymentMethodStatus  @default(ACTIVE)
+  supportsInstallment Boolean              @default(false)
+  note                String?
+  updatedAt           DateTime             @updatedAt
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, label])
+}
+
+model CacheGroup {
+  id                  String            @id @default(cuid())
+  companyId           String
+  label               String
+  target              String
+  status              CacheGroupStatus  @default(HEALTHY)
+  ttlMinutes          Int
+  warmIntervalMinutes Int
+  lastWarmedAt        DateTime?
+  note                String?
+  updatedAt           DateTime          @updatedAt
+  company             Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, label])
+}
+
+model DocumentAsset {
+  id                 String               @id @default(cuid())
+  companyId          String
+  title              String
+  category           String
+  audience           String
+  status             DocumentAssetStatus  @default(DRAFT)
+  fileUrl            String
+  updatedAt          DateTime             @updatedAt
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ShortcutLink {
+  id                 String          @id @default(cuid())
+  companyId          String
+  title              String
+  url                String
+  category           String
+  description        String?
+  status             ShortcutStatus  @default(ACTIVE)
+  updatedAt          DateTime        @updatedAt
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ExternalService {
+  id                 String                 @id @default(cuid())
+  companyId          String
+  name               String
+  url                String
+  ownerLabel         String
+  category           String
+  status             ExternalServiceStatus  @default(ACTIVE)
+  note               String?
+  updatedAt          DateTime               @updatedAt
+  company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model DocumentLink {
+  id                 String               @id @default(cuid())
+  companyId          String
+  title              String
+  url                String
+  category           String
+  status             DocumentAssetStatus  @default(DRAFT)
+  updatedAt          DateTime             @updatedAt
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ParameterGroup {
+  id                 String                    @id @default(cuid())
+  companyId          String
+  label              String
+  scope              String
+  itemCount          Int                       @default(0)
+  sampleItems        String[]                  @default([])
+  status             ResourceDefinitionStatus  @default(DRAFT)
+  note               String?
+  updatedAt          DateTime                  @updatedAt
+  company            Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, label])
 }

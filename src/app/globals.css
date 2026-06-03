@@ -1,22 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fffdf8;
-  --foreground: #1f2937;
+  --background: #fcf8f1;
+  --foreground: #1a2231;
   --font-sans-stack: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
   --font-display-stack: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-  --color-sand: #f5e6c8;
-  --color-teal: #0f766e;
-  --color-aqua: #14b8a6;
-  --color-gold: #f59e0b;
-  --color-ink: #1f2937;
-  --color-cream: #fffdf8;
-  --color-soft-white: #fff8ee;
-  --color-line: rgba(15, 118, 110, 0.12);
-  --color-coral: #f43f5e;
-  --color-coral-soft: #ffe9ee;
-  --color-slate-soft: #f7f7f7;
+  --color-sand: #efe2cb;
+  --color-teal: #0d6b66;
+  --color-aqua: #23b6a7;
+  --color-gold: #d7a34a;
+  --color-ink: #1a2231;
+  --color-cream: #fcf8f1;
+  --color-soft-white: #fffdf9;
+  --color-line: rgba(13, 107, 102, 0.12);
+  --color-coral: #ef6d52;
+  --color-coral-soft: #fff0ea;
+  --color-slate-soft: #f5f4f0;
   --color-border-soft: rgba(15, 23, 42, 0.08);
+  --color-shadow-soft: rgba(32, 38, 52, 0.08);
 }
 
 @theme inline {
@@ -35,13 +36,16 @@ html {
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(35, 182, 167, 0.09), transparent 20%),
+    radial-gradient(circle at right 20%, rgba(239, 109, 82, 0.08), transparent 18%),
+    linear-gradient(180deg, #fffdf9 0%, var(--background) 45%, #ffffff 100%);
   color: var(--foreground);
   font-family: var(--font-sans-stack);
 }
 
 a {
-  color: inherit;
   text-decoration: none;
 }
 
@@ -51,9 +55,9 @@ a {
 
 .bg-shell {
   background:
-    radial-gradient(circle at top center, rgba(244, 63, 94, 0.08), transparent 22%),
-    radial-gradient(circle at left 18%, rgba(245, 158, 11, 0.06), transparent 20%),
-    linear-gradient(180deg, #fffaf7 0%, #ffffff 100%);
+    radial-gradient(circle at top center, rgba(239, 109, 82, 0.08), transparent 22%),
+    radial-gradient(circle at left 18%, rgba(215, 163, 74, 0.08), transparent 20%),
+    linear-gradient(180deg, #fffaf6 0%, #ffffff 100%);
 }
 
 .bg-ocean-panel {
@@ -64,7 +68,32 @@ a {
 
 .card-surface {
   border: 1px solid var(--color-border-soft);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 42px var(--color-shadow-soft);
   backdrop-filter: blur(10px);
+}
+
+.surface-luxe {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.9)),
+    #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
+}
+
+.surface-dark {
+  background:
+    radial-gradient(circle at top right, rgba(35, 182, 167, 0.16), transparent 24%),
+    linear-gradient(160deg, #182231 0%, #101926 100%);
+}
+
+.grid-faint {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.42) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.42) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.text-balance {
+  text-wrap: balance;
 }

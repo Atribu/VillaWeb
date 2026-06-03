@@ -3,70 +3,115 @@ import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { PublicVillaCard } from "@/components/villas/public-villa-card";
-import { blogPreview, campaignCards, categoryHighlights, faqItems } from "@/lib/site-data";
-import {
-  formatCurrency,
-  getFeaturedVillaCatalog,
-  getVillaQuickStats,
-} from "@/lib/villa-catalog";
+import { blogPreview, campaignCards, faqItems } from "@/lib/site-data";
+import { formatCurrency, getFeaturedVillaCatalog } from "@/lib/villa-catalog";
 import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export const metadata: Metadata = {
   title: "Ana Sayfa",
   description:
-    "Modern, SEO odakli villa kiralama vitrini. Tarih secin, premium villalari inceleyin ve talep olusturun.",
+    "Kategori, lokasyon ve quick search odakli villa kiralama vitrini. Secili villalari inceleyin ve talep olusturun.",
   keywords: [
     "villa kiralama",
-    "luks villa",
+    "ozel havuzlu villa",
+    "balayi villasi",
     "kalkan villa kiralama",
-    "fethiye villa",
     "bodrum villa",
-    "tatil villasi",
+    "fethiye villa",
   ],
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "VillaVera | Modern Villa Kiralama Deneyimi",
+    title: "VillaVera | Villa Kiralama Koleksiyonu",
     description:
-      "Modern tasarim, SEO odakli icerik ve panel destekli talep akisiyla premium villa vitrini.",
+      "Quick search, kategori bazli kesif ve lokasyon landing mantigi ile hazirlanan villa kiralama vitrini.",
     type: "website",
   },
 };
 
 export const dynamic = "force-dynamic";
 
+const holidayTypes = [
+  {
+    title: "Balayi Villalari",
+    text: "Romantik, daha sakin ve daha ozel bir tatil arayan ciftler icin hazirlandi.",
+    accent: "Balayi",
+  },
+  {
+    title: "Merkeze Yakin Villalar",
+    text: "Arabasiz hareket etmek isteyenler icin sahile ve merkeze daha yakin secenekler.",
+    accent: "Merkezi Konum",
+  },
+  {
+    title: "Denize Yakin Villalar",
+    text: "Yazlik ritmini daha hizli yasamak isteyenler icin denize kolay ulasimli villalar.",
+    accent: "Denize Yakin",
+  },
+  {
+    title: "Deniz Manzarali Villalar",
+    text: "Kahvaltidan gun batimina kadar manzarayi tatilin merkezine koyan secimler.",
+    accent: "Deniz Manzarali",
+  },
+  {
+    title: "Ozel Havuzlu Villalar",
+    text: "Kalabaliklardan uzak, havuz deneyimini tamamen kendine ait yasamak isteyenler icin.",
+    accent: "Ozel Havuz",
+  },
+  {
+    title: "Korunakli Villalar",
+    text: "Mahremiyet ve daha kontrollu bir konaklama deneyimi arayan misafirler icin.",
+    accent: "Korunakli",
+  },
+  {
+    title: "Servisli Villalar",
+    text: "Temizlik, destek ve daha konforlu uzun konaklama akislari isteyenlere uygun.",
+    accent: "Servisli",
+  },
+  {
+    title: "Jakuzili Villalar",
+    text: "Daha keyifli, daha ozel ve daha premium bir deneyim isteyenler icin secildi.",
+    accent: "Jakuzili",
+  },
+];
+
+function buildLocationCollections(villas: Awaited<ReturnType<typeof getDemoVillas>>) {
+  const grouped = new Map<string, typeof villas>();
+
+  villas.forEach((villa) => {
+    const key = villa.district;
+    const list = grouped.get(key) ?? [];
+    list.push(villa);
+    grouped.set(key, list);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([district, items]) => ({
+      district,
+      city: items[0]?.city ?? "",
+      averagePrice: formatCurrency(
+        Math.round(
+          items.reduce((sum, item) => sum + (item.discountedNightlyPrice ?? item.nightlyPrice), 0) /
+            items.length,
+        ),
+      ),
+      villas: items.slice(0, 3),
+    }))
+    .slice(0, 3);
+}
+
 export default async function HomePage() {
   const company = await getCurrentPublicCompany();
   const villas = await getDemoVillas({ companyId: company.id });
   const featuredVillas = getFeaturedVillaCatalog(villas);
-  const quickStats = getVillaQuickStats(villas);
-
-  const destinationHighlights = Array.from(
-    villas.reduce((map, villa) => {
-      const key = `${villa.district}-${villa.city}`;
-      const current = map.get(key) ?? {
-        district: villa.district,
-        city: villa.city,
-        villaCount: 0,
-        totalPrice: 0,
-      };
-
-      current.villaCount += 1;
-      current.totalPrice += villa.discountedNightlyPrice ?? villa.nightlyPrice;
-      map.set(key, current);
-
-      return map;
-    }, new Map<string, { district: string; city: string; villaCount: number; totalPrice: number }>()),
-  )
-    .map(([, item]) => ({
-      ...item,
-      averagePrice: formatCurrency(Math.round(item.totalPrice / item.villaCount)),
-    }))
-    .slice(0, 4);
-
-  const heroVillas = featuredVillas.slice(0, 3);
+  const heroVilla = featuredVillas[0] ?? villas[0];
+  const secondaryVillas = (featuredVillas.length > 0 ? featuredVillas : villas).slice(1, 4);
+  const locationCollections = buildLocationCollections(villas);
+  const exclusiveVillas = villas.filter((villa) => villa.featured).slice(0, 6);
+  const longStayVillas = [...villas]
+    .sort((a, b) => (a.minNightCount ?? 0) - (b.minNightCount ?? 0))
+    .slice(0, 3);
 
   const faqJsonLd = {
     "@context": "https://schema.org",
@@ -88,113 +133,136 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
 
-      <section className="pt-10 sm:pt-14">
+      <section className="pt-10 sm:pt-12">
         <Container>
-          <div className="overflow-hidden rounded-[2.5rem] border border-black/6 bg-white px-5 py-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-            <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-              <div>
+          <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <div className="relative overflow-hidden rounded-[2rem] border border-black/6 bg-slate-900 text-white shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
+              <div
+                className="absolute inset-0 bg-cover bg-center opacity-35"
+                style={{
+                  backgroundImage: heroVilla?.coverImageUrl ? `url(${heroVilla.coverImageUrl})` : undefined,
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/85 to-slate-950/30" />
+              <div className="relative z-10 px-7 py-8 sm:px-9 sm:py-10">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--color-coral)]">
-                  {company.shortName} Demo Vitrini
+                  {company.shortName} Exclusive Villas
                 </p>
-                <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-                  {company.heroTitle}
+                <h1 className="mt-5 max-w-3xl font-display text-5xl font-semibold tracking-[-0.05em] text-balance sm:text-6xl">
+                  Ayricalikli villa deneyimi secili koleksiyonlarla burada.
                 </h1>
-                <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-                  {company.heroDescription}
+                <p className="mt-5 max-w-2xl text-base leading-8 text-white/74">
+                  {company.heroDescription} Kategori mantigi, lokasyon odagi ve panel destekli
+                  fiyat akisi sayesinde hem guven hem de kesif hissi bir arada ilerler.
                 </p>
 
-                <div className="mt-8 rounded-[1.8rem] border border-black/6 bg-white p-3 shadow-[0_10px_26px_rgba(15,23,42,0.06)]">
-                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
-                    {[
-                      ["Bolge", "Kalkan, Fethiye, Bodrum"],
-                      ["Tarih", "Giris ve cikis sec"],
-                      ["Misafir", "2 kisiden 12 kisiye"],
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className="rounded-[1.25rem] border border-slate-100 bg-[var(--color-slate-soft)] px-4 py-4"
+                {heroVilla ? (
+                  <div className="mt-8 max-w-md rounded-[1.4rem] bg-white/10 p-5 backdrop-blur">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
+                      One cikan villa
+                    </p>
+                    <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.04em]">
+                      {heroVilla.title}
+                    </h2>
+                    <p className="mt-2 text-sm text-white/72">{heroVilla.locationLabel}</p>
+                    <p className="mt-4 text-sm leading-7 text-white/74">{heroVilla.shortDescription}</p>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <Link
+                        href={`/villalar/${heroVilla.slug}`}
+                        className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-white/90"
                       >
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                          {label}
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
-                      </div>
-                    ))}
-
-                    <Link
-                      href="/villalar"
-                      className="inline-flex items-center justify-center rounded-[1.25rem] bg-slate-900 px-6 py-4 text-sm font-semibold text-white transition hover:bg-slate-800"
-                    >
-                      Villalari Kesfet
-                    </Link>
+                        Detaylari incele
+                      </Link>
+                      <Link
+                        href="/villalar"
+                        className="rounded-full border border-white/16 px-5 py-2.5 text-sm font-semibold text-white transition hover:border-white/28"
+                      >
+                        Tum villalar
+                      </Link>
+                    </div>
                   </div>
-                </div>
+                ) : null}
+              </div>
+            </div>
 
-                <div className="mt-8 flex flex-wrap gap-3">
-                  {quickStats.map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="rounded-full border border-black/6 bg-[var(--color-slate-soft)] px-4 py-2.5"
-                    >
-                      <span className="text-sm font-semibold text-slate-900">{stat.value}</span>
-                      <span className="ml-2 text-sm text-slate-500">{stat.label}</span>
+            <div className="grid gap-4">
+              <div className="rounded-[2rem] border border-black/6 bg-white p-6 shadow-[0_14px_28px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-[var(--color-coral)]">
+                  Quick Search
+                </p>
+                <div className="mt-5 grid gap-3">
+                  {[
+                    ["Villa tipi", "Villa", "bg-white"],
+                    ["Nereye", "Ulke / Bolge / Tatil beldesi", "bg-[var(--color-slate-soft)]"],
+                    ["Giris tarihi", "Tarih sec", "bg-[var(--color-slate-soft)]"],
+                    ["Cikis tarihi", "Tarih sec", "bg-[var(--color-slate-soft)]"],
+                    ["Misafir", "Kisi sayisi", "bg-[var(--color-slate-soft)]"],
+                  ].map(([label, value, surface]) => (
+                    <div key={label} className={`rounded-[1rem] border border-black/6 px-4 py-3 ${surface}`}>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        {label}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
                     </div>
                   ))}
+
+                  <Link
+                    href="/villalar"
+                    className="inline-flex items-center justify-center rounded-[1rem] bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    Search
+                  </Link>
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
-                <div className="overflow-hidden rounded-[2rem] bg-slate-100">
-                  <div
-                    className="aspect-[0.92/1] h-full w-full bg-cover bg-center"
-                    style={{
-                      backgroundImage: `url(${heroVillas[0]?.coverImageUrl ?? ""})`,
-                    }}
-                  />
-                </div>
-
-                <div className="grid gap-4">
-                  {heroVillas.slice(1).map((villa) => (
-                    <div key={villa.id} className="overflow-hidden rounded-[2rem] bg-slate-100">
-                      <div
-                        className="aspect-[1.05/0.92] h-full w-full bg-cover bg-center"
-                        style={{
-                          backgroundImage: `url(${villa.coverImageUrl ?? ""})`,
-                        }}
-                      />
+              <div className="grid gap-4 sm:grid-cols-2">
+                {secondaryVillas.map((villa) => (
+                  <Link
+                    key={villa.id}
+                    href={`/villalar/${villa.slug}`}
+                    className="overflow-hidden rounded-[1.6rem] border border-black/6 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.05)]"
+                  >
+                    <div
+                      className="aspect-[1.2/0.92] bg-cover bg-center"
+                      style={{
+                        backgroundImage: villa.coverImageUrl ? `url(${villa.coverImageUrl})` : undefined,
+                      }}
+                    />
+                    <div className="p-4">
+                      <p className="text-sm font-semibold text-slate-950">{villa.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">{villa.locationLabel}</p>
                     </div>
-                  ))}
-
-                  <div className="rounded-[2rem] bg-[var(--color-coral-soft)] p-6">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-coral)]">
-                      Talep Odakli Deneyim
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold text-slate-900">
-                      Kullanici once villayi inceler, sonra tarihe gore talep gonderir.
-                    </p>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">
-                      Rezervasyon penceresi, panelde yonetilen doluluk takvimi ve kampanya mantigi
-                      ile birlikte calisir.
-                    </p>
-                  </div>
-                </div>
+                  </Link>
+                ))}
               </div>
             </div>
           </div>
         </Container>
       </section>
 
-      <section className="pt-20">
+      <section className="pt-18">
         <Container>
           <SectionHeading
-            eyebrow="One Cikan Villalar"
-            title="Misafir kararini hizlandiran modern villa kartlari"
-            description="Lokasyon, fiyat, kapasite ve guven olusturan detaylar ayni kartta sunulur. Her kart SEO destekli detay sayfasina baglanir."
+            eyebrow="Tatil Tarzin Hangisi?"
+            title="Kategori bazli secimle dogru villaya daha hizli ulasilir"
+            description="Bu alan daha katalog mantikli sitelerde kullanicinin niyetini hizla anlamaya yardim eder. Biz de ayni mantigi daha temiz bir grid duzeniyle kuruyoruz."
           />
 
-          <div className="mt-10 grid gap-6 lg:grid-cols-3">
-            {featuredVillas.map((villa) => (
-              <PublicVillaCard key={villa.id} villa={villa} />
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {holidayTypes.map((item) => (
+              <Link
+                key={item.title}
+                href="/villalar"
+                className="rounded-[1.7rem] border border-black/6 bg-white p-6 shadow-[0_14px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.08)]"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+                  {item.accent}
+                </p>
+                <h3 className="mt-4 font-display text-[1.9rem] font-semibold tracking-[-0.04em] text-slate-950">
+                  {item.title}
+                </h3>
+                <p className="mt-4 text-sm leading-7 text-slate-600">{item.text}</p>
+              </Link>
             ))}
           </div>
         </Container>
@@ -202,33 +270,54 @@ export default async function HomePage() {
 
       <section className="pt-20">
         <Container>
-          <SectionHeading
-            eyebrow="Populer Bolgeler"
-            title="Konuma gore kesfedilen, organik trafik ureten landing yapisi"
-            description="Bolgeler, hem kullanicinin aradigi villaya hizla ulasmasini hem de arama motorlarinda lokasyon bazli gorunurluk kazanmayi destekler."
-          />
-
-          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            {destinationHighlights.map((item) => (
-              <div
-                key={`${item.district}-${item.city}`}
-                className="rounded-[1.8rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-                  {item.city}
-                </p>
-                <h3 className="mt-3 text-2xl font-semibold text-slate-900">{item.district}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  {item.villaCount} aktif villa, ortalama {item.averagePrice} gecelik fiyat
-                  araligiyla kesfediliyor.
-                </p>
-                <Link
-                  href="/villalar"
-                  className="mt-5 inline-flex text-sm font-semibold text-slate-900 transition hover:text-[var(--color-coral)]"
-                >
-                  Bu bolgedeki villalari incele
+          {locationCollections.map((collection) => (
+            <div key={collection.district} className="mb-16 last:mb-0">
+              <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+                    Popular {collection.district} Homes
+                  </p>
+                  <h2 className="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-slate-950">
+                    {collection.city} / {collection.district}
+                  </h2>
+                  <p className="mt-3 text-sm text-slate-600">
+                    Ortalama fiyat {collection.averagePrice} · panelden yonetilen secili portfoy
+                  </p>
+                </div>
+                <Link href="/villalar" className="text-sm font-semibold text-slate-950">
+                  Tumunu incele
                 </Link>
               </div>
+
+              <div className="grid gap-6 lg:grid-cols-3">
+                {collection.villas.map((villa) => (
+                  <PublicVillaCard key={villa.id} villa={villa} compact />
+                ))}
+              </div>
+            </div>
+          ))}
+        </Container>
+      </section>
+
+      <section className="pt-20">
+        <Container>
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+                {company.shortName} Exclusive
+              </p>
+              <h2 className="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-slate-950">
+                Ozel olarak one cikarilan villalar
+              </h2>
+            </div>
+            <Link href="/villalar" className="text-sm font-semibold text-slate-950">
+              Tum portfoy
+            </Link>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            {exclusiveVillas.map((villa) => (
+              <PublicVillaCard key={villa.id} villa={villa} compact />
             ))}
           </div>
         </Container>
@@ -237,58 +326,55 @@ export default async function HomePage() {
       <section className="pt-20">
         <Container>
           <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-[2rem] bg-slate-900 p-8 text-white shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-200">
-                Neden VillaVera
-              </p>
-              <h2 className="mt-4 text-4xl font-semibold leading-tight">
-                Modern tasarim sadeligini, kurumsal operasyon gucuyle birlestiren sistem.
-              </h2>
-              <p className="mt-5 text-sm leading-7 text-slate-300">
-                Personel panelden villa ekler, admin fiyat ve uygunlugu yonetir, public taraf ise
-                sade ama ikna edici bir deneyim sunar.
-              </p>
+            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_14px_28px_rgba(15,23,42,0.05)]">
+              <SectionHeading
+                eyebrow="Uzun Donem Konaklamalar"
+                title="Aylik ya da sezonluk kiralama dusunenler icin secili villalar"
+                description="Daha sakin, daha planli ve daha operasyon odakli konaklama arayanlar icin bu blok landing mantigini destekler."
+              />
+
+              <div className="mt-8 grid gap-4">
+                {longStayVillas.map((villa) => (
+                  <Link
+                    key={villa.id}
+                    href={`/villalar/${villa.slug}`}
+                    className="rounded-[1.4rem] bg-[var(--color-slate-soft)] px-5 py-4 transition hover:bg-white hover:shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">{villa.title}</p>
+                        <p className="mt-1 text-xs text-slate-500">{villa.locationLabel}</p>
+                      </div>
+                      <div className="text-sm text-slate-600">
+                        <span className="font-semibold text-slate-950">
+                          {formatCurrency(villa.discountedNightlyPrice ?? villa.nightlyPrice)}
+                        </span>{" "}
+                        / gece
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {categoryHighlights.map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-[1.8rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
-                >
-                  <h3 className="text-xl font-semibold text-slate-900">{item.title}</h3>
-                  <p className="mt-3 text-sm leading-7 text-slate-600">{item.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="pt-20">
-        <Container>
-          <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_14px_28px_rgba(15,23,42,0.05)]">
               <SectionHeading
                 eyebrow="Kampanyalar"
-                title="Panelde tanimlanan indirimler vitrinde net sekilde gorunur"
-                description="Eski fiyat ustu cizili, yeni fiyat vurgulu. Kupon ve donemsel kampanya mantigi ilk bakista anlatilir."
+                title="Panelde tanimlanan firsatlar vitrinde net sekilde gorunur"
+                description="Eski fiyat ustu cizili, yeni fiyat vurgulu. Kupon ve donemsel kampanya mantigi ilk bakista anlasilir."
               />
-            </div>
 
-            <div className="grid gap-5 lg:grid-cols-3">
-              {campaignCards.map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-[1.8rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-                    {item.value}
-                  </p>
-                  <h3 className="mt-3 text-xl font-semibold text-slate-900">{item.title}</h3>
-                  <p className="mt-3 text-sm leading-7 text-slate-600">{item.description}</p>
-                </div>
-              ))}
+              <div className="mt-8 grid gap-4">
+                {campaignCards.map((item) => (
+                  <div key={item.title} className="rounded-[1.4rem] bg-[var(--color-coral-soft)] p-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+                      {item.value}
+                    </p>
+                    <h3 className="mt-3 text-xl font-semibold text-slate-950">{item.title}</h3>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">{item.description}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </Container>
@@ -297,28 +383,28 @@ export default async function HomePage() {
       <section className="pt-20">
         <Container>
           <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_14px_28px_rgba(15,23,42,0.05)]">
               <SectionHeading
                 eyebrow="Sik Sorulan Sorular"
-                title="SEO'yu destekleyen guven katmani"
-                description="Sadece bilgi vermek icin degil, kullanici niyetini ve Google aramalarini karsilamak icin hazirlanan SSS alanlari."
+                title="Guven katmani ve SEO destegi"
+                description="Bilgi veren, guven olusturan ve arama niyetini karsilayan bir soru-cevap yapisi."
               />
 
               <div className="mt-8 space-y-4">
                 {faqItems.map((item) => (
                   <div key={item.question} className="rounded-[1.3rem] bg-[var(--color-slate-soft)] p-5">
-                    <h3 className="text-lg font-semibold text-slate-900">{item.question}</h3>
+                    <h3 className="text-lg font-semibold text-slate-950">{item.question}</h3>
                     <p className="mt-3 text-sm leading-7 text-slate-600">{item.answer}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_14px_28px_rgba(15,23,42,0.05)]">
               <SectionHeading
                 eyebrow="Blog ve Rehber"
-                title="Reklam olmadan buyumeyi destekleyen icerik merkezi"
-                description="Bolge ve tatil odakli icerikler, siteyi sadece vitrinden cikartip organik bir trafik makinesine donusturur."
+                title="Reklam olmadan buyume icin icerik merkezi"
+                description="Bolge, kategori ve tatil tipine gore uretilecek icerikler listeleme ve detay sayfalarini destekler."
               />
 
               <div className="mt-8 space-y-4">
@@ -327,41 +413,14 @@ export default async function HomePage() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
                       {post.category}
                     </p>
-                    <h3 className="mt-3 text-xl font-semibold text-slate-900">{post.title}</h3>
+                    <h3 className="mt-3 text-xl font-semibold text-slate-950">{post.title}</h3>
                     <p className="mt-3 text-sm leading-7 text-slate-600">
-                      Blog yazilari, bolge sayfalari ve villa detaylariyla birbirine baglanarak
-                      kullaniciyi uzun sure sitede tutar.
+                      Kategori sayfalari ve lokasyon landing bloklariyla birlikte organik kesfi
+                      guclendiren editoryal alan.
                     </p>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="pt-20">
-        <Container>
-          <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-            <SectionHeading
-              eyebrow="SEO Editoryal Alan"
-              title="Her sayfanin altinda arama niyetini karsilayan guclu bir icerik katmani olacak"
-              description="Modern tasarim ile SEO arasinda tercih yapmiyoruz. Ustte hizli karar verdiren kartlar, altta ise detayli metin, bolge anlatimi ve ic linkleme bulunuyor."
-            />
-
-            <div className="mt-8 grid gap-6 lg:grid-cols-2">
-              <p className="text-sm leading-8 text-slate-600">
-                VillaVera; Kalkan, Fethiye, Kas ve Bodrum gibi lokasyonlarda ozel havuzlu,
-                muhafazakar, balayi ve genis aile villalarini tek vitrinde toplar. Her detay
-                sayfasinda benzersiz baslik, meta aciklama, odak anahtar kelime, gorsel alt metni
-                ve yapilandirilmis veri kullanilir.
-              </p>
-              <p className="text-sm leading-8 text-slate-600">
-                Boylece site yalnizca guzel gorunen bir katalog olmaz; ayni zamanda organik
-                aramalarda bulunabilir, guven veren ve donusum uretebilen bir kiralama platformuna
-                donusur. Panel tarafinda yapilan fiyat, kupon ve doluluk degisiklikleri de bu
-                vitrinin kalbini besler.
-              </p>
             </div>
           </div>
         </Container>

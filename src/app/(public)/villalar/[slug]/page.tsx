@@ -57,8 +57,7 @@ export default async function VillaDetailPage({ params }: PageProps) {
 
   const galleryImages =
     villa.imageUrls.length > 0 ? villa.imageUrls : villa.coverImageUrl ? [villa.coverImageUrl] : [];
-  const primaryImage = galleryImages[0];
-  const secondaryImages = galleryImages.slice(1, 5);
+  const galleryTiles = galleryImages.slice(0, 5);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -83,6 +82,11 @@ export default async function VillaDetailPage({ params }: PageProps) {
     ],
   };
 
+  const reviewLabel =
+    typeof villa.rating === "number"
+      ? `${villa.rating.toFixed(2)} puan${villa.reviewCount ? ` / ${villa.reviewCount} yorum` : ""}`
+      : "Yeni portfoy";
+
   return (
     <Container className="py-12 sm:py-14">
       <script
@@ -103,115 +107,141 @@ export default async function VillaDetailPage({ params }: PageProps) {
           <span className="text-slate-700">{villa.title}</span>
         </div>
 
-        <section className="space-y-6">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div>
+        <section className="surface-luxe overflow-hidden rounded-[2.6rem] p-5 sm:p-7">
+          <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <div className="surface-dark rounded-[2.2rem] px-7 py-8 text-white sm:px-8 sm:py-10">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[var(--color-coral-soft)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+                <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/84 ring-1 ring-white/14">
                   {villa.badge}
                 </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
-                  {villa.category} · {company.shortName}
+                <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/84 ring-1 ring-white/14">
+                  {villa.category}
                 </span>
                 {villa.featured ? (
-                  <span className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
-                    One Cikan Villa
+                  <span className="rounded-full bg-[var(--color-coral)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-white">
+                    Editor secimi
                   </span>
                 ) : null}
               </div>
-              <h1 className="mt-4 max-w-4xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
+
+              <h1 className="mt-6 max-w-4xl font-display text-5xl font-semibold tracking-[-0.05em] text-balance sm:text-6xl">
                 {villa.title}
               </h1>
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-slate-600">
+              <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-white/72">
                 <span>{villa.locationLabel}</span>
-                <span>{villa.capacity} misafir</span>
-                <span>{villa.bedroomCount} oda</span>
-                <span>{villa.bathroomCount} banyo</span>
-                <span>{villa.poolType}</span>
+                <span>{reviewLabel}</span>
+                <span>{villa.requestCount} talep</span>
+              </div>
+
+              <p className="mt-6 max-w-2xl text-base leading-8 text-white/74">
+                {villa.description}
+              </p>
+
+              <div className="mt-8 grid gap-3 rounded-[2rem] border border-white/10 bg-white/8 p-3 sm:grid-cols-3">
+                {[
+                  ["Misafir", `${villa.capacity} kisilik`],
+                  ["Yatak odasi", `${villa.bedroomCount} oda`],
+                  ["Havuz", villa.poolType],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-[1.2rem] bg-white/8 px-4 py-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/45">
+                      {label}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-white">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  href={villa.availabilityRanges.length > 0 ? `/talep?villa=${villa.slug}` : "/talep"}
+                  className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90"
+                >
+                  Talep olustur
+                </Link>
+                <Link
+                  href="/villalar"
+                  className="rounded-full border border-white/14 px-5 py-3 text-sm font-semibold text-white transition hover:border-white/30"
+                >
+                  Tum villalar
+                </Link>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/villalar"
-                className="rounded-full border border-black/8 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
-              >
-                Tum Villalar
-              </Link>
-              <Link
-                href={villa.availabilityRanges.length > 0 ? `/talep?villa=${villa.slug}` : "/talep"}
-                className="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
-                Talep Olustur
-              </Link>
-            </div>
-          </div>
+            <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
+              {galleryTiles[0] ? (
+                <div className="overflow-hidden rounded-[2rem]">
+                  <Image
+                    src={galleryTiles[0]}
+                    alt={villa.coverAlt}
+                    width={1600}
+                    height={1100}
+                    className="h-full w-full object-cover"
+                    priority
+                  />
+                </div>
+              ) : (
+                <div className={`rounded-[2rem] bg-gradient-to-br ${villa.coverGradient}`} />
+              )}
 
-          <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
-            {primaryImage ? (
-              <div className="overflow-hidden rounded-[2rem]">
-                <Image
-                  src={primaryImage}
-                  alt={villa.coverAlt}
-                  width={1600}
-                  height={1000}
-                  className="h-full w-full object-cover"
-                  priority
-                />
-              </div>
-            ) : (
-              <div className={`h-[420px] rounded-[2rem] bg-gradient-to-br ${villa.coverGradient}`} />
-            )}
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              {secondaryImages.length > 0 ? (
-                secondaryImages.map((imageUrl, index) => (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                {galleryTiles.slice(1).map((imageUrl, index) => (
                   <div key={imageUrl} className="overflow-hidden rounded-[2rem]">
                     <Image
                       src={imageUrl}
                       alt={`${villa.coverAlt} galeri gorseli ${index + 2}`}
                       width={1200}
-                      height={750}
+                      height={850}
                       className="h-full w-full object-cover"
                     />
                   </div>
-                ))
-              ) : (
-                <div className="rounded-[2rem] border border-black/6 bg-white p-8 text-sm leading-7 text-slate-600 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                  Bu villa icin galeri, tarih secimi ve talep akisi birlikte tasarlandi. Panelden
-                  eklenen her gorsel burada modern bir vitrin duzeniyle yansitilir.
+                ))}
+
+                <div className="rounded-[2rem] border border-black/6 bg-[var(--color-coral-soft)] p-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+                    Fiyat bilgisi
+                  </p>
+                  {villa.discountedNightlyPrice ? (
+                    <p className="mt-4 text-sm text-slate-400 line-through">
+                      {formatCurrency(villa.nightlyPrice)}
+                    </p>
+                  ) : null}
+                  <p className="mt-1 font-display text-4xl font-semibold tracking-[-0.04em] text-slate-950">
+                    {formatCurrency(villa.discountedNightlyPrice ?? villa.nightlyPrice)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">gecelik baslayan fiyat</p>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
+        <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
           <div className="space-y-6">
-            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-                Villa Ozeti
+            <div className="rounded-[2.1rem] border border-black/6 bg-white p-8 shadow-[0_16px_42px_rgba(15,23,42,0.06)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-coral)]">
+                Villa ozeti
               </p>
-              <h2 className="mt-4 text-3xl font-semibold text-slate-900">
-                Premium detaylar, sade bir karar deneyimi ile sunuluyor
+              <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.04em] text-slate-950">
+                Premium detaylari sade bir karar deneyimiyle birlestiriyoruz
               </h2>
               <p className="mt-5 text-sm leading-8 text-slate-600">{villa.description}</p>
 
               <div className="mt-8 grid gap-4 md:grid-cols-2">
                 {[
                   ["Kapasite", `${villa.capacity} kisilik konaklama`],
-                  ["Oda Plani", `${villa.bedroomCount} oda, ${villa.bathroomCount} banyo`],
-                  ["Havuz Tipi", villa.poolType],
-                  ["Talep Yogunlugu", `${villa.requestCount} talep / ${villa.viewCount} goruntulenme`],
+                  ["Oda plani", `${villa.bedroomCount} oda, ${villa.bathroomCount} banyo`],
+                  ["Talep yogunlugu", `${villa.requestCount} talep / ${villa.viewCount} goruntulenme`],
+                  ["Min. konaklama", `${villa.minNightCount ?? 1} gece`],
                 ].map(([label, value]) => (
                   <div
                     key={label}
-                    className="rounded-[1.4rem] border border-slate-100 bg-[var(--color-slate-soft)] p-5"
+                    className="rounded-[1.5rem] bg-[var(--color-slate-soft)] px-5 py-5"
                   >
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
                       {label}
                     </p>
-                    <p className="mt-3 text-base font-semibold text-slate-900">{value}</p>
+                    <p className="mt-3 text-base font-semibold text-slate-950">{value}</p>
                   </div>
                 ))}
               </div>
@@ -220,71 +250,104 @@ export default async function VillaDetailPage({ params }: PageProps) {
             <div className="grid gap-4 md:grid-cols-3">
               {[
                 {
-                  title: "Takvim Kontrollu Talep",
-                  text: "Panelden eklenen doluluk bloklari popup takvimde secilemez sekilde yansir.",
+                  title: "Takvim kontrollu secim",
+                  text: "Panelde kapali veya dolu olarak isaretlenen gunler misafir tarafinda secilemez.",
                 },
                 {
-                  title: "Esnek Fiyat Yonetimi",
-                  text: "Indirimli fiyat, kampanya ve kupon yapisi public tarafta net bicimde gorunur.",
+                  title: "Kampanya uyumlu fiyatlama",
+                  text: "Aktif indirim, eski fiyat ve kupon mantigi talep akisi boyunca tutarli gorunur.",
                 },
                 {
-                  title: "SEO Hazirligi",
-                  text: "Slug, meta aciklama, odak kelime ve schema yapisi bu detay sayfasina dahildir.",
+                  title: "Arama motoru gucu",
+                  text: "Slug, meta aciklama, odak kelime ve schema bilgileri sayfanin omurgasina dahildir.",
                 },
               ].map((item) => (
                 <div
                   key={item.title}
-                  className="rounded-[1.7rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+                  className="rounded-[1.8rem] border border-black/6 bg-white p-6 shadow-[0_16px_42px_rgba(15,23,42,0.06)]"
                 >
-                  <h3 className="text-lg font-semibold text-slate-900">{item.title}</h3>
+                  <h3 className="font-display text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+                    {item.title}
+                  </h3>
                   <p className="mt-3 text-sm leading-7 text-slate-600">{item.text}</p>
                 </div>
               ))}
             </div>
 
-            <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-                SEO Ozeti
-              </p>
-              <h2 className="mt-4 text-2xl font-semibold text-slate-900">{villa.seoTitle}</h2>
-              <p className="mt-4 text-sm leading-8 text-slate-600">{villa.seoDescription}</p>
-              <p className="mt-4 text-sm font-medium text-slate-500">
-                Odak anahtar kelime: {villa.focusKeyword}
-              </p>
+            <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+              <div className="rounded-[2.1rem] border border-black/6 bg-white p-8 shadow-[0_16px_42px_rgba(15,23,42,0.06)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-coral)]">
+                  Villa hakkinda
+                </p>
+                <h2 className="mt-4 font-display text-3xl font-semibold tracking-[-0.04em] text-slate-950">
+                  Lokasyon aramalarini da karsilayan daha guclu anlatim alani
+                </h2>
+                <p className="mt-5 text-sm leading-8 text-slate-600">
+                  {villa.title}, {villa.district} bolgesinde {villa.focusKeyword} arayan
+                  kullanicilar icin hazirlanan premium bir sayfa kurgusuna sahiptir. Karar asamasi
+                  ile SEO katmanini ayni yerde bulusturur.
+                </p>
+                <p className="mt-5 text-sm leading-8 text-slate-600">
+                  Buradaki dil; gorsel kaliteyi, kapasiteyi, manzarayi, yuzme deneyimini ve
+                  lokasyon avantajini ayni anda anlatabilecek kadar editoryal, ama yine de sade
+                  kalabilecek kadar kontrollu olmalidir.
+                </p>
+              </div>
+
+              <div className="rounded-[2.1rem] border border-black/6 bg-white p-8 shadow-[0_16px_42px_rgba(15,23,42,0.06)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-coral)]">
+                  Karar destek bilgileri
+                </p>
+                <div className="mt-6 space-y-4">
+                  {[
+                    ["Konum", villa.locationLabel],
+                    ["Gelir verisi", villa.revenueLabel],
+                    ["Gorsel sayisi", `${villa.imageCount} gorsel`],
+                    ["Odak kelime", villa.focusKeyword],
+                    ["Temizlik", formatCurrency(villa.cleaningFee ?? 0)],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="flex items-center justify-between rounded-[1.3rem] bg-[var(--color-slate-soft)] px-4 py-4 text-sm"
+                    >
+                      <span className="text-slate-500">{label}</span>
+                      <span className="font-semibold text-slate-950">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
           <aside className="space-y-4 xl:sticky xl:top-28">
-            <div className="rounded-[1.8rem] border border-black/6 bg-white p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-              <div className="flex items-end justify-between gap-4">
+            <div className="rounded-[2rem] border border-black/6 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)]">
+              <div className="flex items-end justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                  {villa.activeDiscountTitle ? (
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-                      {villa.activeDiscountTitle}
-                    </p>
-                  ) : null}
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                    Gecelik baslayan fiyat
+                  </p>
                   {villa.discountedNightlyPrice ? (
-                    <p className="text-sm text-slate-400 line-through">
+                    <p className="mt-2 text-sm text-slate-400 line-through">
                       {formatCurrency(villa.nightlyPrice)}
                     </p>
                   ) : null}
-                  <p className="mt-1 text-3xl font-semibold text-slate-900">
+                  <p className="mt-1 font-display text-4xl font-semibold tracking-[-0.04em] text-slate-950">
                     {formatCurrency(villa.discountedNightlyPrice ?? villa.nightlyPrice)}
                   </p>
                 </div>
-                <p className="pb-1 text-sm text-slate-500">gecelik baslayan fiyat</p>
+                <p className="pb-1 text-sm text-slate-500">gecelik</p>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm">
+                <div className="rounded-[1.2rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm">
                   <span className="block text-slate-500">Minimum gece</span>
-                  <span className="mt-1 block font-semibold text-slate-900">
+                  <span className="mt-1 block font-semibold text-slate-950">
                     {villa.minNightCount ?? 1} gece
                   </span>
                 </div>
-                <div className="rounded-[1rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm">
+                <div className="rounded-[1.2rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm">
                   <span className="block text-slate-500">Temizlik</span>
-                  <span className="mt-1 block font-semibold text-slate-900">
+                  <span className="mt-1 block font-semibold text-slate-950">
                     {formatCurrency(villa.cleaningFee ?? 0)}
                   </span>
                 </div>
@@ -293,24 +356,23 @@ export default async function VillaDetailPage({ params }: PageProps) {
 
             <VillaAvailabilityCard villa={villa} />
 
-            <div className="rounded-[1.8rem] border border-black/6 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-                Hizli Bilgiler
+            <div className="surface-dark rounded-[2rem] px-5 py-6 text-white">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/45">
+                Hizli bilgiler
               </p>
               <div className="mt-4 space-y-3">
                 {[
                   ["Konum", villa.locationLabel],
-                  ["Gelir Verisi", villa.revenueLabel],
-                  ["Gorsel Sayisi", `${villa.imageCount} gorsel`],
-                  ["Odak Kelime", villa.focusKeyword],
+                  ["Kategori", villa.category],
                   ["Min. gece", `${villa.minNightCount ?? 1} gece`],
+                  ["Portfoy notu", villa.badge],
                 ].map(([label, value]) => (
                   <div
                     key={label}
-                    className="flex items-center justify-between rounded-[1rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm"
+                    className="flex items-center justify-between rounded-[1.1rem] bg-white/8 px-4 py-3 text-sm"
                   >
-                    <span className="text-slate-500">{label}</span>
-                    <span className="font-semibold text-slate-900">{value}</span>
+                    <span className="text-white/62">{label}</span>
+                    <span className="font-semibold text-white">{value}</span>
                   </div>
                 ))}
               </div>
@@ -318,59 +380,19 @@ export default async function VillaDetailPage({ params }: PageProps) {
           </aside>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-              Villa Hakkinda
-            </p>
-            <h2 className="mt-4 text-3xl font-semibold text-slate-900">
-              Bolge aramalarini karsilayan, guclu karar metinleriyle desteklenen detay alani
-            </h2>
-            <p className="mt-5 text-sm leading-8 text-slate-600">{villa.description}</p>
-            <p className="mt-5 text-sm leading-8 text-slate-600">
-              {villa.title}, {villa.district} bolgesinde {villa.focusKeyword} arayan kullanicilar
-              icin hazirlanan premium bir sayfa kurgusuna sahiptir. Bu detay sayfasi hem talep
-              donusumunu hem de arama motoru gorunurlugunu destekleyecek sekilde buyutulebilir.
-            </p>
-          </div>
-
-          <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-              Karar Destek Bilgileri
-            </p>
-            <div className="mt-6 space-y-4">
-              {[
-                ["Konum", villa.locationLabel],
-                ["Kategori", villa.category],
-                ["Gorsel sayisi", `${villa.imageCount}`],
-                ["Talep ilgisi", `${villa.requestCount} talep`],
-                ["Gelir verisi", villa.revenueLabel],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between rounded-[1.25rem] bg-[var(--color-slate-soft)] px-4 py-4 text-sm"
-                >
-                  <span className="text-slate-500">{label}</span>
-                  <span className="font-semibold text-slate-900">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {relatedVillas.length > 0 ? (
-          <section className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-            <div className="flex items-center justify-between gap-4">
+          <section className="rounded-[2.2rem] border border-black/6 bg-white p-8 shadow-[0_16px_42px_rgba(15,23,42,0.06)]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-                  Benzer Villalar
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-coral)]">
+                  Benzer villalar
                 </p>
-                <h2 className="mt-3 text-3xl font-semibold text-slate-900">
-                  Ayni bolgeden diger secenekleri de inceleyebilirsin
+                <h2 className="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-slate-950">
+                  Ayni bolgedeki diger secenekleri de gor
                 </h2>
               </div>
-              <Link href="/villalar" className="text-sm font-semibold text-slate-900">
-                Tum Villalar
+              <Link href="/villalar" className="text-sm font-semibold text-slate-950">
+                Tum villalar
               </Link>
             </div>
 

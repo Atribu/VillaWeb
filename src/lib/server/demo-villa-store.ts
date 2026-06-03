@@ -25,6 +25,12 @@ import {
   getPrimaryWebsiteIdForCompany,
 } from "@/lib/server/prisma-demo-shared";
 import {
+  getFallbackVillas,
+} from "@/lib/server/development-fallback-data";
+import {
+  withDevelopmentFallback,
+} from "@/lib/server/development-fallback";
+import {
   getDemoDiscountCampaigns,
   getDemoPricingRecords,
   getDemoRequests,
@@ -144,78 +150,113 @@ async function queryVillas(input?: { companyId?: string | null; includeAll?: boo
 }
 
 export async function getDemoVillas(input?: { companyId?: string | null; includeAll?: boolean }) {
-  const [villas, pricingRecords, discountCampaigns, requests] = await Promise.all([
-    queryVillas(input),
-    getDemoPricingRecords(input),
-    getDemoDiscountCampaigns(input),
-    getDemoRequests(input),
-  ]);
+  return withDevelopmentFallback(
+    async () => {
+      const [villas, pricingRecords, discountCampaigns, requests] = await Promise.all([
+        queryVillas(input),
+        getDemoPricingRecords(input),
+        getDemoDiscountCampaigns(input),
+        getDemoRequests(input),
+      ]);
 
-  return villas.map((villa, index) => {
-    const baseVilla: CatalogVilla = {
-      id: villa.id,
-      companyId: villa.companyId,
-      title: villa.title,
-      slug: villa.slug,
-      locationLabel: villa.district ? `${villa.district}, ${villa.city}` : villa.city,
-      city: villa.city,
-      district: villa.district ?? villa.city,
-      badge: villa.badge ?? "Secili Villa",
-      category: villa.category ?? "Villa",
-      status: villa.status === "ACTIVE" ? "ACTIVE" : "DRAFT",
-      featured: villa.featured,
-      rating: decimalToNumber(villa.averageRating) || undefined,
-      reviewCount: villa.reviewCount || undefined,
-      isSuperhost: villa.isSuperhost,
-      shortDescription: villa.shortDescription ?? villa.description,
-      description: villa.description,
-      nightlyPrice: decimalToNumber(villa.nightlyBasePrice),
-      capacity: villa.capacity,
-      bedroomCount: villa.bedroomCount,
-      bathroomCount: villa.bathroomCount,
-      poolType: villa.poolType ?? "Ozel havuz",
-      imageCount: villa.images.length,
-      imageUrls: villa.images.map((image) => image.url),
-      coverImageUrl: villa.images.find((image) => image.isCover)?.url ?? villa.coverImageUrl ?? villa.images[0]?.url,
-      coverGradient: chooseCoverGradient(index),
-      seoTitle: villa.seoTitle ?? villa.title,
-      seoDescription: villa.seoDescription ?? villa.shortDescription ?? villa.description,
-      focusKeyword: villa.focusKeyword ?? villa.slug,
-      coverAlt: villa.coverAlt ?? villa.title,
-      viewCount: villa.dailyMetrics.reduce((sum, metric) => sum + metric.viewCount, 0),
-      requestCount: requests.filter((request) => request.villaSlug === villa.slug).length,
-      revenueLabel: formatCurrency(
-        requests
-          .filter((request) => request.villaSlug === villa.slug && request.status === "APPROVED")
-          .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
-      ),
-      createdAt: villa.createdAt.toISOString(),
-      availabilityRanges: sortAvailabilityRanges(
-        villa.availabilityBlocks.map((range) =>
-          mapAvailabilityRange({
-            id: range.id,
-            startsAt: range.startsAt,
-            endsAt: range.endsAt,
-            note: range.note,
-            blockType: range.blockType,
-            sourceRequestId: range.sourceRequestId,
-          }),
-        ),
-      ),
-    };
+      return villas.map((villa, index) => {
+        const baseVilla: CatalogVilla = {
+          id: villa.id,
+          companyId: villa.companyId,
+          title: villa.title,
+          slug: villa.slug,
+          locationLabel: villa.district ? `${villa.district}, ${villa.city}` : villa.city,
+          city: villa.city,
+          district: villa.district ?? villa.city,
+          badge: villa.badge ?? "Secili Villa",
+          category: villa.category ?? "Villa",
+          status: villa.status === "ACTIVE" ? "ACTIVE" : "DRAFT",
+          featured: villa.featured,
+          rating: decimalToNumber(villa.averageRating) || undefined,
+          reviewCount: villa.reviewCount || undefined,
+          isSuperhost: villa.isSuperhost,
+          shortDescription: villa.shortDescription ?? villa.description,
+          description: villa.description,
+          nightlyPrice: decimalToNumber(villa.nightlyBasePrice),
+          capacity: villa.capacity,
+          bedroomCount: villa.bedroomCount,
+          bathroomCount: villa.bathroomCount,
+          poolType: villa.poolType ?? "Ozel havuz",
+          imageCount: villa.images.length,
+          imageUrls: villa.images.map((image) => image.url),
+          coverImageUrl:
+            villa.images.find((image) => image.isCover)?.url ??
+            villa.coverImageUrl ??
+            villa.images[0]?.url,
+          coverGradient: chooseCoverGradient(index),
+          seoTitle: villa.seoTitle ?? villa.title,
+          seoDescription: villa.seoDescription ?? villa.shortDescription ?? villa.description,
+          focusKeyword: villa.focusKeyword ?? villa.slug,
+          coverAlt: villa.coverAlt ?? villa.title,
+          viewCount: villa.dailyMetrics.reduce((sum, metric) => sum + metric.viewCount, 0),
+          requestCount: requests.filter((request) => request.villaSlug === villa.slug).length,
+          revenueLabel: formatCurrency(
+            requests
+              .filter((request) => request.villaSlug === villa.slug && request.status === "APPROVED")
+              .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
+          ),
+          createdAt: villa.createdAt.toISOString(),
+          availabilityRanges: sortAvailabilityRanges(
+            villa.availabilityBlocks.map((range) =>
+              mapAvailabilityRange({
+                id: range.id,
+                startsAt: range.startsAt,
+                endsAt: range.endsAt,
+                note: range.note,
+                blockType: range.blockType,
+                sourceRequestId: range.sourceRequestId,
+              }),
+            ),
+          ),
+        };
 
-    const resolvedPricing = getResolvedVillaPricing(baseVilla, pricingRecords, discountCampaigns);
+        const resolvedPricing = getResolvedVillaPricing(baseVilla, pricingRecords, discountCampaigns);
 
-    return {
-      ...baseVilla,
-      nightlyPrice: resolvedPricing.baseNightlyPrice,
-      discountedNightlyPrice: resolvedPricing.discountedNightlyPrice,
-      cleaningFee: resolvedPricing.cleaningFee,
-      minNightCount: resolvedPricing.minNightCount,
-      activeDiscountTitle: resolvedPricing.activeDiscount?.title,
-      activeDiscountPercent: resolvedPricing.activeDiscount?.percentOff,
-    } satisfies CatalogVilla;
-  });
+        return {
+          ...baseVilla,
+          nightlyPrice: resolvedPricing.baseNightlyPrice,
+          discountedNightlyPrice: resolvedPricing.discountedNightlyPrice,
+          cleaningFee: resolvedPricing.cleaningFee,
+          minNightCount: resolvedPricing.minNightCount,
+          activeDiscountTitle: resolvedPricing.activeDiscount?.title,
+          activeDiscountPercent: resolvedPricing.activeDiscount?.percentOff,
+        } satisfies CatalogVilla;
+      });
+    },
+    async () => {
+      const [villas, pricingRecords, discountCampaigns, requests] = await Promise.all([
+        getFallbackVillas(input?.companyId),
+        getDemoPricingRecords(input),
+        getDemoDiscountCampaigns(input),
+        getDemoRequests(input),
+      ]);
+
+      return villas.map((villa) => {
+        const resolvedPricing = getResolvedVillaPricing(villa, pricingRecords, discountCampaigns);
+
+        return {
+          ...villa,
+          requestCount: requests.filter((request) => request.villaSlug === villa.slug).length,
+          revenueLabel: formatCurrency(
+            requests
+              .filter((request) => request.villaSlug === villa.slug && request.status === "APPROVED")
+              .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
+          ),
+          nightlyPrice: resolvedPricing.baseNightlyPrice,
+          discountedNightlyPrice: resolvedPricing.discountedNightlyPrice,
+          cleaningFee: resolvedPricing.cleaningFee,
+          minNightCount: resolvedPricing.minNightCount,
+          activeDiscountTitle: resolvedPricing.activeDiscount?.title,
+          activeDiscountPercent: resolvedPricing.activeDiscount?.percentOff,
+        } satisfies CatalogVilla;
+      });
+    },
+  );
 }
 
 export async function getDemoVillaBySlug(

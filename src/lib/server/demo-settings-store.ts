@@ -10,6 +10,14 @@ import type {
 } from "@/lib/demo-settings";
 import { resolvePanelCompanyId, assertPanelCompanyAccess } from "@/lib/server/demo-company-context";
 import { decimalToNumber, getDefaultCompanyId, iso } from "@/lib/server/prisma-demo-shared";
+import {
+  getFallbackCacheGroups,
+  getFallbackCurrencyRates,
+  getFallbackDocuments,
+  getFallbackPaymentMethods,
+  getFallbackSystemDefaults,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export class DemoSettingsStoreError extends Error {}
 
@@ -18,132 +26,157 @@ async function resolveSettingsCompanyId() {
 }
 
 export async function getDemoCurrencyRates() {
-  const companyId = await resolveSettingsCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveSettingsCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const currencies = await db.currencyRate.findMany({
-    where: { companyId },
-    orderBy: { code: "asc" },
-  });
+      const currencies = await db.currencyRate.findMany({
+        where: { companyId },
+        orderBy: { code: "asc" },
+      });
 
-  return currencies.map((currency) => ({
-    id: currency.id,
-    code: currency.code,
-    label: currency.label,
-    buyRate: decimalToNumber(currency.buyRate),
-    sellRate: decimalToNumber(currency.sellRate),
-    sourceLabel: currency.sourceLabel,
-    status: currency.status satisfies DemoCurrencyRateStatus,
-    updatedAt: iso(currency.updatedAt),
-  }));
+      return currencies.map((currency) => ({
+        id: currency.id,
+        code: currency.code,
+        label: currency.label,
+        buyRate: decimalToNumber(currency.buyRate),
+        sellRate: decimalToNumber(currency.sellRate),
+        sourceLabel: currency.sourceLabel,
+        status: currency.status satisfies DemoCurrencyRateStatus,
+        updatedAt: iso(currency.updatedAt),
+      }));
+    },
+    async () => getFallbackCurrencyRates(await resolveSettingsCompanyId()),
+  );
 }
 
 export async function getDemoPaymentMethods() {
-  const companyId = await resolveSettingsCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveSettingsCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const methods = await db.paymentMethod.findMany({
-    where: { companyId },
-    orderBy: { label: "asc" },
-  });
+      const methods = await db.paymentMethod.findMany({
+        where: { companyId },
+        orderBy: { label: "asc" },
+      });
 
-  return methods.map((method) => ({
-    id: method.id,
-    label: method.label,
-    provider: method.provider,
-    feePercent: decimalToNumber(method.feePercent),
-    settlementDays: method.settlementDays,
-    status: method.status satisfies DemoPaymentMethodStatus,
-    supportsInstallment: method.supportsInstallment,
-    note: method.note ?? "",
-    updatedAt: iso(method.updatedAt),
-  }));
+      return methods.map((method) => ({
+        id: method.id,
+        label: method.label,
+        provider: method.provider,
+        feePercent: decimalToNumber(method.feePercent),
+        settlementDays: method.settlementDays,
+        status: method.status satisfies DemoPaymentMethodStatus,
+        supportsInstallment: method.supportsInstallment,
+        note: method.note ?? "",
+        updatedAt: iso(method.updatedAt),
+      }));
+    },
+    async () => getFallbackPaymentMethods(await resolveSettingsCompanyId()),
+  );
 }
 
 export async function getDemoCacheGroups() {
-  const companyId = await resolveSettingsCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveSettingsCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const groups = await db.cacheGroup.findMany({
-    where: { companyId },
-    orderBy: { label: "asc" },
-  });
+      const groups = await db.cacheGroup.findMany({
+        where: { companyId },
+        orderBy: { label: "asc" },
+      });
 
-  return groups.map((group) => ({
-    id: group.id,
-    label: group.label,
-    target: group.target,
-    status: group.status satisfies DemoCacheGroupStatus,
-    ttlMinutes: group.ttlMinutes,
-    warmIntervalMinutes: group.warmIntervalMinutes,
-    lastWarmedAt: iso(group.lastWarmedAt),
-    note: group.note ?? "",
-  }));
+      return groups.map((group) => ({
+        id: group.id,
+        label: group.label,
+        target: group.target,
+        status: group.status satisfies DemoCacheGroupStatus,
+        ttlMinutes: group.ttlMinutes,
+        warmIntervalMinutes: group.warmIntervalMinutes,
+        lastWarmedAt: iso(group.lastWarmedAt),
+        note: group.note ?? "",
+      }));
+    },
+    async () => getFallbackCacheGroups(await resolveSettingsCompanyId()),
+  );
 }
 
 export async function getDemoSystemDefaults() {
-  const companyId = await resolveSettingsCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveSettingsCompanyId();
 
-  if (!companyId) {
-    throw new DemoSettingsStoreError("Varsayilanlar icin aktif firma bulunamadi.");
-  }
+      if (!companyId) {
+        throw new DemoSettingsStoreError("Varsayilanlar icin aktif firma bulunamadi.");
+      }
 
-  const [company, settings] = await Promise.all([
-    db.company.findUnique({
-      where: { id: companyId },
-      select: { currency: true },
-    }),
-    db.companySetting.findUnique({
-      where: { companyId },
-    }),
-  ]);
+      const [company, settings] = await Promise.all([
+        db.company.findUnique({
+          where: { id: companyId },
+          select: { currency: true },
+        }),
+        db.companySetting.findUnique({
+          where: { companyId },
+        }),
+      ]);
 
-  if (!settings) {
-    throw new DemoSettingsStoreError("Firma ayarlari bulunamadi.");
-  }
+      if (!settings) {
+        throw new DemoSettingsStoreError("Firma ayarlari bulunamadi.");
+      }
 
-  return {
-    leadResponseMinutes: settings.leadResponseMinutes,
-    defaultMinNightCount: settings.defaultMinNightCount,
-    defaultCleaningLeadHours: settings.defaultCleaningLeadHours,
-    supportPhone: settings.primaryPhone ?? "",
-    supportEmail: settings.primaryEmail ?? "",
-    defaultCurrency: company?.currency ?? "TRY",
-    requestReminderHours: settings.requestReminderHours,
-    updatedAt: iso(settings.updatedAt),
-  } satisfies DemoSystemDefaults;
+      return {
+        leadResponseMinutes: settings.leadResponseMinutes,
+        defaultMinNightCount: settings.defaultMinNightCount,
+        defaultCleaningLeadHours: settings.defaultCleaningLeadHours,
+        supportPhone: settings.primaryPhone ?? "",
+        supportEmail: settings.primaryEmail ?? "",
+        defaultCurrency: company?.currency ?? "TRY",
+        requestReminderHours: settings.requestReminderHours,
+        updatedAt: iso(settings.updatedAt),
+      } satisfies DemoSystemDefaults;
+    },
+    async () => getFallbackSystemDefaults(await resolveSettingsCompanyId()),
+  );
 }
 
 export async function getDemoDocuments() {
-  const companyId = await resolveSettingsCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveSettingsCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const documents = await db.documentAsset.findMany({
-    where: { companyId },
-    orderBy: { updatedAt: "desc" },
-  });
+      const documents = await db.documentAsset.findMany({
+        where: { companyId },
+        orderBy: { updatedAt: "desc" },
+      });
 
-  return documents.map((document) => ({
-    id: document.id,
-    title: document.title,
-    category: document.category,
-    audience: document.audience,
-    status: document.status satisfies DemoDocumentStatus,
-    fileUrl: document.fileUrl,
-    updatedAt: iso(document.updatedAt),
-  }));
+      return documents.map((document) => ({
+        id: document.id,
+        title: document.title,
+        category: document.category,
+        audience: document.audience,
+        status: document.status satisfies DemoDocumentStatus,
+        fileUrl: document.fileUrl,
+        updatedAt: iso(document.updatedAt),
+      }));
+    },
+    async () => getFallbackDocuments(await resolveSettingsCompanyId()),
+  );
 }
 
 export async function updateDemoCurrencyRate(

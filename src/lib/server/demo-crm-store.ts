@@ -13,6 +13,8 @@ import {
 } from "@/lib/server/demo-operations-store";
 import { db } from "@/lib/db";
 import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
+import { getFallbackReviews } from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 import {
   mapDemoReviewStatusToPrisma,
   mapReviewStatusToDemo,
@@ -24,33 +26,38 @@ export async function getDemoCustomers() {
 }
 
 export async function getDemoReviews() {
-  const companyId = await resolvePanelCompanyId();
-  const reviews = await db.guestReview.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      villa: {
-        select: {
-          slug: true,
-          title: true,
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const reviews = await db.guestReview.findMany({
+        where: companyId ? { companyId } : undefined,
+        include: {
+          villa: {
+            select: {
+              slug: true,
+              title: true,
+            },
+          },
         },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+        orderBy: { createdAt: "desc" },
+      });
 
-  return reviews.map((review) => ({
-    id: review.id,
-    companyId: review.companyId,
-    villaSlug: review.villa.slug,
-    villaTitle: review.villa.title,
-    guestName: review.guestName,
-    rating: review.rating,
-    comment: review.comment,
-    source: review.source,
-    status: mapReviewStatusToDemo(review.status),
-    createdAt: review.createdAt.toISOString(),
-    staffNote: review.staffNote ?? undefined,
-  }));
+      return reviews.map((review) => ({
+        id: review.id,
+        companyId: review.companyId,
+        villaSlug: review.villa.slug,
+        villaTitle: review.villa.title,
+        guestName: review.guestName,
+        rating: review.rating,
+        comment: review.comment,
+        source: review.source,
+        status: mapReviewStatusToDemo(review.status),
+        createdAt: review.createdAt.toISOString(),
+        staffNote: review.staffNote ?? undefined,
+      }));
+    },
+    async () => getFallbackReviews(await resolvePanelCompanyId()),
+  );
 }
 
 export async function updateDemoReviewStatus(reviewId: string, status: DemoReviewStatus) {

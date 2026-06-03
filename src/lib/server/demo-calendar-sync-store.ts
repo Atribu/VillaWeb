@@ -9,6 +9,12 @@ import type {
 } from "@/lib/demo-calendar-sync";
 import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
 import {
+  getFallbackChannelMappings,
+  getFallbackIcalSources,
+  getFallbackSyncLogs,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import {
   iso,
   mapCalendarSourceStatusToDemo,
   mapDemoCalendarSourceStatusToPrisma,
@@ -20,95 +26,110 @@ import {
 export class DemoCalendarSyncStoreError extends Error {}
 
 export async function getDemoIcalSources() {
-  const companyId = await resolvePanelCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
 
-  const sources = await db.calendarSyncSource.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      villa: {
-        select: {
-          slug: true,
-          title: true,
+      const sources = await db.calendarSyncSource.findMany({
+        where: companyId ? { companyId } : undefined,
+        include: {
+          villa: {
+            select: {
+              slug: true,
+              title: true,
+            },
+          },
         },
-      },
-    },
-    orderBy: [{ lastSyncedAt: "desc" }, { updatedAt: "desc" }],
-  });
+        orderBy: [{ lastSyncedAt: "desc" }, { updatedAt: "desc" }],
+      });
 
-  return sources.map((source) => ({
-    id: source.id,
-    companyId: source.companyId,
-    villaSlug: source.villa.slug,
-    villaTitle: source.villa.title,
-    channelName: source.channelName,
-    sourceUrl: source.sourceUrl,
-    direction: source.direction,
-    active: source.active,
-    status: mapCalendarSourceStatusToDemo(source.status),
-    lastSyncedAt: iso(source.lastSyncedAt),
-  }));
+      return sources.map((source) => ({
+        id: source.id,
+        companyId: source.companyId,
+        villaSlug: source.villa.slug,
+        villaTitle: source.villa.title,
+        channelName: source.channelName,
+        sourceUrl: source.sourceUrl,
+        direction: source.direction,
+        active: source.active,
+        status: mapCalendarSourceStatusToDemo(source.status),
+        lastSyncedAt: iso(source.lastSyncedAt),
+      }));
+    },
+    async () => getFallbackIcalSources(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoChannelMappings() {
-  const companyId = await resolvePanelCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
 
-  const mappings = await db.calendarSyncMapping.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      villa: {
-        select: {
-          slug: true,
-          title: true,
+      const mappings = await db.calendarSyncMapping.findMany({
+        where: companyId ? { companyId } : undefined,
+        include: {
+          villa: {
+            select: {
+              slug: true,
+              title: true,
+            },
+          },
         },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+        orderBy: { updatedAt: "desc" },
+      });
 
-  return mappings.map((mapping) => ({
-    id: mapping.id,
-    companyId: mapping.companyId,
-    villaSlug: mapping.villa.slug,
-    villaTitle: mapping.villa.title,
-    channelName: mapping.channelName,
-    remoteCalendarName: mapping.remoteCalendarName,
-    syncMode: mapSyncModeToDemo(mapping.syncMode),
-    active: mapping.active,
-    updatedAt: iso(mapping.updatedAt),
-  }));
+      return mappings.map((mapping) => ({
+        id: mapping.id,
+        companyId: mapping.companyId,
+        villaSlug: mapping.villa.slug,
+        villaTitle: mapping.villa.title,
+        channelName: mapping.channelName,
+        remoteCalendarName: mapping.remoteCalendarName,
+        syncMode: mapSyncModeToDemo(mapping.syncMode),
+        active: mapping.active,
+        updatedAt: iso(mapping.updatedAt),
+      }));
+    },
+    async () => getFallbackChannelMappings(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoSyncLogs() {
-  const companyId = await resolvePanelCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
 
-  const logs = await db.calendarSyncLog.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      villa: {
-        select: {
-          slug: true,
-          title: true,
+      const logs = await db.calendarSyncLog.findMany({
+        where: companyId ? { companyId } : undefined,
+        include: {
+          villa: {
+            select: {
+              slug: true,
+              title: true,
+            },
+          },
+          source: {
+            select: { id: true },
+          },
         },
-      },
-      source: {
-        select: { id: true },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+        orderBy: { createdAt: "desc" },
+      });
 
-  return logs.map((log) => ({
-    id: log.id,
-    companyId: log.companyId,
-    sourceId: log.source?.id ?? "",
-    villaSlug: log.villa.slug,
-    villaTitle: log.villa.title,
-    channelName: log.channelName,
-    outcome: mapSyncOutcomeToDemo(log.outcome),
-    eventCount: log.eventCount,
-    message: log.message,
-    createdAt: iso(log.createdAt),
-  }));
+      return logs.map((log) => ({
+        id: log.id,
+        companyId: log.companyId,
+        sourceId: log.source?.id ?? "",
+        villaSlug: log.villa.slug,
+        villaTitle: log.villa.title,
+        channelName: log.channelName,
+        outcome: mapSyncOutcomeToDemo(log.outcome),
+        eventCount: log.eventCount,
+        message: log.message,
+        createdAt: iso(log.createdAt),
+      }));
+    },
+    async () => getFallbackSyncLogs(await resolvePanelCompanyId()),
+  );
 }
 
 export async function updateDemoIcalSource(

@@ -15,6 +15,12 @@ import {
 } from "@/lib/demo-finance";
 import { resolvePanelCompanyId, assertPanelCompanyAccess } from "@/lib/server/demo-company-context";
 import { dateKey, decimalToNumber, getDefaultCompanyId } from "@/lib/server/prisma-demo-shared";
+import {
+  getFallbackCashEntries,
+  getFallbackInvoices,
+  getFallbackPayments,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export class DemoFinanceStoreError extends Error {}
 
@@ -173,15 +179,24 @@ function mapCashEntriesToDemo(
 }
 
 export async function getDemoInvoices() {
-  return mapInvoicesToDemo(await getScopedInvoices());
+  return withDevelopmentFallback(
+    async () => mapInvoicesToDemo(await getScopedInvoices()),
+    async () => getFallbackInvoices(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoPayments() {
-  return mapPaymentsToDemo(await getScopedPayments());
+  return withDevelopmentFallback(
+    async () => mapPaymentsToDemo(await getScopedPayments()),
+    async () => getFallbackPayments(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoCashEntries() {
-  return mapCashEntriesToDemo(await getScopedCashEntries());
+  return withDevelopmentFallback(
+    async () => mapCashEntriesToDemo(await getScopedCashEntries()),
+    async () => getFallbackCashEntries(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoFinanceBalances() {

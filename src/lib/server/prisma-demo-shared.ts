@@ -21,6 +21,11 @@ import type {
   WebsiteStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import {
+  getFallbackDefaultCompanyId,
+  getFallbackPrimaryWebsiteIdForCompany,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export function decimalToNumber(value?: { toNumber(): number } | number | null) {
   if (value === null || value === undefined) {
@@ -291,22 +296,32 @@ export function mapSeoStatusToDemo(status: SeoContentStatus) {
 }
 
 export async function getPrimaryWebsiteIdForCompany(companyId: string) {
-  const website = await db.companyWebsite.findFirst({
-    where: { companyId },
-    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
-    select: { id: true },
-  });
+  return withDevelopmentFallback(
+    async () => {
+      const website = await db.companyWebsite.findFirst({
+        where: { companyId },
+        orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
 
-  return website?.id ?? null;
+      return website?.id ?? null;
+    },
+    () => getFallbackPrimaryWebsiteIdForCompany(companyId),
+  );
 }
 
 export async function getDefaultCompanyId() {
-  const company = await db.company.findFirst({
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
+  return withDevelopmentFallback(
+    async () => {
+      const company = await db.company.findFirst({
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
 
-  return company?.id ?? null;
+      return company?.id ?? null;
+    },
+    () => getFallbackDefaultCompanyId(),
+  );
 }
 
 export function ensureMembershipCompany(

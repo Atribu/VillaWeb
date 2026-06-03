@@ -43,6 +43,15 @@ import {
   mapOperationStatusToDemo,
   mapRequestSourceToDemo,
 } from "@/lib/server/prisma-demo-shared";
+import {
+  getFallbackCoupons,
+  getFallbackDiscountCampaigns,
+  getFallbackOperationTasks,
+  getFallbackPricingRecords,
+  getFallbackRequestEvents,
+  getFallbackRequests,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export class DemoOperationsStoreError extends Error {}
 
@@ -68,83 +77,98 @@ export async function getDemoPricingRecords(input?: {
   companyId?: string | null;
   includeAll?: boolean;
 }) {
-  const villas = await queryScopedVillas(input);
+  return withDevelopmentFallback(
+    async () => {
+      const villas = await queryScopedVillas(input);
 
-  return villas
-    .map((villa) => ({
-      companyId: villa.companyId,
-      villaSlug: villa.slug,
-      baseNightlyPrice: decimalToNumber(villa.nightlyBasePrice),
-      cleaningFee: decimalToNumber(villa.cleaningFee),
-      minNightCount: villa.minNightCount,
-      updatedAt: DEMO_REFERENCE_DATE,
-    }) satisfies DemoPricingRecord)
-    .sort((left, right) => left.villaSlug.localeCompare(right.villaSlug));
+      return villas
+        .map((villa) => ({
+          companyId: villa.companyId,
+          villaSlug: villa.slug,
+          baseNightlyPrice: decimalToNumber(villa.nightlyBasePrice),
+          cleaningFee: decimalToNumber(villa.cleaningFee),
+          minNightCount: villa.minNightCount,
+          updatedAt: DEMO_REFERENCE_DATE,
+        }) satisfies DemoPricingRecord)
+        .sort((left, right) => left.villaSlug.localeCompare(right.villaSlug));
+    },
+    () => getFallbackPricingRecords(input?.companyId),
+  );
 }
 
 export async function getDemoDiscountCampaigns(input?: {
   companyId?: string | null;
   includeAll?: boolean;
 }) {
-  const companyId = await resolvePanelCompanyId(input);
-  const campaigns = await db.campaign.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      villas: {
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId(input);
+      const campaigns = await db.campaign.findMany({
+        where: companyId ? { companyId } : undefined,
         include: {
-          villa: {
-            select: { slug: true },
+          villas: {
+            include: {
+              villa: {
+                select: { slug: true },
+              },
+            },
           },
         },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+        orderBy: { createdAt: "desc" },
+      });
 
-  return campaigns.map((campaign) => ({
-    id: campaign.id,
-    companyId: campaign.companyId,
-    title: campaign.name,
-    villaScope: campaign.villas[0]?.villa.slug ?? "ALL",
-    percentOff: decimalToNumber(campaign.discountValue),
-    startDate: dateKey(campaign.startsAt),
-    endDate: dateKey(campaign.endsAt),
-    note: campaign.note ?? "",
-    active: mapCampaignStatusToActive(campaign.status),
-    createdAt: campaign.createdAt.toISOString(),
-  })) satisfies DemoDiscountCampaign[];
+      return campaigns.map((campaign) => ({
+        id: campaign.id,
+        companyId: campaign.companyId,
+        title: campaign.name,
+        villaScope: campaign.villas[0]?.villa.slug ?? "ALL",
+        percentOff: decimalToNumber(campaign.discountValue),
+        startDate: dateKey(campaign.startsAt),
+        endDate: dateKey(campaign.endsAt),
+        note: campaign.note ?? "",
+        active: mapCampaignStatusToActive(campaign.status),
+        createdAt: campaign.createdAt.toISOString(),
+      })) satisfies DemoDiscountCampaign[];
+    },
+    () => getFallbackDiscountCampaigns(input?.companyId),
+  );
 }
 
 export async function getDemoCoupons(input?: { companyId?: string | null; includeAll?: boolean }) {
-  const companyId = await resolvePanelCompanyId(input);
-  const coupons = await db.coupon.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      villas: {
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId(input);
+      const coupons = await db.coupon.findMany({
+        where: companyId ? { companyId } : undefined,
         include: {
-          villa: {
-            select: { slug: true },
+          villas: {
+            include: {
+              villa: {
+                select: { slug: true },
+              },
+            },
           },
         },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+        orderBy: { createdAt: "desc" },
+      });
 
-  return coupons.map((coupon) => ({
-    id: coupon.id,
-    companyId: coupon.companyId,
-    title: coupon.title,
-    code: coupon.code,
-    villaScope: coupon.villas[0]?.villa.slug ?? "ALL",
-    percentOff: decimalToNumber(coupon.discountValue),
-    startDate: dateKey(coupon.startsAt),
-    endDate: dateKey(coupon.endsAt),
-    usageLimit: coupon.usageLimit ?? 9999,
-    usageCount: coupon.usedCount,
-    active: mapCouponStatusToActive(coupon.status),
-    createdAt: coupon.createdAt.toISOString(),
-  })) satisfies DemoCoupon[];
+      return coupons.map((coupon) => ({
+        id: coupon.id,
+        companyId: coupon.companyId,
+        title: coupon.title,
+        code: coupon.code,
+        villaScope: coupon.villas[0]?.villa.slug ?? "ALL",
+        percentOff: decimalToNumber(coupon.discountValue),
+        startDate: dateKey(coupon.startsAt),
+        endDate: dateKey(coupon.endsAt),
+        usageLimit: coupon.usageLimit ?? 9999,
+        usageCount: coupon.usedCount,
+        active: mapCouponStatusToActive(coupon.status),
+        createdAt: coupon.createdAt.toISOString(),
+      })) satisfies DemoCoupon[];
+    },
+    () => getFallbackCoupons(input?.companyId),
+  );
 }
 
 async function mapBookingRequestsToDemoRequests(
@@ -244,80 +268,92 @@ async function mapBookingRequestsToDemoRequests(
 }
 
 export async function getDemoRequests(input?: { companyId?: string | null; includeAll?: boolean }) {
-  const companyId = await resolvePanelCompanyId(input);
-  const requests = await db.bookingRequest.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      villa: {
-        select: {
-          slug: true,
-          title: true,
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId(input);
+      const requests = await db.bookingRequest.findMany({
+        where: companyId ? { companyId } : undefined,
+        include: {
+          villa: {
+            select: {
+              slug: true,
+              title: true,
+            },
+          },
         },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+        orderBy: { createdAt: "desc" },
+      });
 
-  return mapBookingRequestsToDemoRequests(requests, input);
+      return mapBookingRequestsToDemoRequests(requests, input);
+    },
+    () => getFallbackRequests(input?.companyId),
+  );
 }
 
 export async function getDemoRequestEvents(input?: {
   companyId?: string | null;
   includeAll?: boolean;
 }) {
-  const companyId = await resolvePanelCompanyId(input);
-  const [requests, histories] = await Promise.all([
-    getDemoRequests(input),
-    db.bookingRequestStatusHistory.findMany({
-      where: companyId
-        ? {
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId(input);
+      const [requests, histories] = await Promise.all([
+        getDemoRequests(input),
+        db.bookingRequestStatusHistory.findMany({
+          where: companyId
+            ? {
+                bookingRequest: {
+                  companyId,
+                },
+              }
+            : undefined,
+          include: {
             bookingRequest: {
-              companyId,
-            },
-          }
-        : undefined,
-      include: {
-        bookingRequest: {
-          select: {
-            id: true,
-            companyId: true,
-            villa: {
               select: {
-                slug: true,
-                title: true,
+                id: true,
+                companyId: true,
+                villa: {
+                  select: {
+                    slug: true,
+                    title: true,
+                  },
+                },
+                source: true,
+                fullName: true,
               },
             },
-            source: true,
-            fullName: true,
           },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
 
-  const createdEvents = buildSeedRequestEvents(requests).filter((event) => event.eventType === "CREATED");
-  const statusEvents: DemoRequestEvent[] = histories.map((history) => ({
-    id: history.id,
-    companyId: history.bookingRequest.companyId,
-    requestId: history.bookingRequestId,
-    villaSlug: history.bookingRequest.villa.slug,
-    villaTitle: history.bookingRequest.villa.title,
-    eventType: "STATUS_CHANGED",
-    status: mapBookingStatusToDemo(history.newStatus),
-    title: "Talep durumu guncellendi",
-    detail:
-      history.note ??
-      `${history.bookingRequest.fullName} kaydi ${getRequestStatusLabel(
-        mapBookingStatusToDemo(history.newStatus),
-      )} durumuna alindi.`,
-    actorLabel: "Operasyon ekibi",
-    origin: mapRequestSourceToDemo(history.bookingRequest.source),
-    createdAt: history.createdAt.toISOString(),
-  }));
+      const createdEvents = buildSeedRequestEvents(requests).filter(
+        (event) => event.eventType === "CREATED",
+      );
+      const statusEvents: DemoRequestEvent[] = histories.map((history) => ({
+        id: history.id,
+        companyId: history.bookingRequest.companyId,
+        requestId: history.bookingRequestId,
+        villaSlug: history.bookingRequest.villa.slug,
+        villaTitle: history.bookingRequest.villa.title,
+        eventType: "STATUS_CHANGED",
+        status: mapBookingStatusToDemo(history.newStatus),
+        title: "Talep durumu guncellendi",
+        detail:
+          history.note ??
+          `${history.bookingRequest.fullName} kaydi ${getRequestStatusLabel(
+            mapBookingStatusToDemo(history.newStatus),
+          )} durumuna alindi.`,
+        actorLabel: "Operasyon ekibi",
+        origin: mapRequestSourceToDemo(history.bookingRequest.source),
+        createdAt: history.createdAt.toISOString(),
+      }));
 
-  return [...createdEvents, ...statusEvents].sort((left, right) =>
-    right.createdAt.localeCompare(left.createdAt),
+      return [...createdEvents, ...statusEvents].sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt),
+      );
+    },
+    () => getFallbackRequestEvents(input?.companyId),
   );
 }
 
@@ -325,45 +361,50 @@ export async function getDemoOperationTasks(input?: {
   companyId?: string | null;
   includeAll?: boolean;
 }) {
-  const companyId = await resolvePanelCompanyId(input);
-  const tasks = await db.operationTask.findMany({
-    where: companyId ? { companyId } : undefined,
-    include: {
-      bookingRequest: {
-        select: {
-          id: true,
-          fullName: true,
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId(input);
+      const tasks = await db.operationTask.findMany({
+        where: companyId ? { companyId } : undefined,
+        include: {
+          bookingRequest: {
+            select: {
+              id: true,
+              fullName: true,
+            },
+          },
+          villa: {
+            select: {
+              slug: true,
+              title: true,
+            },
+          },
         },
-      },
-      villa: {
-        select: {
-          slug: true,
-          title: true,
-        },
-      },
-    },
-    orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
-  });
+        orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
+      });
 
-  return tasks.map((task) => ({
-    id: task.id,
-    companyId: task.companyId,
-    requestId: task.bookingRequestId ?? "",
-    villaSlug: task.villa?.slug ?? "",
-    villaTitle: task.villa?.title ?? "-",
-    guestName: task.bookingRequest?.fullName ?? "-",
-    taskType: task.taskType,
-    title: task.title,
-    detail: task.detail ?? "",
-    scheduledDate: dateKey(task.scheduledAt),
-    scheduledTimeLabel: task.scheduledTimeLabel ?? "Planlandi",
-    assignee: task.assigneeLabel ?? "Operasyon Ekibi",
-    supplierName: task.supplierName ?? undefined,
-    priority: task.priority,
-    status: mapOperationStatusToDemo(task.status),
-    source: task.sourceLabel === "MANUAL" ? "MANUAL" : "AUTO_RESERVATION",
-    createdAt: task.createdAt.toISOString(),
-  })) satisfies DemoOperationTask[];
+      return tasks.map((task) => ({
+        id: task.id,
+        companyId: task.companyId,
+        requestId: task.bookingRequestId ?? "",
+        villaSlug: task.villa?.slug ?? "",
+        villaTitle: task.villa?.title ?? "-",
+        guestName: task.bookingRequest?.fullName ?? "-",
+        taskType: task.taskType,
+        title: task.title,
+        detail: task.detail ?? "",
+        scheduledDate: dateKey(task.scheduledAt),
+        scheduledTimeLabel: task.scheduledTimeLabel ?? "Planlandi",
+        assignee: task.assigneeLabel ?? "Operasyon Ekibi",
+        supplierName: task.supplierName ?? undefined,
+        priority: task.priority,
+        status: mapOperationStatusToDemo(task.status),
+        source: task.sourceLabel === "MANUAL" ? "MANUAL" : "AUTO_RESERVATION",
+        createdAt: task.createdAt.toISOString(),
+      })) satisfies DemoOperationTask[];
+    },
+    () => getFallbackOperationTasks(input?.companyId),
+  );
 }
 
 export async function getDemoRequestById(requestId: string) {

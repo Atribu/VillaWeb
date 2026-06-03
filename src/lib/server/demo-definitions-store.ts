@@ -5,6 +5,11 @@ import type { DemoDefinitionStatus } from "@/lib/demo-definitions";
 import { getDemoVillas } from "@/lib/server/demo-villa-store";
 import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
 import {
+  getFallbackParameterGroups,
+  getFallbackRegionAirportRecords,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import {
   getDefaultCompanyId,
   iso,
   mapDefinitionStatusToDemo,
@@ -18,78 +23,88 @@ async function resolveDefinitionsCompanyId() {
 }
 
 export async function getDemoRegionAirportRecords() {
-  const companyId = await resolveDefinitionsCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveDefinitionsCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
-
-  const [regions, villas] = await Promise.all([
-    db.region.findMany({
-      where: { OR: [{ companyId }, { companyId: null }] },
-      include: {
-        airports: {
-          orderBy: { createdAt: "asc" },
-        },
-      },
-      orderBy: [{ city: "asc" }, { name: "asc" }],
-    }),
-    getDemoVillas({ companyId }),
-  ]);
-
-  return regions.map((region) => {
-    const airport = region.airports[0] ?? null;
-    const villaCount = villas.filter((villa) => {
-      if (villa.city.toLowerCase() !== region.city.toLowerCase()) {
-        return false;
+      if (!companyId) {
+        return [];
       }
 
-      if (region.districtScope.length === 0) {
-        return true;
-      }
+      const [regions, villas] = await Promise.all([
+        db.region.findMany({
+          where: { OR: [{ companyId }, { companyId: null }] },
+          include: {
+            airports: {
+              orderBy: { createdAt: "asc" },
+            },
+          },
+          orderBy: [{ city: "asc" }, { name: "asc" }],
+        }),
+        getDemoVillas({ companyId }),
+      ]);
 
-      return region.districtScope.some(
-        (district) => district.toLowerCase() === (villa.district ?? "").toLowerCase(),
-      );
-    }).length;
+      return regions.map((region) => {
+        const airport = region.airports[0] ?? null;
+        const villaCount = villas.filter((villa) => {
+          if (villa.city.toLowerCase() !== region.city.toLowerCase()) {
+            return false;
+          }
 
-    return {
-      id: region.id,
-      regionLabel: region.name,
-      city: region.city,
-      districtScope: region.districtScope,
-      airportCode: airport?.code ?? "-",
-      airportName: airport?.name ?? "Bagli havalimani yok",
-      driveMinutes: airport?.driveMinutes ?? 0,
-      status: mapDefinitionStatusToDemo(region.status),
-      villaCount,
-      updatedAt: iso(region.updatedAt),
-    };
-  });
+          if (region.districtScope.length === 0) {
+            return true;
+          }
+
+          return region.districtScope.some(
+            (district) => district.toLowerCase() === (villa.district ?? "").toLowerCase(),
+          );
+        }).length;
+
+        return {
+          id: region.id,
+          regionLabel: region.name,
+          city: region.city,
+          districtScope: region.districtScope,
+          airportCode: airport?.code ?? "-",
+          airportName: airport?.name ?? "Bagli havalimani yok",
+          driveMinutes: airport?.driveMinutes ?? 0,
+          status: mapDefinitionStatusToDemo(region.status),
+          villaCount,
+          updatedAt: iso(region.updatedAt),
+        };
+      });
+    },
+    async () => getFallbackRegionAirportRecords(await resolveDefinitionsCompanyId()),
+  );
 }
 
 export async function getDemoParameterGroups() {
-  const companyId = await resolveDefinitionsCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveDefinitionsCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const groups = await db.parameterGroup.findMany({
-    where: { companyId },
-    orderBy: { label: "asc" },
-  });
+      const groups = await db.parameterGroup.findMany({
+        where: { companyId },
+        orderBy: { label: "asc" },
+      });
 
-  return groups.map((group) => ({
-    id: group.id,
-    label: group.label,
-    scope: group.scope,
-    itemCount: group.itemCount,
-    sampleItems: group.sampleItems,
-    status: mapDefinitionStatusToDemo(group.status),
-    note: group.note ?? "",
-    updatedAt: iso(group.updatedAt),
-  }));
+      return groups.map((group) => ({
+        id: group.id,
+        label: group.label,
+        scope: group.scope,
+        itemCount: group.itemCount,
+        sampleItems: group.sampleItems,
+        status: mapDefinitionStatusToDemo(group.status),
+        note: group.note ?? "",
+        updatedAt: iso(group.updatedAt),
+      }));
+    },
+    async () => getFallbackParameterGroups(await resolveDefinitionsCompanyId()),
+  );
 }
 
 export async function updateDemoRegionAirportStatus(

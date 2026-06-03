@@ -8,6 +8,12 @@ import type {
 } from "@/lib/demo-external-links";
 import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
 import {
+  getFallbackDocumentLinks,
+  getFallbackExternalServices,
+  getFallbackShortcuts,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import {
   getDefaultCompanyId,
   iso,
   mapDemoExternalServiceStatusToPrisma,
@@ -27,72 +33,87 @@ function mapDocumentLinkStatus(status: "ACTIVE" | "DRAFT" | "ARCHIVED"): DemoDoc
 }
 
 export async function getDemoShortcuts() {
-  const companyId = await resolveExternalLinksCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveExternalLinksCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const shortcuts = await db.shortcutLink.findMany({
-    where: { companyId },
-    orderBy: { title: "asc" },
-  });
+      const shortcuts = await db.shortcutLink.findMany({
+        where: { companyId },
+        orderBy: { title: "asc" },
+      });
 
-  return shortcuts.map((shortcut) => ({
-    id: shortcut.id,
-    title: shortcut.title,
-    url: shortcut.url,
-    category: shortcut.category,
-    description: shortcut.description ?? "",
-    status: mapShortcutStatusToDemo(shortcut.status),
-    updatedAt: iso(shortcut.updatedAt),
-  }));
+      return shortcuts.map((shortcut) => ({
+        id: shortcut.id,
+        title: shortcut.title,
+        url: shortcut.url,
+        category: shortcut.category,
+        description: shortcut.description ?? "",
+        status: mapShortcutStatusToDemo(shortcut.status),
+        updatedAt: iso(shortcut.updatedAt),
+      }));
+    },
+    async () => getFallbackShortcuts(await resolveExternalLinksCompanyId()),
+  );
 }
 
 export async function getDemoExternalServices() {
-  const companyId = await resolveExternalLinksCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveExternalLinksCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const services = await db.externalService.findMany({
-    where: { companyId },
-    orderBy: { name: "asc" },
-  });
+      const services = await db.externalService.findMany({
+        where: { companyId },
+        orderBy: { name: "asc" },
+      });
 
-  return services.map((service) => ({
-    id: service.id,
-    name: service.name,
-    url: service.url,
-    ownerLabel: service.ownerLabel,
-    category: service.category,
-    status: mapExternalServiceStatusToDemo(service.status),
-    note: service.note ?? "",
-    updatedAt: iso(service.updatedAt),
-  }));
+      return services.map((service) => ({
+        id: service.id,
+        name: service.name,
+        url: service.url,
+        ownerLabel: service.ownerLabel,
+        category: service.category,
+        status: mapExternalServiceStatusToDemo(service.status),
+        note: service.note ?? "",
+        updatedAt: iso(service.updatedAt),
+      }));
+    },
+    async () => getFallbackExternalServices(await resolveExternalLinksCompanyId()),
+  );
 }
 
 export async function getDemoDocumentLinks() {
-  const companyId = await resolveExternalLinksCompanyId();
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolveExternalLinksCompanyId();
 
-  if (!companyId) {
-    return [];
-  }
+      if (!companyId) {
+        return [];
+      }
 
-  const links = await db.documentLink.findMany({
-    where: { companyId },
-    orderBy: { title: "asc" },
-  });
+      const links = await db.documentLink.findMany({
+        where: { companyId },
+        orderBy: { title: "asc" },
+      });
 
-  return links.map((link) => ({
-    id: link.id,
-    title: link.title,
-    url: link.url,
-    category: link.category,
-    status: mapDocumentLinkStatus(link.status),
-    updatedAt: iso(link.updatedAt),
-  }));
+      return links.map((link) => ({
+        id: link.id,
+        title: link.title,
+        url: link.url,
+        category: link.category,
+        status: mapDocumentLinkStatus(link.status),
+        updatedAt: iso(link.updatedAt),
+      }));
+    },
+    async () => getFallbackDocumentLinks(await resolveExternalLinksCompanyId()),
+  );
 }
 
 export async function updateDemoShortcutStatus(shortcutId: string, status: DemoShortcutStatus) {

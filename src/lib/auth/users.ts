@@ -3,6 +3,8 @@ import "server-only";
 
 import type { MembershipRole, PlatformRole } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getDemoCompanies } from "@/lib/demo-companies";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export type AppRole = "SUPER_ADMIN" | "ADMIN" | "STAFF";
 
@@ -97,57 +99,82 @@ function verifyScryptPassword(storedHash: string, password: string) {
 export async function validateUser(username: string, password: string): Promise<AppUser | null> {
   const normalizedUsername = username.trim().toLowerCase();
 
-  const user = await db.user.findUnique({
-    where: { username: normalizedUsername },
-    include: {
-      memberships: {
-        where: { status: "ACTIVE" },
-        orderBy: [{ isPrimary: "desc" }, { acceptedAt: "desc" }, { createdAt: "asc" }],
+  return withDevelopmentFallback(
+    async () => {
+      const user = await db.user.findUnique({
+        where: { username: normalizedUsername },
         include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user || !user.isActive) {
-    return null;
-  }
-
-  if (!verifyScryptPassword(user.passwordHash, password)) {
-    return null;
-  }
-
-  const primaryMembership = user.memberships[0] ?? null;
-  const role = mapPlatformRoleToAppRole(user.platformRole, primaryMembership?.role);
-  const now = new Date();
-
-  await db.$transaction([
-    db.user.update({
-      where: { id: user.id },
-      data: {
-        lastLoginAt: now,
-      },
-    }),
-    ...(primaryMembership
-      ? [
-          db.companyMembership.update({
-            where: { id: primaryMembership.id },
-            data: {
-              lastActiveAt: now,
+          memberships: {
+            where: { status: "ACTIVE" },
+            orderBy: [{ isPrimary: "desc" }, { acceptedAt: "desc" }, { createdAt: "asc" }],
+            include: {
+              company: true,
             },
-          }),
-        ]
-      : []),
-  ]);
+          },
+        },
+      });
 
-  return {
-    id: user.id,
-    username: user.username,
-    displayName: user.name,
-    role,
-    companyId: primaryMembership?.companyId,
-    companySlug: primaryMembership?.company.slug,
-    companyName: primaryMembership?.company.publicName,
-  };
+      if (!user || !user.isActive) {
+        return null;
+      }
+
+      if (!verifyScryptPassword(user.passwordHash, password)) {
+        return null;
+      }
+
+      const primaryMembership = user.memberships[0] ?? null;
+      const role = mapPlatformRoleToAppRole(user.platformRole, primaryMembership?.role);
+      const now = new Date();
+
+      await db.$transaction([
+        db.user.update({
+          where: { id: user.id },
+          data: {
+            lastLoginAt: now,
+          },
+        }),
+        ...(primaryMembership
+          ? [
+              db.companyMembership.update({
+                where: { id: primaryMembership.id },
+                data: {
+                  lastActiveAt: now,
+                },
+              }),
+            ]
+          : []),
+      ]);
+
+      return {
+        id: user.id,
+        username: user.username,
+        displayName: user.name,
+        role,
+        companyId: primaryMembership?.companyId,
+        companySlug: primaryMembership?.company.slug,
+        companyName: primaryMembership?.company.publicName,
+      };
+    },
+    () => {
+      const credential = loginCredentials.find((item) => item.username.toLowerCase() === normalizedUsername);
+
+      if (!credential || credential.password !== password) {
+        return null;
+      }
+
+      const company = credential.companyName
+        ? getDemoCompanies().find((item) => item.name === credential.companyName)
+        : null;
+
+      return {
+        id: `dev-${credential.username}`,
+        username: credential.username,
+        displayName: credential.displayName,
+        role: credential.role,
+        companyId: company?.id,
+        companySlug: company?.slug,
+        companyName: company?.name,
+      } satisfies AppUser;
+    },
+  );
 }

@@ -2,6 +2,13 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import type { DemoCompanyRecord } from "@/lib/demo-companies";
+import {
+  getFallbackCompanyRecordById,
+  getFallbackCompanyRecordBySlug,
+  getFallbackCompanyRecords,
+  getFallbackDefaultCompanyRecord,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 function mapCompanyToDemoRecord(company: {
   id: string;
@@ -41,20 +48,25 @@ function mapCompanyToDemoRecord(company: {
 }
 
 export async function getAllCompanyRecords() {
-  const companies = await db.company.findMany({
-    orderBy: { createdAt: "asc" },
-    include: {
-      settings: {
-        select: {
-          accentLabel: true,
-          heroTitle: true,
-          heroDescription: true,
+  return withDevelopmentFallback(
+    async () => {
+      const companies = await db.company.findMany({
+        orderBy: { createdAt: "asc" },
+        include: {
+          settings: {
+            select: {
+              accentLabel: true,
+              heroTitle: true,
+              heroDescription: true,
+            },
+          },
         },
-      },
-    },
-  });
+      });
 
-  return companies.map(mapCompanyToDemoRecord);
+      return companies.map(mapCompanyToDemoRecord);
+    },
+    () => getFallbackCompanyRecords(),
+  );
 }
 
 export async function getCompanyRecordById(companyId?: string | null) {
@@ -62,20 +74,25 @@ export async function getCompanyRecordById(companyId?: string | null) {
     return null;
   }
 
-  const company = await db.company.findUnique({
-    where: { id: companyId },
-    include: {
-      settings: {
-        select: {
-          accentLabel: true,
-          heroTitle: true,
-          heroDescription: true,
+  return withDevelopmentFallback(
+    async () => {
+      const company = await db.company.findUnique({
+        where: { id: companyId },
+        include: {
+          settings: {
+            select: {
+              accentLabel: true,
+              heroTitle: true,
+              heroDescription: true,
+            },
+          },
         },
-      },
-    },
-  });
+      });
 
-  return company ? mapCompanyToDemoRecord(company) : null;
+      return company ? mapCompanyToDemoRecord(company) : null;
+    },
+    () => getFallbackCompanyRecordById(companyId),
+  );
 }
 
 export async function getCompanyRecordBySlug(companySlug?: string | null) {
@@ -83,35 +100,45 @@ export async function getCompanyRecordBySlug(companySlug?: string | null) {
     return null;
   }
 
-  const company = await db.company.findUnique({
-    where: { slug: companySlug.trim().toLowerCase() },
-    include: {
-      settings: {
-        select: {
-          accentLabel: true,
-          heroTitle: true,
-          heroDescription: true,
+  return withDevelopmentFallback(
+    async () => {
+      const company = await db.company.findUnique({
+        where: { slug: companySlug.trim().toLowerCase() },
+        include: {
+          settings: {
+            select: {
+              accentLabel: true,
+              heroTitle: true,
+              heroDescription: true,
+            },
+          },
         },
-      },
-    },
-  });
+      });
 
-  return company ? mapCompanyToDemoRecord(company) : null;
+      return company ? mapCompanyToDemoRecord(company) : null;
+    },
+    () => getFallbackCompanyRecordBySlug(companySlug),
+  );
 }
 
 export async function getDefaultCompanyRecord() {
-  const company = await db.company.findFirst({
-    orderBy: { createdAt: "asc" },
-    include: {
-      settings: {
-        select: {
-          accentLabel: true,
-          heroTitle: true,
-          heroDescription: true,
+  return withDevelopmentFallback(
+    async () => {
+      const company = await db.company.findFirst({
+        orderBy: { createdAt: "asc" },
+        include: {
+          settings: {
+            select: {
+              accentLabel: true,
+              heroTitle: true,
+              heroDescription: true,
+            },
+          },
         },
-      },
-    },
-  });
+      });
 
-  return company ? mapCompanyToDemoRecord(company) : null;
+      return company ? mapCompanyToDemoRecord(company) : null;
+    },
+    () => getFallbackDefaultCompanyRecord(),
+  );
 }

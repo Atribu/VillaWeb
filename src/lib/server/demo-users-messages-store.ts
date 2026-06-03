@@ -23,6 +23,14 @@ import {
   mapMembershipStatusToDemoStatus,
   mapMessageStatusToDemo,
 } from "@/lib/server/prisma-demo-shared";
+import {
+  getFallbackAgencies,
+  getFallbackBranches,
+  getFallbackCommissionRates,
+  getFallbackInternalMessages,
+  getFallbackTeamUsers,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export class DemoUsersMessagesStoreError extends Error {}
 
@@ -184,73 +192,90 @@ async function getUsersMessagesSnapshot(companyId?: string | null) {
 }
 
 export async function getDemoAgencies() {
-  const companyId = await resolvePanelCompanyId();
-  const { agencies, agencyStats } = await getUsersMessagesSnapshot(companyId);
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const { agencies, agencyStats } = await getUsersMessagesSnapshot(companyId);
 
-  return agencies.map((agency) => {
-    const stat = agencyStats.get(agency.id);
+      return agencies.map((agency) => {
+        const stat = agencyStats.get(agency.id);
 
-    return {
-      id: agency.id,
-      companyId: agency.companyId,
-      name: agency.name,
-      kind: agency.kind,
-      ownerName: agency.ownerName ?? "Atanmadi",
-      city: agency.city ?? "-",
-      status: agency.status satisfies DemoAgencyStatus,
-      requestCount: stat?.requestCount ?? 0,
-      approvedRevenue: stat?.approvedRevenue ?? decimalToNumber(agency.approvedRevenue),
-      openPipeline: stat?.openPipeline ?? decimalToNumber(agency.openPipeline),
-      note: agency.note ?? "",
-    };
-  });
+        return {
+          id: agency.id,
+          companyId: agency.companyId,
+          name: agency.name,
+          kind: agency.kind,
+          ownerName: agency.ownerName ?? "Atanmadi",
+          city: agency.city ?? "-",
+          status: agency.status satisfies DemoAgencyStatus,
+          requestCount: stat?.requestCount ?? 0,
+          approvedRevenue: stat?.approvedRevenue ?? decimalToNumber(agency.approvedRevenue),
+          openPipeline: stat?.openPipeline ?? decimalToNumber(agency.openPipeline),
+          note: agency.note ?? "",
+        };
+      });
+    },
+    async () => getFallbackAgencies(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoBranches() {
-  const companyId = await resolvePanelCompanyId();
-  const { branches, branchStats, branchUserCounts } = await getUsersMessagesSnapshot(companyId);
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const { branches, branchStats, branchUserCounts } = await getUsersMessagesSnapshot(companyId);
 
-  return branches.map((branch) => {
-    const stat = branchStats.get(branch.id);
+      return branches.map((branch) => {
+        const stat = branchStats.get(branch.id);
 
-    return {
-      id: branch.id,
-      companyId: branch.companyId,
-      agencyId: branch.agencyId ?? "",
-      agencyName: branch.agency?.name ?? "Bagimsiz",
-      name: branch.name,
-      city: branch.city ?? "-",
-      phone: branch.phone ?? "-",
-      status: branch.status satisfies DemoBranchStatus,
-      userCount: branchUserCounts.get(branch.id) ?? 0,
-      requestCount: stat?.requestCount ?? 0,
-      approvedRevenue: stat?.approvedRevenue ?? 0,
-    };
-  });
+        return {
+          id: branch.id,
+          companyId: branch.companyId,
+          agencyId: branch.agencyId ?? "",
+          agencyName: branch.agency?.name ?? "Bagimsiz",
+          name: branch.name,
+          city: branch.city ?? "-",
+          phone: branch.phone ?? "-",
+          status: branch.status satisfies DemoBranchStatus,
+          userCount: branchUserCounts.get(branch.id) ?? 0,
+          requestCount: stat?.requestCount ?? 0,
+          approvedRevenue: stat?.approvedRevenue ?? 0,
+        };
+      });
+    },
+    async () => getFallbackBranches(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoTeamUsers() {
-  const companyId = await resolvePanelCompanyId();
-  const { memberships } = await getUsersMessagesSnapshot(companyId);
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const { memberships } = await getUsersMessagesSnapshot(companyId);
 
-  return memberships
-    .map((membership) => ({
-      id: membership.id,
-      companyId: membership.companyId,
-      fullName: membership.user.name,
-      username: membership.user.username,
-      email: membership.user.email,
-      phone: membership.user.phone ?? "-",
-      roleId: mapMembershipRoleToDemoRole(membership.role),
-      status: mapMembershipStatusToDemoStatus(membership.status),
-      agencyId: membership.branch?.agencyId ?? "",
-      agencyName: membership.branch?.agency?.name ?? "Bagimsiz",
-      branchId: membership.branchId ?? "",
-      branchName: membership.branch?.name ?? "Atanmamis",
-      responsibility: membership.responsibility ?? "Rol bazli erisim",
-      lastActiveAt: iso(membership.lastActiveAt ?? membership.user.lastLoginAt ?? membership.updatedAt),
-    }))
-    .sort((left, right) => left.fullName.localeCompare(right.fullName));
+      return memberships
+        .map((membership) => ({
+          id: membership.id,
+          companyId: membership.companyId,
+          fullName: membership.user.name,
+          username: membership.user.username,
+          email: membership.user.email,
+          phone: membership.user.phone ?? "-",
+          roleId: mapMembershipRoleToDemoRole(membership.role),
+          status: mapMembershipStatusToDemoStatus(membership.status),
+          agencyId: membership.branch?.agencyId ?? "",
+          agencyName: membership.branch?.agency?.name ?? "Bagimsiz",
+          branchId: membership.branchId ?? "",
+          branchName: membership.branch?.name ?? "Atanmamis",
+          responsibility: membership.responsibility ?? "Rol bazli erisim",
+          lastActiveAt: iso(
+            membership.lastActiveAt ?? membership.user.lastLoginAt ?? membership.updatedAt,
+          ),
+        }))
+        .sort((left, right) => left.fullName.localeCompare(right.fullName));
+    },
+    async () => getFallbackTeamUsers(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoRoles() {
@@ -259,37 +284,47 @@ export async function getDemoRoles() {
 }
 
 export async function getDemoInternalMessages() {
-  const companyId = await resolvePanelCompanyId();
-  const { messages } = await getUsersMessagesSnapshot(companyId);
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const { messages } = await getUsersMessagesSnapshot(companyId);
 
-  return messages.map((message) => ({
-    id: message.id,
-    companyId: message.companyId,
-    senderName: message.senderUser?.name ?? "Sistem",
-    recipientLabel: message.recipientLabel,
-    subject: message.subject,
-    body: message.body,
-    status: mapMessageStatusToDemo(message.status),
-    priority: message.priority,
-    relatedModule: message.relatedModule ?? "Panel",
-    createdAt: iso(message.createdAt),
-  }));
+      return messages.map((message) => ({
+        id: message.id,
+        companyId: message.companyId,
+        senderName: message.senderUser?.name ?? "Sistem",
+        recipientLabel: message.recipientLabel,
+        subject: message.subject,
+        body: message.body,
+        status: mapMessageStatusToDemo(message.status),
+        priority: message.priority,
+        relatedModule: message.relatedModule ?? "Panel",
+        createdAt: iso(message.createdAt),
+      }));
+    },
+    async () => getFallbackInternalMessages(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoCommissionRates() {
-  const companyId = await resolvePanelCompanyId();
-  const { commissions } = await getUsersMessagesSnapshot(companyId);
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const { commissions } = await getUsersMessagesSnapshot(companyId);
 
-  return commissions.map((commission) => ({
-    id: commission.id,
-    companyId: commission.companyId,
-    scopeType: mapCommissionScopeType(commission.scopeType),
-    scopeLabel: commission.scopeLabel,
-    percent: decimalToNumber(commission.percent),
-    payoutRule: commission.payoutRule,
-    active: commission.active,
-    updatedAt: iso(commission.updatedAt),
-  })) satisfies DemoCommissionRateRecord[];
+      return commissions.map((commission) => ({
+        id: commission.id,
+        companyId: commission.companyId,
+        scopeType: mapCommissionScopeType(commission.scopeType),
+        scopeLabel: commission.scopeLabel,
+        percent: decimalToNumber(commission.percent),
+        payoutRule: commission.payoutRule,
+        active: commission.active,
+        updatedAt: iso(commission.updatedAt),
+      })) satisfies DemoCommissionRateRecord[];
+    },
+    async () => getFallbackCommissionRates(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoUsersMessagesOverview() {

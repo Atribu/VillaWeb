@@ -8,6 +8,12 @@ import type {
 import { db } from "@/lib/db";
 import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
 import {
+  getFallbackLandingPages,
+  getFallbackSeoContents,
+  getFallbackWebsites,
+} from "@/lib/server/development-fallback-data";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import {
   mapDemoWebsiteStatusToPrisma,
   mapSeoStatusToDemo,
   mapWebsiteStatusToDemo,
@@ -20,63 +26,78 @@ function mapSeoContentTypeToDemo(type: "BLOG" | "LANDING" | "CATEGORY" | "PAGE")
 }
 
 export async function getDemoWebsites() {
-  const companyId = await resolvePanelCompanyId();
-  const websites = await db.companyWebsite.findMany({
-    where: companyId ? { companyId } : undefined,
-    orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
-  });
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const websites = await db.companyWebsite.findMany({
+        where: companyId ? { companyId } : undefined,
+        orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
+      });
 
-  return websites.map((website) => ({
-    id: website.id,
-    companyId: website.companyId,
-    name: website.name,
-    domain: website.domain ?? "",
-    locale: website.locale,
-    status: mapWebsiteStatusToDemo(website.status),
-    primaryChannel: website.primaryChannel ?? "SEO + Direkt Talep",
-    default: website.isPrimary,
-    updatedAt: website.updatedAt.toISOString(),
-  }));
+      return websites.map((website) => ({
+        id: website.id,
+        companyId: website.companyId,
+        name: website.name,
+        domain: website.domain ?? "",
+        locale: website.locale,
+        status: mapWebsiteStatusToDemo(website.status),
+        primaryChannel: website.primaryChannel ?? "SEO + Direkt Talep",
+        default: website.isPrimary,
+        updatedAt: website.updatedAt.toISOString(),
+      }));
+    },
+    async () => getFallbackWebsites(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoLandingPages() {
-  const companyId = await resolvePanelCompanyId();
-  const landings = await db.landingPage.findMany({
-    where: companyId ? { companyId } : undefined,
-    orderBy: { updatedAt: "desc" },
-  });
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const landings = await db.landingPage.findMany({
+        where: companyId ? { companyId } : undefined,
+        orderBy: { updatedAt: "desc" },
+      });
 
-  return landings.map((landing) => ({
-    id: landing.id,
-    companyId: landing.companyId,
-    title: landing.title,
-    slug: landing.slug,
-    targetRegion: landing.targetRegion ?? "-",
-    focusKeyword: landing.focusKeyword ?? "-",
-    status: landing.status,
-    leadCount: landing.leadCount,
-    updatedAt: landing.updatedAt.toISOString(),
-  }));
+      return landings.map((landing) => ({
+        id: landing.id,
+        companyId: landing.companyId,
+        title: landing.title,
+        slug: landing.slug,
+        targetRegion: landing.targetRegion ?? "-",
+        focusKeyword: landing.focusKeyword ?? "-",
+        status: landing.status,
+        leadCount: landing.leadCount,
+        updatedAt: landing.updatedAt.toISOString(),
+      }));
+    },
+    async () => getFallbackLandingPages(await resolvePanelCompanyId()),
+  );
 }
 
 export async function getDemoSeoContents() {
-  const companyId = await resolvePanelCompanyId();
-  const contents = await db.seoContent.findMany({
-    where: companyId ? { companyId } : undefined,
-    orderBy: { updatedAt: "desc" },
-  });
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const contents = await db.seoContent.findMany({
+        where: companyId ? { companyId } : undefined,
+        orderBy: { updatedAt: "desc" },
+      });
 
-  return contents.map((content) => ({
-    id: content.id,
-    companyId: content.companyId,
-    title: content.title,
-    contentType: mapSeoContentTypeToDemo(content.contentType),
-    targetUrl: content.targetUrl,
-    primaryKeyword: content.primaryKeyword,
-    status: mapSeoStatusToDemo(content.status),
-    seoScore: content.seoScore ?? 0,
-    updatedAt: content.updatedAt.toISOString(),
-  }));
+      return contents.map((content) => ({
+        id: content.id,
+        companyId: content.companyId,
+        title: content.title,
+        contentType: mapSeoContentTypeToDemo(content.contentType),
+        targetUrl: content.targetUrl,
+        primaryKeyword: content.primaryKeyword,
+        status: mapSeoStatusToDemo(content.status),
+        seoScore: content.seoScore ?? 0,
+        updatedAt: content.updatedAt.toISOString(),
+      }));
+    },
+    async () => getFallbackSeoContents(await resolvePanelCompanyId()),
+  );
 }
 
 export async function updateDemoWebsite(

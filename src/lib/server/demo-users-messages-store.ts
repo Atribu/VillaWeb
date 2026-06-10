@@ -525,6 +525,10 @@ export async function updateDemoBranchStatus(branchId: string, status: DemoBranc
 export async function updateDemoTeamUser(
   userId: string,
   input: {
+    fullName?: string;
+    username?: string;
+    email?: string;
+    phone?: string;
     status?: DemoTeamUserStatus;
     roleId?: DemoRoleId;
     branchId?: string;
@@ -535,6 +539,9 @@ export async function updateDemoTeamUser(
     async () => {
       const membership = await db.companyMembership.findUnique({
         where: { id: userId },
+        include: {
+          user: true,
+        },
       });
 
       if (!membership) {
@@ -566,17 +573,57 @@ export async function updateDemoTeamUser(
         }
       }
 
-      await db.companyMembership.update({
-        where: { id: userId },
-        data: {
-          ...(input.status ? { status: mapDemoUserStatusToMembershipStatus(input.status) } : {}),
-          ...(input.roleId ? { role: mapDemoRoleToMembershipRole(input.roleId) } : {}),
-          ...(branchId !== undefined ? { branchId } : {}),
-          ...(input.responsibility !== undefined
-            ? { responsibility: input.responsibility.trim() || "Rol bazli erisim" }
-            : {}),
-          ...(input.status === "ACTIVE" ? { acceptedAt: membership.acceptedAt ?? new Date() } : {}),
-        },
+      const fullName = input.fullName?.trim();
+      const username = input.username?.trim().toLowerCase();
+      const email = input.email?.trim().toLowerCase();
+      const phone = input.phone?.trim();
+
+      if (email && !email.includes("@")) {
+        throw new DemoUsersMessagesStoreError("Gecerli bir e-posta adresi girilmelidir.");
+      }
+
+      if (username || email) {
+        const existingUser = await db.user.findFirst({
+          where: {
+            id: { not: membership.userId },
+            OR: [
+              ...(username ? [{ username }] : []),
+              ...(email ? [{ email }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+
+        if (existingUser) {
+          throw new DemoUsersMessagesStoreError("Bu kullanici adi veya e-posta zaten kullanimda.");
+        }
+      }
+
+      await db.$transaction(async (tx) => {
+        await tx.companyMembership.update({
+          where: { id: userId },
+          data: {
+            ...(input.status ? { status: mapDemoUserStatusToMembershipStatus(input.status) } : {}),
+            ...(input.roleId ? { role: mapDemoRoleToMembershipRole(input.roleId) } : {}),
+            ...(branchId !== undefined ? { branchId } : {}),
+            ...(input.responsibility !== undefined
+              ? { responsibility: input.responsibility.trim() || "Rol bazli erisim" }
+              : {}),
+            ...(input.status === "ACTIVE" ? { acceptedAt: membership.acceptedAt ?? new Date() } : {}),
+          },
+        });
+
+        if (fullName || username || email || phone) {
+          await tx.user.update({
+            where: { id: membership.userId },
+            data: {
+              ...(fullName ? { name: fullName } : {}),
+              ...(username ? { username } : {}),
+              ...(email ? { email } : {}),
+              ...(phone ? { phone } : {}),
+            },
+          });
+        }
       });
 
       const users = await getDemoTeamUsers();
@@ -592,6 +639,10 @@ export async function updateDemoTeamUser(
       await assertPanelCompanyAccess(current.companyId);
 
       return updateFallbackTeamUser(userId, {
+        ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),
+        ...(input.username !== undefined ? { username: input.username } : {}),
+        ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.roleId !== undefined ? { roleId: input.roleId } : {}),
         ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),

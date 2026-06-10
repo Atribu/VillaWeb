@@ -314,6 +314,7 @@ model Company {
   whatsappNumber     String?
   supportHours       String?
   primaryDomain      String?               @unique
+  taxNumber          String?
   timezone           String                @default("Europe/Istanbul")
   locale             String                @default("tr-TR")
   currency           String                @default("TRY")

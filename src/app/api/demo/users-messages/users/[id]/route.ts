@@ -27,6 +27,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
+      fullName?: string;
+      username?: string;
+      email?: string;
+      phone?: string;
       status?: DemoTeamUserStatus;
       roleId?: DemoRoleId;
       branchId?: string;
@@ -48,6 +52,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (
+      payload.fullName === undefined &&
+      payload.username === undefined &&
+      payload.email === undefined &&
+      payload.phone === undefined &&
       payload.status === undefined &&
       payload.roleId === undefined &&
       payload.branchId === undefined &&
@@ -56,7 +64,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new DemoUsersMessagesStoreError("Guncellenecek en az bir alan secilmelidir.");
     }
 
-    const user = await updateDemoTeamUser(id, payload);
+    const user = await updateDemoTeamUser(id, {
+      ...(payload.fullName !== undefined ? { fullName: String(payload.fullName) } : {}),
+      ...(payload.username !== undefined ? { username: String(payload.username) } : {}),
+      ...(payload.email !== undefined ? { email: String(payload.email) } : {}),
+      ...(payload.phone !== undefined ? { phone: String(payload.phone) } : {}),
+      ...(payload.status !== undefined ? { status: payload.status } : {}),
+      ...(payload.roleId !== undefined ? { roleId: payload.roleId } : {}),
+      ...(payload.branchId !== undefined ? { branchId: String(payload.branchId) } : {}),
+      ...(payload.responsibility !== undefined
+        ? { responsibility: String(payload.responsibility) }
+        : {}),
+    });
 
     return NextResponse.json({ user });
   } catch (error) {

@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import {
   getDefaultDemoCompany,
   getDemoCompanies,
+  type DemoCompanyRecord,
+  type DemoCompanyStatus,
 } from "@/lib/demo-companies";
 import {
   seedDemoIcalSources,
@@ -163,8 +165,38 @@ function normalizeOperationTask(record: DemoOperationTask): DemoOperationTask {
   };
 }
 
+function normalizeFallbackCompanyRecord(record: DemoCompanyRecord): DemoCompanyRecord {
+  const name = record.name?.trim() || "Demo Firma";
+
+  return {
+    id: record.id,
+    slug: record.slug?.trim().toLowerCase() || `firma-${randomUUID().slice(0, 6)}`,
+    name,
+    legalName: record.legalName?.trim() || name,
+    shortName: record.shortName?.trim() || name,
+    panelLabel: record.panelLabel?.trim() || `${name} Panel`,
+    status: (record.status ?? "ACTIVE") satisfies DemoCompanyStatus,
+    tagline: record.tagline?.trim() || "Villa platformu",
+    phone: record.phone?.trim() || "",
+    whatsapp: record.whatsapp?.trim() || record.phone?.trim() || "",
+    email: record.email?.trim() || "",
+    primaryDomain: record.primaryDomain?.trim().toLowerCase() || "",
+    address: record.address?.trim() || "",
+    taxNumber: record.taxNumber?.trim() || "",
+    supportHours: record.supportHours?.trim() || "",
+    accentLabel: record.accentLabel?.trim() || "Firma bazli villa platformu",
+    heroTitle: record.heroTitle?.trim() || name,
+    heroDescription:
+      record.heroDescription?.trim() ||
+      "Villa vitrini, panel yonetimi ve operasyon akislarini tek merkezden yonetin.",
+  };
+}
+
 export async function getFallbackCompanyRecords() {
-  return clone(getDemoCompanies());
+  const fileData = await readDevelopmentDataFile("demo-companies.json", getDemoCompanies());
+  return fileData.map((record) =>
+    normalizeFallbackCompanyRecord(record as DemoCompanyRecord),
+  );
 }
 
 export async function getFallbackCompanyRecordById(companyId?: string | null) {
@@ -182,11 +214,11 @@ export async function getFallbackCompanyRecordBySlug(companySlug?: string | null
 }
 
 export async function getFallbackDefaultCompanyRecord() {
-  return clone(getDefaultDemoCompany());
+  return (await getFallbackCompanyRecords())[0] ?? clone(getDefaultDemoCompany());
 }
 
 export async function getFallbackDefaultCompanyId() {
-  return getDefaultDemoCompany().id;
+  return (await getFallbackDefaultCompanyRecord())?.id ?? getDefaultDemoCompany().id;
 }
 
 export async function getFallbackVillas(companyId?: string | null) {
@@ -623,6 +655,22 @@ async function saveFallbackTeamUsers(records: DemoTeamUserRecord[]) {
   await writeDevelopmentDataFile("demo-team-users.json", records);
 }
 
+async function saveFallbackCompanyRecords(records: DemoCompanyRecord[]) {
+  await writeDevelopmentDataFile("demo-companies.json", records);
+}
+
+async function saveFallbackWebsites(records: DemoWebsiteRecord[]) {
+  await writeDevelopmentDataFile("demo-websites.json", records);
+}
+
+async function saveFallbackAgencies(records: DemoAgencyRecord[]) {
+  await writeDevelopmentDataFile("demo-agencies.json", records);
+}
+
+async function saveFallbackBranches(records: DemoBranchRecord[]) {
+  await writeDevelopmentDataFile("demo-branches.json", records);
+}
+
 async function saveFallbackPaymentMethods(records: PaymentMethodWithCompany[]) {
   await writeDevelopmentDataFile("demo-payment-methods.json", records);
 }
@@ -688,9 +736,179 @@ export async function createFallbackTeamUser(input: {
   return nextUser;
 }
 
+export async function createFallbackCompany(input: {
+  publicName: string;
+  legalName: string;
+  shortName: string;
+  panelName: string;
+  status: DemoCompanyStatus;
+  primaryEmail: string;
+  primaryPhone: string;
+  whatsappNumber: string;
+  primaryDomain: string;
+  address: string;
+  taxNumber: string;
+  supportHours: string;
+  accentLabel: string;
+  heroTitle: string;
+  heroDescription: string;
+  slug: string;
+}) {
+  const companies = await getFallbackCompanyRecords();
+
+  const nextCompany: DemoCompanyRecord = normalizeFallbackCompanyRecord({
+    id: `company-${randomUUID().slice(0, 8)}`,
+    slug: input.slug,
+    name: input.publicName,
+    legalName: input.legalName,
+    shortName: input.shortName,
+    panelLabel: input.panelName,
+    status: input.status,
+    tagline: input.accentLabel,
+    phone: input.primaryPhone,
+    whatsapp: input.whatsappNumber || input.primaryPhone,
+    email: input.primaryEmail,
+    primaryDomain: input.primaryDomain,
+    address: input.address,
+    taxNumber: input.taxNumber,
+    supportHours: input.supportHours,
+    accentLabel: input.accentLabel,
+    heroTitle: input.heroTitle,
+    heroDescription: input.heroDescription,
+  });
+
+  await saveFallbackCompanyRecords([...companies, nextCompany]);
+
+  const [websites, agencies, branches] = await Promise.all([
+    getFallbackWebsites(),
+    getFallbackAgencies(),
+    getFallbackBranches(),
+  ]);
+
+  const now = new Date().toISOString();
+  const nextAgency: DemoAgencyRecord = {
+    id: `agency-${randomUUID().slice(0, 8)}`,
+    companyId: nextCompany.id,
+    name: "Merkez Operasyon",
+    kind: "INTERNAL",
+    ownerName: "Super Admin",
+    city: nextCompany.address || "Turkiye",
+    status: "ACTIVE",
+    requestCount: 0,
+    approvedRevenue: 0,
+    openPipeline: 0,
+    note: "Yeni firma ile birlikte olusan varsayilan merkez operasyon kaydi.",
+  };
+  const nextBranch: DemoBranchRecord = {
+    id: `branch-${randomUUID().slice(0, 8)}`,
+    companyId: nextCompany.id,
+    agencyId: nextAgency.id,
+    agencyName: nextAgency.name,
+    name: "Ana Sube",
+    city: nextCompany.address || "Turkiye",
+    phone: nextCompany.phone,
+    status: "ACTIVE",
+    userCount: 0,
+    requestCount: 0,
+    approvedRevenue: 0,
+  };
+  const nextWebsite: DemoWebsiteRecord = {
+    id: `site-${randomUUID().slice(0, 8)}`,
+    companyId: nextCompany.id,
+    name: `${nextCompany.name} Ana Site`,
+    domain: nextCompany.primaryDomain,
+    locale: "tr-TR",
+    status: "STAGING",
+    primaryChannel: "Direkt Talep",
+    default: true,
+    updatedAt: now,
+  };
+
+  await Promise.all([
+    saveFallbackAgencies([...agencies, nextAgency]),
+    saveFallbackBranches([...branches, nextBranch]),
+    saveFallbackWebsites([...websites, nextWebsite]),
+  ]);
+
+  return nextCompany;
+}
+
+export async function updateFallbackCompany(
+  companyId: string,
+  input: {
+    publicName: string;
+    legalName: string;
+    shortName: string;
+    panelName: string;
+    status: DemoCompanyStatus;
+    primaryEmail: string;
+    primaryPhone: string;
+    whatsappNumber: string;
+    primaryDomain: string;
+    address: string;
+    taxNumber: string;
+    supportHours: string;
+    accentLabel: string;
+    heroTitle: string;
+    heroDescription: string;
+  },
+) {
+  const companies = await getFallbackCompanyRecords();
+  const index = companies.findIndex((company) => company.id === companyId);
+
+  if (index === -1) {
+    throw new Error("Firma bulunamadi.");
+  }
+
+  const current = companies[index]!;
+  const updated = normalizeFallbackCompanyRecord({
+    ...current,
+    name: input.publicName,
+    legalName: input.legalName,
+    shortName: input.shortName,
+    panelLabel: input.panelName,
+    status: input.status,
+    phone: input.primaryPhone,
+    whatsapp: input.whatsappNumber || input.primaryPhone,
+    email: input.primaryEmail,
+    primaryDomain: input.primaryDomain,
+    address: input.address,
+    taxNumber: input.taxNumber,
+    supportHours: input.supportHours,
+    accentLabel: input.accentLabel,
+    heroTitle: input.heroTitle,
+    heroDescription: input.heroDescription,
+  });
+
+  const nextCompanies = [...companies];
+  nextCompanies[index] = updated;
+  await saveFallbackCompanyRecords(nextCompanies);
+
+  const websites = await getFallbackWebsites();
+  const websiteIndex = websites.findIndex(
+    (website) => website.companyId === companyId && website.default,
+  );
+
+  if (websiteIndex !== -1) {
+    const nextWebsites = [...websites];
+    nextWebsites[websiteIndex] = {
+      ...nextWebsites[websiteIndex]!,
+      domain: updated.primaryDomain,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveFallbackWebsites(nextWebsites);
+  }
+
+  return updated;
+}
+
 export async function updateFallbackTeamUser(
   userId: string,
   input: {
+    fullName?: string;
+    username?: string;
+    email?: string;
+    phone?: string;
     status?: DemoTeamUserStatus;
     roleId?: DemoRoleId;
     branchId?: string | null;
@@ -706,6 +924,19 @@ export async function updateFallbackTeamUser(
 
   const current = users[index]!;
   let nextBranch = null as DemoBranchRecord | null;
+  const nextUsername = input.username?.trim() ?? current.username;
+  const nextEmail = input.email?.trim().toLowerCase() ?? current.email.toLowerCase();
+
+  if (
+    users.some(
+      (user) =>
+        user.id !== userId &&
+        (user.username.toLowerCase() === nextUsername.toLowerCase() ||
+          user.email.toLowerCase() === nextEmail),
+    )
+  ) {
+    throw new Error("Bu kullanici adi veya e-posta zaten kullanimda.");
+  }
 
   if (input.branchId !== undefined && input.branchId !== "") {
     const branches = await getFallbackBranches();
@@ -724,6 +955,10 @@ export async function updateFallbackTeamUser(
   const updated = {
     ...current,
     companyId: normalizeDevelopmentCompanyId(current.companyId),
+    fullName: input.fullName?.trim() || current.fullName,
+    username: nextUsername,
+    email: nextEmail,
+    phone: input.phone?.trim() || current.phone,
     roleId: input.roleId ?? current.roleId,
     status: nextStatus,
     responsibility:

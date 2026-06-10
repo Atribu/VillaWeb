@@ -68,7 +68,7 @@ export function LoginForm({
 
       <div className="space-y-2">
         <label htmlFor="username" className="text-sm font-medium text-slate-700">
-          {pickLocalized(locale, "Kullanici Adi", "Username")}
+          {pickLocalized(locale, "E-posta veya Kullanici Adi", "Email or Username")}
         </label>
         <input
           id="username"
@@ -76,7 +76,7 @@ export function LoginForm({
           type="text"
           autoComplete="username"
           defaultValue={state.username}
-          placeholder={pickLocalized(locale, "admin", "admin")}
+          placeholder={pickLocalized(locale, "ornek@firma.com", "name@example.com")}
           className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
         />
       </div>

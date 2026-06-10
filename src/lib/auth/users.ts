@@ -3,7 +3,6 @@ import "server-only";
 
 import type { MembershipRole, PlatformRole } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getDemoCompanies } from "@/lib/demo-companies";
 import { getAllCompanyRecords } from "@/lib/server/company-store";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
@@ -37,9 +36,13 @@ export type LoginValidationResult =
 
 export const loginCredentials = [
   {
-    username: process.env.SEED_SUPER_ADMIN_USERNAME ?? process.env.SUPER_ADMIN_USERNAME ?? "super-admin",
+    username:
+      process.env.SEED_SUPER_ADMIN_USERNAME ??
+      process.env.SUPER_ADMIN_USERNAME ??
+      "oguzkilinc.ant@gmail.com",
+    email: process.env.SEED_SUPER_ADMIN_EMAIL ?? "oguzkilinc.ant@gmail.com",
     password:
-      process.env.SEED_SUPER_ADMIN_PASSWORD ?? process.env.SUPER_ADMIN_PASSWORD ?? "VillaSuper2026!",
+      process.env.SEED_SUPER_ADMIN_PASSWORD ?? process.env.SUPER_ADMIN_PASSWORD ?? "qweasd11.",
     displayName: "Platform Super Admin",
     role: "SUPER_ADMIN" as const,
   },
@@ -85,7 +88,7 @@ function mapPlatformRoleToAppRole(
   platformRole: PlatformRole,
   membershipRole?: MembershipRole | null,
 ): AppRole {
-  if (platformRole === "PLATFORM_OWNER" || platformRole === "PLATFORM_ADMIN") {
+  if (platformRole === "PLATFORM_OWNER") {
     return "SUPER_ADMIN";
   }
 
@@ -142,7 +145,7 @@ async function resolveLoginCompany(companyName: string) {
 }
 
 function isPlatformUser(platformRole: PlatformRole) {
-  return platformRole === "PLATFORM_OWNER" || platformRole === "PLATFORM_ADMIN";
+  return platformRole === "PLATFORM_OWNER";
 }
 
 export async function validateUser(
@@ -155,8 +158,10 @@ export async function validateUser(
 
   return withDevelopmentFallback(
     async () => {
-      const user = await db.user.findUnique({
-        where: { username: normalizedUsername },
+      const user = await db.user.findFirst({
+        where: {
+          OR: [{ username: normalizedUsername }, { email: normalizedUsername }],
+        },
         include: {
           memberships: {
             where: { status: "ACTIVE" },
@@ -263,8 +268,14 @@ export async function validateUser(
         },
       } satisfies LoginValidationResult;
     },
-    () => {
-      const credential = loginCredentials.find((item) => item.username.toLowerCase() === normalizedUsername);
+    async () => {
+      const credential = loginCredentials.find(
+        (item) =>
+          item.username.toLowerCase() === normalizedUsername ||
+          ("email" in item &&
+            typeof item.email === "string" &&
+            item.email.toLowerCase() === normalizedUsername),
+      );
 
       if (!credential || credential.password !== password) {
         return {
@@ -292,12 +303,7 @@ export async function validateUser(
         } satisfies LoginValidationResult;
       }
 
-      const selectedCompany = getDemoCompanies().find(
-        (item) =>
-          [item.name, item.shortName, item.slug, item.panelLabel, item.primaryDomain].some(
-            (candidate) => toSearchKey(candidate) === toSearchKey(normalizedCompanyName),
-          ),
-      );
+      const selectedCompany = await resolveLoginCompany(normalizedCompanyName);
 
       if (!selectedCompany) {
         return {
@@ -307,7 +313,7 @@ export async function validateUser(
       }
 
       const company = credential.companyName
-        ? getDemoCompanies().find((item) => item.name === credential.companyName)
+        ? await resolveLoginCompany(credential.companyName)
         : null;
 
       if (!company || company.id !== selectedCompany.id) {

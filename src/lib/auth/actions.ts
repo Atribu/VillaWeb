@@ -26,8 +26,8 @@ export async function authenticateUser(
     return {
       error: pickLocalized(
         locale,
-        "Kullanici adi ve sifre alanlari zorunludur.",
-        "Username and password are required.",
+        "E-posta veya kullanici adi ile sifre alanlari zorunludur.",
+        "Email or username and password are required.",
       ),
       companyName,
       username,
@@ -58,8 +58,8 @@ export async function authenticateUser(
               )
             : pickLocalized(
                 locale,
-                "Kullanici adi veya sifre hatali.",
-                "The username or password is incorrect.",
+                "E-posta, kullanici adi veya sifre hatali.",
+                "The email, username or password is incorrect.",
               );
 
     return {

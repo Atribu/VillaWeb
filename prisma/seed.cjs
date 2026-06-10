@@ -18,9 +18,9 @@ function hashPassword(password, salt) {
 }
 
 const env = {
-  superAdminUsername: process.env.SEED_SUPER_ADMIN_USERNAME ?? "super-admin",
-  superAdminEmail: process.env.SEED_SUPER_ADMIN_EMAIL ?? "owner@villaweb.local",
-  superAdminPassword: process.env.SEED_SUPER_ADMIN_PASSWORD ?? "VillaSuper2026!",
+  superAdminUsername: process.env.SEED_SUPER_ADMIN_USERNAME ?? "oguzkilinc.ant@gmail.com",
+  superAdminEmail: process.env.SEED_SUPER_ADMIN_EMAIL ?? "oguzkilinc.ant@gmail.com",
+  superAdminPassword: process.env.SEED_SUPER_ADMIN_PASSWORD ?? "qweasd11.",
   platformAdminUsername: process.env.SEED_PLATFORM_ADMIN_USERNAME ?? "platform-admin",
   platformAdminEmail: process.env.SEED_PLATFORM_ADMIN_EMAIL ?? "ops@villaweb.local",
   platformAdminPassword: process.env.SEED_PLATFORM_ADMIN_PASSWORD ?? "VillaOps2026!",
@@ -147,6 +147,7 @@ const companies = {
     whatsappNumber: "+90 555 000 00 00",
     supportHours: "Her gun 09:00 - 22:00",
     primaryDomain: "villavera.demo",
+    taxNumber: "3456789012",
     heroTitle: "Deniz manzarali, premium ve donusum odakli villa vitrini.",
     heroDescription:
       "VillaVera; Kalkan ve Kas odakli premium seckileri, balayi segmenti ve SEO guclu landing kurgusuyla talep toplar.",
@@ -163,6 +164,7 @@ const companies = {
     whatsappNumber: "+90 554 222 11 22",
     supportHours: "Hafta ici 09:00 - 20:00",
     primaryDomain: "sahilcollection.demo",
+    taxNumber: "4567890123",
     heroTitle: "Aileler ve kalabalik gruplar icin kurumsal villa vitrini.",
     heroDescription:
       "Sahil Collection; Fethiye ve Bodrum odakli genis kapasite villalari, kampanya kurgusu ve operasyon takibiyle satisa hazir durur.",
@@ -356,6 +358,7 @@ async function seedCompanies() {
       whatsappNumber: company.whatsappNumber,
       supportHours: company.supportHours,
       primaryDomain: company.primaryDomain,
+      taxNumber: company.taxNumber,
       timezone: "Europe/Istanbul",
       locale: "tr-TR",
       currency: "TRY",
@@ -471,8 +474,8 @@ async function seedUsers() {
       name: "Platform Operations Admin",
       phone: "+90 532 000 00 91",
       passwordHash: hashPassword(env.platformAdminPassword, "villaweb-platform-admin"),
-      platformRole: "PLATFORM_ADMIN",
-      isActive: true,
+      platformRole: "COMPANY_USER",
+      isActive: false,
       lastLoginAt: at("2026-06-01T08:30:00.000Z"),
     },
     {

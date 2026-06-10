@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 
 export default async function PanelLoginPage() {
   const [locale, companies] = await Promise.all([getCurrentLocale(), getAllCompanyRecords()]);
+  const publicCredentials = loginCredentials.filter((credential) => credential.role !== "SUPER_ADMIN");
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-16 sm:px-6 lg:px-8">
@@ -30,23 +31,21 @@ export default async function PanelLoginPage() {
           <p className="mt-6 max-w-xl text-sm leading-7 text-teal-50/85">
             {pickLocalized(
               locale,
-              "Demo artik cok firmali calisiyor. Super admin tum firmalari gorur; firma adminleri ve personeller ise sadece kendi sirket verilerini ve kendi web sitesini yonetir.",
-              "The demo now works in a multi-tenant model. Super admins see all companies, while company admins and staff manage only their own data and website.",
+              "Demo artik cok firmali calisiyor. Platform yetkisi gizli tutulur; firma adminleri ve personeller ise sadece kendi sirket verilerini ve kendi web sitesini yonetir.",
+              "The demo now works in a multi-tenant model. Platform owner access stays private, while company admins and staff manage only their own data and website.",
             )}
           </p>
 
           <div className="mt-10 grid gap-4">
-            {loginCredentials.map((credential) => (
+            {publicCredentials.map((credential) => (
               <div
                 key={credential.username}
                 className="rounded-[1.75rem] border border-white/12 bg-white/10 p-5 backdrop-blur"
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-100">
-                  {credential.role === "SUPER_ADMIN"
-                    ? pickLocalized(locale, "Platform Yetkilisi", "Platform Owner")
-                    : credential.role === "ADMIN"
-                      ? pickLocalized(locale, "Firma Admini", "Company Admin")
-                      : pickLocalized(locale, "Firma Personeli", "Company Staff")}
+                  {credential.role === "ADMIN"
+                    ? pickLocalized(locale, "Firma Admini", "Company Admin")
+                    : pickLocalized(locale, "Firma Personeli", "Company Staff")}
                 </p>
                 <h2 className="mt-3 text-2xl font-semibold">{credential.displayName}</h2>
                 {credential.companyName ? (
@@ -58,7 +57,7 @@ export default async function PanelLoginPage() {
                 </p>
                 <p className="mt-1 text-sm">
                   <span className="font-semibold">
-                    {pickLocalized(locale, "Kullanici adi:", "Username:")}
+                    {pickLocalized(locale, "Giris bilgisi:", "Login ID:")}
                   </span>{" "}
                   {credential.username}
                 </p>
@@ -76,7 +75,7 @@ export default async function PanelLoginPage() {
             {pickLocalized(locale, "Panel Formu", "Panel Login")}
           </p>
           <h2 className="mt-4 text-3xl font-semibold text-[var(--color-ink)]">
-            {pickLocalized(locale, "Kullanici adi ve sifre ile giris yap", "Sign in with your username and password")}
+            {pickLocalized(locale, "E-posta veya kullanici adi ile giris yap", "Sign in with your email or username")}
           </h2>
           <p className="mt-4 text-sm leading-7 text-slate-600">
             {pickLocalized(
@@ -91,8 +90,8 @@ export default async function PanelLoginPage() {
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
             {pickLocalized(
               locale,
-              "Super admin disindaki butun hesaplarda once firma adini, sonra kullanici adi ve sifreyi yazman gerekir. Boyleyce her firma sadece kendi verisini gorur.",
-              "For every account except super admin, you must enter the company name first, then the username and password. This keeps each company limited to its own data.",
+              "Platform sahibi girisi ozel tutulur. Firma hesaplarinda once firma adini, sonra e-posta veya kullanici adini ve sifreyi yazman gerekir. Boyleyce her firma sadece kendi verisini gorur.",
+              "Platform owner access stays private. For company accounts, enter the company name first, then the email or username and password. This keeps each company limited to its own data.",
             )}
           </div>
         </div>

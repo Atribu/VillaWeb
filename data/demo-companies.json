@@ -1,0 +1,42 @@
+[
+  {
+    "id": "seed-company-villavera",
+    "slug": "villavera",
+    "name": "VillaVera Collection",
+    "legalName": "VillaVera Turizm ve Dijital Hizmetler A.S.",
+    "shortName": "VillaVera",
+    "panelLabel": "VillaVera Backoffice",
+    "status": "ACTIVE",
+    "tagline": "Premium villa koleksiyonu",
+    "phone": "+90 850 000 00 00",
+    "whatsapp": "+90 555 000 00 00",
+    "email": "merhaba@villavera.com",
+    "primaryDomain": "villavera.demo",
+    "address": "Kalkan Mahallesi, Antalya",
+    "taxNumber": "3456789012",
+    "supportHours": "Her gun 09:00 - 22:00",
+    "accentLabel": "Deniz manzarali ve balayi odakli seckiler",
+    "heroTitle": "Deniz manzarali, premium ve donusum odakli villa vitrini.",
+    "heroDescription": "VillaVera; Kalkan ve Kas odakli premium seckileri, balayi segmenti ve SEO guclu landing kurgusuyla talep toplar."
+  },
+  {
+    "id": "seed-company-sahil",
+    "slug": "sahil-collection",
+    "name": "Sahil Collection Villas",
+    "legalName": "Sahil Collection Tatil Teknolojileri Ltd. Sti.",
+    "shortName": "Sahil Collection",
+    "panelLabel": "Sahil Collection Panel",
+    "status": "ACTIVE",
+    "tagline": "Aile ve grup villalari",
+    "phone": "+90 850 222 11 22",
+    "whatsapp": "+90 554 222 11 22",
+    "email": "rezervasyon@sahilcollection.com",
+    "primaryDomain": "sahilcollection.demo",
+    "address": "Fethiye Marina Bolgesi, Mugla",
+    "taxNumber": "4567890123",
+    "supportHours": "Hafta ici 09:00 - 20:00",
+    "accentLabel": "Aile ve grup konaklamalarinda operasyon agirlikli portfoy",
+    "heroTitle": "Aileler ve kalabalik gruplar icin kurumsal villa vitrini.",
+    "heroDescription": "Sahil Collection; Fethiye ve Bodrum odakli genis kapasite villalari, kampanya kurgusu ve operasyon takibiyle satisa hazir durur."
+  }
+]

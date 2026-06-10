@@ -88,6 +88,14 @@ export async function assertPanelCompanyAccess(companyId?: string | null) {
   }
 }
 
+export async function assertSuperAdminPanelAccess() {
+  const session = await getUserSession().catch(() => null);
+
+  if (!session || session.role !== "SUPER_ADMIN") {
+    throw new Error("Bu islem yalnizca super admin tarafindan kullanilabilir.");
+  }
+}
+
 export async function getCurrentPublicCompany(): Promise<DemoCompanyRecord> {
   const headerSlug = await readCompanySlugFromHeaders();
   const cookieSlug = await readCompanySlugFromCookies();

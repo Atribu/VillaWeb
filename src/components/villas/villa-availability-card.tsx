@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import type { AppLocale } from "@/lib/i18n";
+import { pickLocalized } from "@/lib/i18n";
+import {
+  getLocalizedAvailabilityLabel,
+  getLocalizedVilla,
+} from "@/lib/villa-content-i18n";
 import type { CatalogVilla } from "@/lib/villa-catalog";
 import { formatCurrency, formatShortDate } from "@/lib/villa-catalog";
 import {
@@ -14,11 +20,10 @@ import {
 
 type AvailabilityCardProps = {
   villa: CatalogVilla;
+  locale?: AppLocale;
 };
 
 type AvailabilityRange = CatalogVilla["availabilityRanges"][number];
-
-const weekdayLabels = ["Pzt", "Sal", "Car", "Per", "Cum", "Cmt", "Paz"];
 
 function getStartOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -28,8 +33,8 @@ function addMonths(date: Date, amount: number) {
   return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
-function getMonthLabel(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
+function getMonthLabel(date: Date, locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "tr-TR", {
     month: "long",
     year: "numeric",
   }).format(date);
@@ -56,16 +61,16 @@ function getMonthDays(date: Date) {
   return cells;
 }
 
-function getSelectionStep(checkIn: string, checkOut: string) {
+function getSelectionStep(checkIn: string, checkOut: string, locale: AppLocale) {
   if (!checkIn) {
-    return "1. adim: Giris tarihini sec";
+    return pickLocalized(locale, "1. adim: Giris tarihini sec", "Step 1: Select check-in");
   }
 
   if (!checkOut) {
-    return "2. adim: Cikis tarihini sec";
+    return pickLocalized(locale, "2. adim: Cikis tarihini sec", "Step 2: Select check-out");
   }
 
-  return "Secim tamamlandi";
+  return pickLocalized(locale, "Secim tamamlandi", "Selection complete");
 }
 
 function getModalHeading(
@@ -75,19 +80,24 @@ function getModalHeading(
   },
   checkIn: string,
   checkOut: string,
+  locale: AppLocale,
 ) {
   if (availability.status === "available") {
-    return `${availability.nightCount} gece`;
+    return pickLocalized(locale, `${availability.nightCount} gece`, `${availability.nightCount} nights`);
   }
 
   if (checkIn && !checkOut) {
-    return "Cikis tarihini sec";
+    return pickLocalized(locale, "Cikis tarihini sec", "Select check-out");
   }
 
-  return "Tarih sec";
+  return pickLocalized(locale, "Tarih sec", "Select dates");
 }
 
-export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
+export function VillaAvailabilityCard({
+  villa,
+  locale = "tr",
+}: AvailabilityCardProps) {
+  const localizedVilla = useMemo(() => getLocalizedVilla(villa, locale), [locale, villa]);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [visibleMonth, setVisibleMonth] = useState(() => getStartOfMonth(new Date()));
@@ -98,16 +108,23 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
     () => [visibleMonth, addMonths(visibleMonth, 1)],
     [visibleMonth],
   );
+  const weekdayLabels = useMemo(
+    () =>
+      locale === "en"
+        ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        : ["Pzt", "Sal", "Car", "Per", "Cum", "Cmt", "Paz"],
+    [locale],
+  );
 
   function canSelectCheckIn(dateKey: string) {
-    return dateKey >= today && !isBlockedStayDate(dateKey, villa.availabilityRanges);
+    return dateKey >= today && !isBlockedStayDate(dateKey, localizedVilla.availabilityRanges);
   }
 
   function canSelectCheckOut(dateKey: string) {
     return (
       Boolean(checkIn) &&
       dateKey > checkIn &&
-      isBookableRange(checkIn, dateKey, villa.availabilityRanges)
+      isBookableRange(checkIn, dateKey, localizedVilla.availabilityRanges)
     );
   }
 
@@ -153,8 +170,11 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
     if (!checkIn || !checkOut) {
       return {
         status: "idle" as const,
-        message:
+        message: pickLocalized(
+          locale,
           "Takvimden once giris, sonra cikis tarihini sec. Dolu veya kapali gunler secilemez.",
+          "Select check-in first, then check-out. Reserved or unavailable days cannot be selected.",
+        ),
         blockedRange: null as AvailabilityRange | null,
         nightCount: 0,
       };
@@ -165,20 +185,32 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
     if (nightCount <= 0) {
       return {
         status: "invalid" as const,
-        message: "Cikis tarihi, giris tarihinden sonra olmalidir.",
+        message: pickLocalized(
+          locale,
+          "Cikis tarihi, giris tarihinden sonra olmalidir.",
+          "Check-out must be after check-in.",
+        ),
         blockedRange: null,
         nightCount: 0,
       };
     }
 
-    const blockedRange = findBlockedRange(checkIn, checkOut, villa.availabilityRanges);
+    const blockedRange = findBlockedRange(checkIn, checkOut, localizedVilla.availabilityRanges);
 
     if (blockedRange) {
       return {
         status: "blocked" as const,
-        message: `${formatShortDate(blockedRange.startDate)} - ${formatShortDate(
-          blockedRange.endDate,
-        )} araliginda ${blockedRange.label.toLowerCase()} bulunuyor.`,
+        message: pickLocalized(
+          locale,
+          `${formatShortDate(blockedRange.startDate, locale)} - ${formatShortDate(
+            blockedRange.endDate,
+            locale,
+          )} araliginda ${getLocalizedAvailabilityLabel(blockedRange, locale).toLowerCase()} bulunuyor.`,
+          `${getLocalizedAvailabilityLabel(blockedRange, locale)} exists between ${formatShortDate(
+            blockedRange.startDate,
+            locale,
+          )} and ${formatShortDate(blockedRange.endDate, locale)}.`,
+        ),
         blockedRange,
         nightCount,
       };
@@ -186,11 +218,15 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
 
     return {
       status: "available" as const,
-      message: `${nightCount} gecelik secim icin villa uygun gorunuyor.`,
+      message: pickLocalized(
+        locale,
+        `${nightCount} gecelik secim icin villa uygun gorunuyor.`,
+        `The villa appears available for a ${nightCount}-night stay.`,
+      ),
       blockedRange: null,
       nightCount,
     };
-  }, [checkIn, checkOut, villa.availabilityRanges]);
+  }, [checkIn, checkOut, locale, localizedVilla.availabilityRanges]);
 
   const statusClasses =
     availability.status === "available"
@@ -201,27 +237,27 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
 
   const requestHref =
     availability.status === "available"
-      ? `/talep?villa=${villa.slug}&checkIn=${checkIn}&checkOut=${checkOut}`
+      ? `/talep?villa=${localizedVilla.slug}&checkIn=${checkIn}&checkOut=${checkOut}`
       : null;
 
-  const selectionStep = getSelectionStep(checkIn, checkOut);
-  const modalHeading = getModalHeading(availability, checkIn, checkOut);
+  const selectionStep = getSelectionStep(checkIn, checkOut, locale);
+  const modalHeading = getModalHeading(availability, checkIn, checkOut, locale);
 
   return (
     <>
-      <div className="rounded-[2rem] border border-black/6 bg-white p-5 text-[var(--color-ink)] shadow-[0_20px_50px_rgba(15,23,42,0.08)]">
+      <div className="rounded-[14px] border border-black/6 bg-white p-5 text-[var(--color-ink)] shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Rezervasyon Takvimi
+              {pickLocalized(locale, "Rezervasyon Takvimi", "Reservation Calendar")}
             </p>
             <p className="mt-2 font-display text-[1.85rem] font-semibold tracking-[-0.04em] text-slate-950">
-              Tarih secerek devam et
+              {pickLocalized(locale, "Tarih secerek devam et", "Continue by selecting dates")}
             </p>
           </div>
           {availability.nightCount > 0 ? (
-            <span className="rounded-full bg-[var(--color-coral-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--color-coral)]">
-              {availability.nightCount} gece
+            <span className="rounded-[8px] bg-[var(--color-coral-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--color-coral)]">
+              {availability.nightCount} {pickLocalized(locale, "gece", "nights")}
             </span>
           ) : null}
         </div>
@@ -235,10 +271,12 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
             }`}
           >
             <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Giris
+              {pickLocalized(locale, "Giris", "Check-in")}
             </span>
             <span className="mt-2 block text-base font-semibold text-slate-900">
-              {checkIn ? formatShortDate(checkIn) : "Tarih sec"}
+              {checkIn
+                ? formatShortDate(checkIn, locale)
+                : pickLocalized(locale, "Tarih sec", "Select date")}
             </span>
           </button>
 
@@ -250,10 +288,12 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
             }`}
           >
             <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Cikis
+              {pickLocalized(locale, "Cikis", "Check-out")}
             </span>
             <span className="mt-2 block text-base font-semibold text-slate-900">
-              {checkOut ? formatShortDate(checkOut) : "Tarih sec"}
+              {checkOut
+                ? formatShortDate(checkOut, locale)
+                : pickLocalized(locale, "Tarih sec", "Select date")}
             </span>
           </button>
         </div>
@@ -262,11 +302,11 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
           <button
             type="button"
             onClick={() => setIsCalendarOpen(true)}
-            className="inline-flex rounded-full border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+            className="inline-flex rounded-[10px] border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
           >
-            Takvimi Ac
+            {pickLocalized(locale, "Takvimi Ac", "Open Calendar")}
           </button>
-          <span className="rounded-full bg-[var(--color-slate-soft)] px-3 py-1.5 text-xs font-semibold text-slate-600">
+          <span className="rounded-[8px] bg-[var(--color-slate-soft)] px-3 py-1.5 text-xs font-semibold text-slate-600">
             {selectionStep}
           </span>
           {(checkIn || checkOut) && (
@@ -275,7 +315,7 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
               onClick={clearAll}
               className="ml-auto text-sm font-semibold text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
             >
-              Tarihleri temizle
+              {pickLocalized(locale, "Tarihleri temizle", "Clear dates")}
             </button>
           )}
         </div>
@@ -287,18 +327,18 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="rounded-[1.2rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm text-slate-600">
             <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Minimum gece
+              {pickLocalized(locale, "Minimum gece", "Minimum nights")}
             </span>
             <span className="mt-2 block font-semibold text-slate-900">
-              {villa.minNightCount ?? 1} gece
+              {localizedVilla.minNightCount ?? 1} {pickLocalized(locale, "gece", "nights")}
             </span>
           </div>
           <div className="rounded-[1.2rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm text-slate-600">
             <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Temizlik
+              {pickLocalized(locale, "Temizlik", "Cleaning")}
             </span>
             <span className="mt-2 block font-semibold text-slate-900">
-              {formatCurrency(villa.cleaningFee ?? 0)}
+              {formatCurrency(localizedVilla.cleaningFee ?? 0, locale)}
             </span>
           </div>
         </div>
@@ -307,20 +347,24 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
           {requestHref ? (
             <Link
               href={requestHref}
-              className="rounded-full bg-slate-950 px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[var(--color-teal)]"
+              className="rounded-[10px] bg-slate-950 px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[var(--color-teal)]"
             >
-              Bu Tarihler Icin Talep Gonder
+              {pickLocalized(locale, "Bu Tarihler Icin Talep Gonder", "Send Inquiry for These Dates")}
             </Link>
           ) : (
-            <span className="rounded-full bg-slate-200 px-5 py-3 text-center text-sm font-semibold text-slate-600">
-              Uygun Giris ve Cikis Tarihi Sec
+            <span className="rounded-[10px] bg-slate-200 px-5 py-3 text-center text-sm font-semibold text-slate-600">
+              {pickLocalized(
+                locale,
+                "Uygun Giris ve Cikis Tarihi Sec",
+                "Select Valid Check-in and Check-out Dates",
+              )}
             </span>
           )}
           <Link
             href="/iletisim"
-            className="rounded-full border border-slate-300 px-5 py-3 text-center text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+            className="rounded-[10px] border border-slate-300 px-5 py-3 text-center text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
           >
-            Destek Al
+            {pickLocalized(locale, "Destek Al", "Get Support")}
           </Link>
         </div>
       </div>
@@ -332,7 +376,7 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
         >
           <div className="flex min-h-full items-center justify-center">
             <div
-              className="w-full max-w-5xl rounded-[2.2rem] border border-black/6 bg-white p-5 shadow-2xl shadow-slate-950/25 sm:p-6"
+              className="w-full max-w-5xl rounded-[14px] border border-black/6 bg-white p-5 shadow-2xl shadow-slate-950/25 sm:p-6"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
@@ -341,8 +385,10 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                     {modalHeading}
                   </p>
                   <p className="mt-2 text-sm text-slate-500">
-                    {checkIn ? formatShortDate(checkIn) : "Giris"}{" "}
-                    {checkOut ? `- ${formatShortDate(checkOut)}` : ""}
+                    {checkIn
+                      ? formatShortDate(checkIn, locale)
+                      : pickLocalized(locale, "Giris", "Check-in")}{" "}
+                    {checkOut ? `- ${formatShortDate(checkOut, locale)}` : ""}
                   </p>
                 </div>
 
@@ -355,17 +401,19 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                          Giris
+                          {pickLocalized(locale, "Giris", "Check-in")}
                         </p>
                         <p className="mt-2 text-base font-semibold text-slate-900">
-                          {checkIn ? formatShortDate(checkIn) : "Tarih sec"}
+                          {checkIn
+                            ? formatShortDate(checkIn, locale)
+                            : pickLocalized(locale, "Tarih sec", "Select date")}
                         </p>
                       </div>
                       {checkIn ? (
                         <button
                           type="button"
                           onClick={clearCheckIn}
-                          className="rounded-full px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                          className="rounded-[8px] px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                         >
                           x
                         </button>
@@ -381,17 +429,19 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                          Cikis
+                          {pickLocalized(locale, "Cikis", "Check-out")}
                         </p>
                         <p className="mt-2 text-base font-semibold text-slate-900">
-                          {checkOut ? formatShortDate(checkOut) : "Tarih sec"}
+                          {checkOut
+                            ? formatShortDate(checkOut, locale)
+                            : pickLocalized(locale, "Tarih sec", "Select date")}
                         </p>
                       </div>
                       {checkOut ? (
                         <button
                           type="button"
                           onClick={clearCheckOut}
-                          className="rounded-full px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                          className="rounded-[8px] px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                         >
                           x
                         </button>
@@ -406,16 +456,16 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                   type="button"
                   disabled={visibleMonth <= currentMonth}
                   onClick={() => setVisibleMonth((current) => addMonths(current, -1))}
-                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-900 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300"
+                  className="rounded-[10px] border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-900 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300"
                 >
-                  Geri
+                  {pickLocalized(locale, "Geri", "Back")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setVisibleMonth((current) => addMonths(current, 1))}
-                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-900 hover:text-slate-900"
+                  className="rounded-[10px] border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-900 hover:text-slate-900"
                 >
-                  Ileri
+                  {pickLocalized(locale, "Ileri", "Next")}
                 </button>
               </div>
 
@@ -423,7 +473,7 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                 {visibleMonths.map((monthDate) => (
                   <div key={`${monthDate.getFullYear()}-${monthDate.getMonth()}`}>
                     <p className="text-center text-2xl font-semibold text-slate-900">
-                      {getMonthLabel(monthDate)}
+                      {getMonthLabel(monthDate, locale)}
                     </p>
 
                     <div className="mt-6 grid grid-cols-7 gap-2 text-center text-xs font-medium text-slate-500">
@@ -445,7 +495,10 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                         const isInRange = Boolean(
                           checkIn && checkOut && dateKey > checkIn && dateKey < checkOut,
                         );
-                        const isBlocked = isBlockedStayDate(dateKey, villa.availabilityRanges);
+                        const isBlocked = isBlockedStayDate(
+                          dateKey,
+                          localizedVilla.availabilityRanges,
+                        );
                         const isDisabled =
                           !checkIn || checkOut
                             ? !canSelectCheckIn(dateKey)
@@ -471,14 +524,18 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                                   : "border-transparent bg-white text-slate-900 hover:bg-slate-100";
 
                         const title = isSelectedStart
-                          ? "Secilen giris tarihi"
+                          ? pickLocalized(locale, "Secilen giris tarihi", "Selected check-in date")
                           : isSelectedEnd
-                            ? "Secilen cikis tarihi"
+                            ? pickLocalized(locale, "Secilen cikis tarihi", "Selected check-out date")
                             : isVisuallyBlocked
-                              ? "Bu gun dolu veya kapali"
+                              ? pickLocalized(locale, "Bu gun dolu veya kapali", "This day is reserved or unavailable")
                               : isDisabled && checkIn && !checkOut && dateKey > checkIn
-                                ? "Bu cikis tarihi secilen aralikta uygun degil"
-                                : "Bu tarihi sec";
+                                ? pickLocalized(
+                                    locale,
+                                    "Bu cikis tarihi secilen aralikta uygun degil",
+                                    "This check-out date is not valid for the selected range",
+                                  )
+                                : pickLocalized(locale, "Bu tarihi sec", "Select this date");
 
                         return (
                           <button
@@ -501,16 +558,16 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
               <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-500">
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full bg-slate-900" />
-                    Secilen gun
+                    <span className="h-3 w-3 rounded-[3px] bg-slate-900" />
+                    {pickLocalized(locale, "Secilen gun", "Selected day")}
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full bg-slate-100" />
-                    Secilen aralik
+                    <span className="h-3 w-3 rounded-[3px] bg-slate-100" />
+                    {pickLocalized(locale, "Secilen aralik", "Selected range")}
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full border border-slate-300 bg-white" />
-                    Uygun gun
+                    <span className="h-3 w-3 rounded-[3px] border border-slate-300 bg-white" />
+                    {pickLocalized(locale, "Uygun gun", "Available day")}
                   </span>
                 </div>
 
@@ -520,14 +577,14 @@ export function VillaAvailabilityCard({ villa }: AvailabilityCardProps) {
                     onClick={clearAll}
                     className="text-sm font-semibold text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
-                    Tarihleri temizle
+                    {pickLocalized(locale, "Tarihleri temizle", "Clear dates")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsCalendarOpen(false)}
-                    className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    className="rounded-[10px] bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
                   >
-                    Kapat
+                    {pickLocalized(locale, "Kapat", "Close")}
                   </button>
                 </div>
               </div>

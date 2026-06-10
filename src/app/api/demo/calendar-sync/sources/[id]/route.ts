@@ -21,6 +21,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const payload = (await request.json()) as {
       active?: boolean;
       status?: DemoCalendarSourceStatus;
+      sourceUrl?: string;
     };
 
     if (
@@ -30,7 +31,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new DemoCalendarSyncStoreError("Gecerli bir kaynak durumu secilmelidir.");
     }
 
-    if (payload.active === undefined && payload.status === undefined) {
+    if (
+      payload.active === undefined &&
+      payload.status === undefined &&
+      payload.sourceUrl === undefined
+    ) {
       throw new DemoCalendarSyncStoreError("Guncellenecek en az bir alan secilmelidir.");
     }
 

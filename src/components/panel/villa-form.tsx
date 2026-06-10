@@ -57,6 +57,40 @@ const seoFields = [
   },
 ];
 
+const englishContentFields = [
+  { name: "titleEn", label: "Villa basligi (EN)", placeholder: "Villa Soleia Lagoon" },
+  { name: "badgeEn", label: "Vitrin etiketi (EN)", placeholder: "Sea view" },
+  { name: "categoryEn", label: "Kategori (EN)", placeholder: "Luxury with a view" },
+  { name: "poolTypeEn", label: "Havuz tipi (EN)", placeholder: "Infinity pool" },
+];
+
+const englishSeoFields = [
+  {
+    name: "seoTitleEn",
+    label: "SEO basligi (EN)",
+    placeholder: "Luxury sea-view villa in Kalkan | VillaVera",
+    helper: "Ingilizce arama sonuclari icin baslik karsiligi.",
+  },
+  {
+    name: "seoDescriptionEn",
+    label: "Meta aciklama (EN)",
+    placeholder: "A premium sea-view villa in Kalkan with a private pool and refined stay experience.",
+    helper: "Ingilizce meta aciklama; 140-160 karakter arasi idealdir.",
+  },
+  {
+    name: "focusKeywordEn",
+    label: "Odak anahtar kelime (EN)",
+    placeholder: "sea-view villa in Kalkan",
+    helper: "Ingilizce SEO kurgusuyla uyumlu ana kelime gir.",
+  },
+  {
+    name: "coverAltEn",
+    label: "Kapak gorseli alt metni (EN)",
+    placeholder: "Sea-view villa pool and terrace in Kalkan",
+    helper: "Kapak gorselini Ingilizce ve dogal bir dille tarif et.",
+  },
+];
+
 function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 }
@@ -289,6 +323,60 @@ export function VillaForm() {
               className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
             />
           </div>
+
+          <div className="md:col-span-2 mt-2 rounded-[1.5rem] border border-slate-200 bg-[var(--color-soft-white)] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Ingilizce Icerik
+            </p>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              Public tarafta dil `EN` secildiginde gosterilecek alanlar.
+            </p>
+
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              {englishContentFields.map((field) => (
+                <div key={field.name}>
+                  <label htmlFor={field.name} className="text-sm font-medium text-slate-700">
+                    {field.label}
+                  </label>
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    required
+                    placeholder={field.placeholder}
+                    className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                  />
+                </div>
+              ))}
+
+              <div className="md:col-span-2">
+                <label htmlFor="shortDescriptionEn" className="text-sm font-medium text-slate-700">
+                  Kisa aciklama (EN)
+                </label>
+                <textarea
+                  id="shortDescriptionEn"
+                  name="shortDescriptionEn"
+                  rows={3}
+                  required
+                  placeholder="Panoramic sea views, an infinity pool and a premium stay for up to 8 guests."
+                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label htmlFor="descriptionEn" className="text-sm font-medium text-slate-700">
+                  Detayli aciklama (EN)
+                </label>
+                <textarea
+                  id="descriptionEn"
+                  name="descriptionEn"
+                  rows={5}
+                  required
+                  placeholder="Long English copy for the villa detail page."
+                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -404,6 +492,40 @@ export function VillaForm() {
                 <p className="mt-2 text-xs leading-6 text-slate-500">{field.helper}</p>
               </div>
             ))}
+
+            <div className="rounded-[1.5rem] border border-slate-200 bg-[var(--color-soft-white)] p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                Ingilizce SEO
+              </p>
+              <div className="mt-5 space-y-5">
+                {englishSeoFields.map((field) => (
+                  <div key={field.name}>
+                    <label htmlFor={field.name} className="text-sm font-medium text-slate-700">
+                      {field.label}
+                    </label>
+                    {field.name === "seoDescriptionEn" ? (
+                      <textarea
+                        id={field.name}
+                        name={field.name}
+                        required
+                        rows={4}
+                        placeholder={field.placeholder}
+                        className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                      />
+                    ) : (
+                      <input
+                        id={field.name}
+                        name={field.name}
+                        required
+                        placeholder={field.placeholder}
+                        className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                      />
+                    )}
+                    <p className="mt-2 text-xs leading-6 text-slate-500">{field.helper}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 

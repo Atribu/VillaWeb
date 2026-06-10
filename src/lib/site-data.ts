@@ -1,11 +1,135 @@
-export const navigation = [
-  { href: "/", label: "Ana Sayfa" },
-  { href: "/villalar", label: "Villalar" },
-  { href: "/kampanyalar", label: "Kampanyalar" },
-  { href: "/hakkimizda", label: "Hakkimizda" },
-  { href: "/blog", label: "Blog" },
-  { href: "/iletisim", label: "Iletisim" },
-];
+import type { AppLocale } from "@/lib/i18n";
+import { pickLocalized } from "@/lib/i18n";
+
+export function getNavigation(locale: AppLocale) {
+  return [
+    { href: "/", label: pickLocalized(locale, "Ana Sayfa", "Home") },
+    { href: "/villalar", label: pickLocalized(locale, "Villalar", "Villas") },
+    { href: "/kampanyalar", label: pickLocalized(locale, "Kampanyalar", "Campaigns") },
+    { href: "/hakkimizda", label: pickLocalized(locale, "Hakkimizda", "About") },
+    { href: "/blog", label: "Blog" },
+    { href: "/iletisim", label: pickLocalized(locale, "Iletisim", "Contact") },
+  ];
+}
+
+export function getCampaignCards(locale: AppLocale) {
+  return [
+    {
+      title: pickLocalized(locale, "Erken Rezervasyon Avantaji", "Early Booking Advantage"),
+      description: pickLocalized(
+        locale,
+        "Belirli tarih araliklarinda secili villalarda yuzde bazli kampanya gosterimi.",
+        "Percentage-based campaigns for selected villas within specific date ranges.",
+      ),
+      value: pickLocalized(locale, "%15 indirim", "15% off"),
+    },
+    {
+      title: pickLocalized(locale, "7 Gece ve Uzeri Konaklama", "Stays of 7 Nights or More"),
+      description: pickLocalized(
+        locale,
+        "Uzun konaklamalarda gece basi maliyeti asagi ceken otomatik sezon kampanyalari.",
+        "Automatic seasonal campaigns that lower the nightly cost on longer stays.",
+      ),
+      value: pickLocalized(locale, "Ek gece avantaji", "Extended stay benefit"),
+    },
+    {
+      title: pickLocalized(locale, "Ozel Kupon Kodu", "Exclusive Coupon Code"),
+      description: pickLocalized(
+        locale,
+        "Panelden tanimlanan kodlarla belirli villa veya donemlerde kupon kullandirimi.",
+        "Coupon discounts that can be applied to selected villas or date ranges through panel-defined codes.",
+      ),
+      value: pickLocalized(locale, "Kod ile indirim", "Discount by code"),
+    },
+  ];
+}
+
+export function getFaqItems(locale: AppLocale) {
+  return [
+    {
+      question: pickLocalized(locale, "Odeme alani ne zaman eklenecek?", "When will online payments be added?"),
+      answer: pickLocalized(
+        locale,
+        "Ilk fazda kullanici talep ve randevu formu ile ilerleyecek. Odeme modulu ikinci fazda eklenmek uzere planlandi.",
+        "In the first phase, users continue with inquiry and appointment flows. The payment module is planned for the second phase.",
+      ),
+    },
+    {
+      question: pickLocalized(locale, "Indirimli fiyatlar nasil gosterilecek?", "How will discounted prices be displayed?"),
+      answer: pickLocalized(
+        locale,
+        "Aktif kampanya oldugunda eski fiyat ustu cizili gorunecek, yeni fiyat vurgulu kutu icinde sunulacak.",
+        "When a campaign is active, the old price appears struck through and the discounted price is highlighted.",
+      ),
+    },
+    {
+      question: pickLocalized(locale, "Bir villaya olan ilgi nasil izlenecek?", "How is interest in a villa tracked?"),
+      answer: pickLocalized(
+        locale,
+        "Villa detay sayfasindaki goruntulenmeler, talepler ve gelir verileri panelde villa bazli raporlanacak.",
+        "Views, inquiries and revenue data from each villa detail page are reported in the panel on a villa basis.",
+      ),
+    },
+  ];
+}
+
+export function getBlogPreview(locale: AppLocale) {
+  return [
+    {
+      title: pickLocalized(
+        locale,
+        "Kalkan'da Villa Tatili Planlarken Dikkat Edilecek 7 Nokta",
+        "7 Things to Consider When Planning a Villa Holiday in Kalkan",
+      ),
+      category: pickLocalized(locale, "Bolge Rehberi", "Destination Guide"),
+    },
+    {
+      title: pickLocalized(
+        locale,
+        "Balayi Ciftleri Icin En Dogru Villa Nasil Secilir?",
+        "How Should Honeymoon Couples Choose the Right Villa?",
+      ),
+      category: pickLocalized(locale, "Tatil Rehberi", "Travel Guide"),
+    },
+    {
+      title: pickLocalized(
+        locale,
+        "Kalabalik Aileler Icin Havuzlu Villa Secim Rehberi",
+        "Pool Villa Selection Guide for Large Families",
+      ),
+      category: pickLocalized(locale, "Aile Tatili", "Family Holidays"),
+    },
+  ];
+}
+
+export function getHomeTestimonials(locale: AppLocale) {
+  return [
+    {
+      name: "Elif & Mert",
+      text: pickLocalized(
+        locale,
+        "Secim sureci cok daha netti. Villa detaylarini gorup direkt tarih secerek hizli ilerledik.",
+        "The decision process felt much clearer. We reviewed villa details and moved forward quickly by selecting the dates right away.",
+      ),
+    },
+    {
+      name: "Seda K.",
+      text: pickLocalized(
+        locale,
+        "Aradigimiz bolgeyi ve villa tipini bulmak cok kolay oldu. Site yorucu hissettirmiyor.",
+        "It was very easy to find the region and villa type we wanted. The site never feels exhausting.",
+      ),
+    },
+    {
+      name: "Caner A.",
+      text: pickLocalized(
+        locale,
+        "Talep gonderdikten sonra ekip cok hizli donus yapti. Guven veren bir deneyimdi.",
+        "After sending our inquiry, the team responded very quickly. It was a reassuring experience.",
+      ),
+    },
+  ];
+}
 
 export const featuredVillas = [
   {
@@ -53,75 +177,6 @@ export const categoryHighlights = [
   {
     title: "Luks Manzarali Villalar",
     text: "Gun batimi, deniz ve doga manzarasini bir araya getiren premium secenekler.",
-  },
-];
-
-export const campaignCards = [
-  {
-    title: "Erken Rezervasyon Avantaji",
-    description:
-      "Belirli tarih araliklarinda secili villalarda yuzde bazli kampanya gosterimi.",
-    value: "%15 indirim",
-  },
-  {
-    title: "7 Gece ve Uzeri Konaklama",
-    description:
-      "Uzun konaklamalarda gece basi maliyeti asagi ceken otomatik sezon kampanyalari.",
-    value: "Ek gece avantajı",
-  },
-  {
-    title: "Ozel Kupon Kodu",
-    description:
-      "Panelden tanimlanan kodlarla belirli villa veya donemlerde kupon kullandirimi.",
-    value: "Kod ile indirim",
-  },
-];
-
-export const faqItems = [
-  {
-    question: "Odeme alani ne zaman eklenecek?",
-    answer:
-      "Ilk fazda kullanici talep ve randevu formu ile ilerleyecek. Odeme modulu ikinci fazda eklenmek uzere planlandi.",
-  },
-  {
-    question: "Indirimli fiyatlar nasil gosterilecek?",
-    answer:
-      "Aktif kampanya oldugunda eski fiyat ustu cizili gorunecek, yeni fiyat vurgulu kutu icinde sunulacak.",
-  },
-  {
-    question: "Bir villaya olan ilgi nasil izlenecek?",
-    answer:
-      "Villa detay sayfasindaki goruntulenmeler, talepler ve gelir verileri panelde villa bazli raporlanacak.",
-  },
-];
-
-export const blogPreview = [
-  {
-    title: "Kalkan'da Villa Tatili Planlarken Dikkat Edilecek 7 Nokta",
-    category: "Bolge Rehberi",
-  },
-  {
-    title: "Balayi Ciftleri Icin En Dogru Villa Nasil Secilir?",
-    category: "Tatil Rehberi",
-  },
-  {
-    title: "Kalabalik Aileler Icin Havuzlu Villa Secim Rehberi",
-    category: "Aile Tatili",
-  },
-];
-
-export const contactBlocks = [
-  {
-    title: "Telefon",
-    value: "+90 850 000 00 00",
-  },
-  {
-    title: "E-posta",
-    value: "merhaba@villavera.com",
-  },
-  {
-    title: "WhatsApp",
-    value: "+90 555 000 00 00",
   },
 ];
 

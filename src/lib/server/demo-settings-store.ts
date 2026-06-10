@@ -11,11 +11,13 @@ import type {
 import { resolvePanelCompanyId, assertPanelCompanyAccess } from "@/lib/server/demo-company-context";
 import { decimalToNumber, getDefaultCompanyId, iso } from "@/lib/server/prisma-demo-shared";
 import {
+  createFallbackPaymentMethod,
   getFallbackCacheGroups,
   getFallbackCurrencyRates,
   getFallbackDocuments,
   getFallbackPaymentMethods,
   getFallbackSystemDefaults,
+  updateFallbackPaymentMethod,
 } from "@/lib/server/development-fallback-data";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
@@ -81,6 +83,103 @@ export async function getDemoPaymentMethods() {
       }));
     },
     async () => getFallbackPaymentMethods(await resolveSettingsCompanyId()),
+  );
+}
+
+export async function createDemoPaymentMethod(input: {
+  label: string;
+  provider: string;
+  feePercent: number;
+  settlementDays: number;
+  status: DemoPaymentMethodStatus;
+  supportsInstallment: boolean;
+  note?: string;
+}) {
+  const companyId = await resolveSettingsCompanyId();
+
+  if (!companyId) {
+    throw new DemoSettingsStoreError("Odeme yontemi icin aktif firma bulunamadi.");
+  }
+
+  const label = input.label.trim();
+  const provider = input.provider.trim();
+  const note = input.note?.trim() ?? "";
+
+  if (!label || !provider) {
+    throw new DemoSettingsStoreError("Odeme yontemi etiketi ve saglayici bilgisi zorunludur.");
+  }
+
+  if (input.feePercent < 0) {
+    throw new DemoSettingsStoreError("Komisyon orani negatif olamaz.");
+  }
+
+  if (!Number.isInteger(input.settlementDays) || input.settlementDays < 0) {
+    throw new DemoSettingsStoreError("Valör gunu sifir veya daha buyuk bir tam sayi olmalidir.");
+  }
+
+  return withDevelopmentFallback(
+    async () => {
+      const existing = await db.paymentMethod.findFirst({
+        where: {
+          companyId,
+          label,
+        },
+        select: { id: true },
+      });
+
+      if (existing) {
+        throw new DemoSettingsStoreError("Bu firma icin ayni isimde bir odeme yontemi zaten var.");
+      }
+
+      const method = await db.paymentMethod.create({
+        data: {
+          companyId,
+          label,
+          provider,
+          feePercent: input.feePercent,
+          settlementDays: input.settlementDays,
+          status: input.status,
+          supportsInstallment: input.supportsInstallment,
+          note,
+        },
+      });
+
+      return {
+        id: method.id,
+        label: method.label,
+        provider: method.provider,
+        feePercent: decimalToNumber(method.feePercent),
+        settlementDays: method.settlementDays,
+        status: method.status satisfies DemoPaymentMethodStatus,
+        supportsInstallment: method.supportsInstallment,
+        note: method.note ?? "",
+        updatedAt: iso(method.updatedAt),
+      };
+    },
+    async () => {
+      const method = await createFallbackPaymentMethod({
+        companyId,
+        label,
+        provider,
+        feePercent: input.feePercent,
+        settlementDays: input.settlementDays,
+        status: input.status,
+        supportsInstallment: input.supportsInstallment,
+        note,
+      });
+
+      return {
+        id: method.id,
+        label: method.label,
+        provider: method.provider,
+        feePercent: method.feePercent,
+        settlementDays: method.settlementDays,
+        status: method.status,
+        supportsInstallment: method.supportsInstallment,
+        note: method.note,
+        updatedAt: method.updatedAt,
+      };
+    },
   );
 }
 
@@ -229,43 +328,122 @@ export async function updateDemoCurrencyRate(
 export async function updateDemoPaymentMethod(
   paymentMethodId: string,
   input: {
+    label?: string;
+    provider?: string;
     status?: DemoPaymentMethodStatus;
     feePercent?: number;
+    settlementDays?: number;
+    supportsInstallment?: boolean;
+    note?: string;
   },
 ) {
-  const current = await db.paymentMethod.findUnique({
-    where: { id: paymentMethodId },
-  });
-
-  if (!current) {
-    throw new DemoSettingsStoreError("Odeme yontemi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
   if (input.feePercent !== undefined && input.feePercent < 0) {
     throw new DemoSettingsStoreError("Komisyon orani negatif olamaz.");
   }
 
-  const method = await db.paymentMethod.update({
-    where: { id: paymentMethodId },
-    data: {
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.feePercent !== undefined ? { feePercent: input.feePercent } : {}),
-    },
-  });
+  if (input.settlementDays !== undefined && (!Number.isInteger(input.settlementDays) || input.settlementDays < 0)) {
+    throw new DemoSettingsStoreError("Valör gunu sifir veya daha buyuk bir tam sayi olmalidir.");
+  }
 
-  return {
-    id: method.id,
-    label: method.label,
-    provider: method.provider,
-    feePercent: decimalToNumber(method.feePercent),
-    settlementDays: method.settlementDays,
-    status: method.status satisfies DemoPaymentMethodStatus,
-    supportsInstallment: method.supportsInstallment,
-    note: method.note ?? "",
-    updatedAt: iso(method.updatedAt),
-  };
+  const nextLabel = input.label?.trim();
+  const nextProvider = input.provider?.trim();
+
+  if (nextLabel !== undefined && !nextLabel) {
+    throw new DemoSettingsStoreError("Odeme yontemi etiketi bos birakilamaz.");
+  }
+
+  if (nextProvider !== undefined && !nextProvider) {
+    throw new DemoSettingsStoreError("Saglayici bilgisi bos birakilamaz.");
+  }
+
+  return withDevelopmentFallback(
+    async () => {
+      const current = await db.paymentMethod.findUnique({
+        where: { id: paymentMethodId },
+      });
+
+      if (!current) {
+        throw new DemoSettingsStoreError("Odeme yontemi bulunamadi.");
+      }
+
+      await assertPanelCompanyAccess(current.companyId);
+
+      if (nextLabel && nextLabel !== current.label) {
+        const existing = await db.paymentMethod.findFirst({
+          where: {
+            companyId: current.companyId,
+            label: nextLabel,
+            NOT: { id: current.id },
+          },
+          select: { id: true },
+        });
+
+        if (existing) {
+          throw new DemoSettingsStoreError("Bu firma icin ayni isimde bir odeme yontemi zaten var.");
+        }
+      }
+
+      const method = await db.paymentMethod.update({
+        where: { id: paymentMethodId },
+        data: {
+          ...(nextLabel !== undefined ? { label: nextLabel } : {}),
+          ...(nextProvider !== undefined ? { provider: nextProvider } : {}),
+          ...(input.status ? { status: input.status } : {}),
+          ...(input.feePercent !== undefined ? { feePercent: input.feePercent } : {}),
+          ...(input.settlementDays !== undefined ? { settlementDays: input.settlementDays } : {}),
+          ...(input.supportsInstallment !== undefined
+            ? { supportsInstallment: input.supportsInstallment }
+            : {}),
+          ...(input.note !== undefined ? { note: input.note.trim() } : {}),
+        },
+      });
+
+      return {
+        id: method.id,
+        label: method.label,
+        provider: method.provider,
+        feePercent: decimalToNumber(method.feePercent),
+        settlementDays: method.settlementDays,
+        status: method.status satisfies DemoPaymentMethodStatus,
+        supportsInstallment: method.supportsInstallment,
+        note: method.note ?? "",
+        updatedAt: iso(method.updatedAt),
+      };
+    },
+    async () => {
+      const current = (await getFallbackPaymentMethods()).find((item) => item.id === paymentMethodId);
+
+      if (!current) {
+        throw new DemoSettingsStoreError("Odeme yontemi bulunamadi.");
+      }
+
+      await assertPanelCompanyAccess(current.companyId);
+
+      const method = await updateFallbackPaymentMethod(paymentMethodId, {
+        ...(nextLabel !== undefined ? { label: nextLabel } : {}),
+        ...(nextProvider !== undefined ? { provider: nextProvider } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.feePercent !== undefined ? { feePercent: input.feePercent } : {}),
+        ...(input.settlementDays !== undefined ? { settlementDays: input.settlementDays } : {}),
+        ...(input.supportsInstallment !== undefined
+          ? { supportsInstallment: input.supportsInstallment }
+          : {}),
+        ...(input.note !== undefined ? { note: input.note } : {}),
+      });
+
+      return {
+        id: method.id,
+        label: method.label,
+        provider: method.provider,
+        feePercent: method.feePercent,
+        settlementDays: method.settlementDays,
+        status: method.status,
+        supportsInstallment: method.supportsInstallment,
+        note: method.note,
+        updatedAt: method.updatedAt,
+      };
+    },
+  );
 }
 
 export async function updateDemoCacheGroup(

@@ -55,15 +55,20 @@ export async function resolvePanelCompanyId(input?: {
   companyId?: string | null;
   includeAll?: boolean;
 }) {
-  if (input?.includeAll) {
+  const scope = await getPanelCompanyScope();
+
+  if (scope.isSuperAdmin) {
+    if (input?.includeAll) {
+      return null;
+    }
+
+    if (input?.companyId !== undefined) {
+      return input.companyId;
+    }
+
     return null;
   }
 
-  if (input?.companyId !== undefined) {
-    return input.companyId;
-  }
-
-  const scope = await getPanelCompanyScope();
   return scope.companyId;
 }
 

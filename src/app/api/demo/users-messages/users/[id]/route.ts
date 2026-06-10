@@ -29,6 +29,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const payload = (await request.json()) as {
       status?: DemoTeamUserStatus;
       roleId?: DemoRoleId;
+      branchId?: string;
+      responsibility?: string;
     };
 
     if (
@@ -45,7 +47,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new DemoUsersMessagesStoreError("Gecerli bir rol secilmelidir.");
     }
 
-    if (payload.status === undefined && payload.roleId === undefined) {
+    if (
+      payload.status === undefined &&
+      payload.roleId === undefined &&
+      payload.branchId === undefined &&
+      payload.responsibility === undefined
+    ) {
       throw new DemoUsersMessagesStoreError("Guncellenecek en az bir alan secilmelidir.");
     }
 

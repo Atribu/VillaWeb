@@ -4,6 +4,9 @@ import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { AppLocale } from "@/lib/i18n";
+import { pickLocalized } from "@/lib/i18n";
+import { getLocalizedVilla } from "@/lib/villa-content-i18n";
 import type { CatalogVilla } from "@/lib/villa-catalog";
 import { formatCurrency, formatShortDate } from "@/lib/villa-catalog";
 import type { DemoCoupon, RequestPricingBreakdown } from "@/lib/demo-operations";
@@ -13,10 +16,15 @@ type RequestFormProps = {
   checkIn: string;
   checkOut: string;
   initialPricing: RequestPricingBreakdown;
+  locale?: AppLocale;
 };
 
-function getEmptyFieldErrorMessage() {
-  return "Ad soyad, telefon ve e-posta bilgisi zorunludur.";
+function getEmptyFieldErrorMessage(locale: AppLocale) {
+  return pickLocalized(
+    locale,
+    "Ad soyad, telefon ve e-posta bilgisi zorunludur.",
+    "Full name, phone number and email are required.",
+  );
 }
 
 export function RequestForm({
@@ -24,8 +32,10 @@ export function RequestForm({
   checkIn,
   checkOut,
   initialPricing,
+  locale = "tr",
 }: RequestFormProps) {
   const router = useRouter();
+  const localizedVilla = useMemo(() => getLocalizedVilla(villa, locale), [locale, villa]);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -42,31 +52,34 @@ export function RequestForm({
 
   const totalSummary = useMemo(
     () => [
-      { label: "Ara toplam", value: formatCurrency(pricing.subtotal) },
+      {
+        label: pickLocalized(locale, "Ara toplam", "Subtotal"),
+        value: formatCurrency(pricing.subtotal, locale),
+      },
       {
         label: pricing.activeDiscountTitle
           ? `${pricing.activeDiscountTitle} (${pricing.activeDiscountPercent}%)`
-          : "Kampanya",
+          : pickLocalized(locale, "Kampanya", "Campaign"),
         value:
           pricing.activeDiscountTotal > 0
-            ? `- ${formatCurrency(pricing.activeDiscountTotal)}`
-            : "Uygulanmadi",
+            ? `- ${formatCurrency(pricing.activeDiscountTotal, locale)}`
+            : pickLocalized(locale, "Uygulanmadi", "Not applied"),
       },
       {
-        label: "Temizlik ucreti",
-        value: formatCurrency(pricing.cleaningFee),
+        label: pickLocalized(locale, "Temizlik ucreti", "Cleaning fee"),
+        value: formatCurrency(pricing.cleaningFee, locale),
       },
       {
         label: pricing.couponTitle
           ? `${pricing.couponTitle} (${pricing.couponPercent}%)`
-          : "Kupon indirimi",
+          : pickLocalized(locale, "Kupon indirimi", "Coupon discount"),
         value:
           pricing.couponDiscountTotal > 0
-            ? `- ${formatCurrency(pricing.couponDiscountTotal)}`
-            : "Uygulanmadi",
+            ? `- ${formatCurrency(pricing.couponDiscountTotal, locale)}`
+            : pickLocalized(locale, "Uygulanmadi", "Not applied"),
       },
     ],
-    [pricing],
+    [locale, pricing],
   );
 
   function resetCouponState() {
@@ -107,17 +120,27 @@ export function RequestForm({
 
       if (!response.ok || !payload.pricing) {
         resetCouponState();
-        setCouponMessage(payload.error ?? "Kupon dogrulanamadi.");
+        setCouponMessage(payload.error ?? pickLocalized(locale, "Kupon dogrulanamadi.", "Coupon could not be validated."));
         return;
       }
 
       setPricing(payload.pricing);
       setAppliedCoupon(payload.coupon ?? null);
       setCouponMessage(
-        `${payload.coupon?.title ?? "Kupon"} basariyla uygulandi. Yeni toplam fiyat guncellendi.`,
+        pickLocalized(
+          locale,
+          `${payload.coupon?.title ?? "Kupon"} basariyla uygulandi. Yeni toplam fiyat guncellendi.`,
+          `${payload.coupon?.title ?? "Coupon"} applied successfully. The total price has been updated.`,
+        ),
       );
     } catch {
-      setCouponMessage("Kupon kontrolu sirasinda baglanti hatasi olustu.");
+      setCouponMessage(
+        pickLocalized(
+          locale,
+          "Kupon kontrolu sirasinda baglanti hatasi olustu.",
+          "A connection error occurred while validating the coupon.",
+        ),
+      );
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -129,7 +152,7 @@ export function RequestForm({
 
     if (!fullName.trim() || !phone.trim() || !email.trim()) {
       setSubmitTone("error");
-      setSubmitMessage(getEmptyFieldErrorMessage());
+      setSubmitMessage(getEmptyFieldErrorMessage(locale));
       return;
     }
 
@@ -163,18 +186,24 @@ export function RequestForm({
 
       if (!response.ok || !payload.request) {
         setSubmitTone("error");
-        setSubmitMessage(payload.error ?? "Talep kaydi olusturulamadi.");
+        setSubmitMessage(
+          payload.error ?? pickLocalized(locale, "Talep kaydi olusturulamadi.", "The inquiry could not be created."),
+        );
         return;
       }
 
       setSubmitTone("success");
       setSubmitMessage(
-        `Talebin olusturuldu. Referans kodun: ${payload.request.id}. Panelde yeni talep olarak listeleniyor.`,
+        pickLocalized(
+          locale,
+          `Talebin olusturuldu. Referans kodun: ${payload.request.id}. Panelde yeni talep olarak listeleniyor.`,
+          `Your inquiry has been created. Reference code: ${payload.request.id}. It is now listed in the panel as a new inquiry.`,
+        ),
       );
       setFullName("");
       setPhone("");
       setEmail("");
-      setGuestCount(Math.min(2, villa.capacity));
+      setGuestCount(Math.min(2, localizedVilla.capacity));
       setMessage("");
       setCouponCode("");
       setAppliedCoupon(null);
@@ -182,7 +211,13 @@ export function RequestForm({
       router.refresh();
     } catch {
       setSubmitTone("error");
-      setSubmitMessage("Talep kaydi sirasinda baglanti hatasi olustu.");
+      setSubmitMessage(
+        pickLocalized(
+          locale,
+          "Talep kaydi sirasinda baglanti hatasi olustu.",
+          "A connection error occurred while creating the inquiry.",
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -195,33 +230,36 @@ export function RequestForm({
         className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-          Talep Bilgileri
+          {pickLocalized(locale, "Talep Bilgileri", "Inquiry Details")}
         </p>
         <h2 className="mt-4 text-3xl font-semibold text-slate-900">
-          Gecerli tarih secimi ile panelde islenebilir talep olustur
+          {pickLocalized(locale, "Gecerli tarih secimi ile panelde islenebilir talep olustur", "Create a panel-ready inquiry with valid dates")}
         </h2>
         <p className="mt-4 text-sm leading-8 text-slate-600">
-          Form tamamlandiginda kayit dogrudan paneldeki <strong>Talepler</strong> ekranina duser.
-          Kupon kullanirsan toplam tutar burada ve panel kaydinda ayni sekilde gorunur.
+          {pickLocalized(
+            locale,
+            "Form tamamlandiginda kayit dogrudan paneldeki Talepler ekranina duser. Kupon kullanirsan toplam tutar burada ve panel kaydinda ayni sekilde gorunur.",
+            "Once submitted, the record appears directly in the panel inquiries screen. If you use a coupon, the same total is shown here and in the panel record.",
+          )}
         </p>
 
         <div className="mt-8 grid gap-5 md:grid-cols-2">
           <div>
             <label htmlFor="fullName" className="text-sm font-medium text-slate-700">
-              Ad soyad
+              {pickLocalized(locale, "Ad soyad", "Full name")}
             </label>
             <input
               id="fullName"
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
-              placeholder="Ornek: Ayse Yilmaz"
+              placeholder={pickLocalized(locale, "Ornek: Ayse Yilmaz", "Example: Emily Johnson")}
               className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
             />
           </div>
 
           <div>
             <label htmlFor="guestCount" className="text-sm font-medium text-slate-700">
-              Misafir sayisi
+              {pickLocalized(locale, "Misafir sayisi", "Guest count")}
             </label>
             <input
               id="guestCount"
@@ -236,7 +274,7 @@ export function RequestForm({
 
           <div>
             <label htmlFor="phone" className="text-sm font-medium text-slate-700">
-              Telefon
+              {pickLocalized(locale, "Telefon", "Phone")}
             </label>
             <input
               id="phone"
@@ -249,7 +287,7 @@ export function RequestForm({
 
           <div>
             <label htmlFor="email" className="text-sm font-medium text-slate-700">
-              E-posta
+              {pickLocalized(locale, "E-posta", "Email")}
             </label>
             <input
               id="email"
@@ -263,14 +301,18 @@ export function RequestForm({
 
           <div className="md:col-span-2">
             <label htmlFor="message" className="text-sm font-medium text-slate-700">
-              Ek not
+              {pickLocalized(locale, "Ek not", "Additional note")}
             </label>
             <textarea
               id="message"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               rows={4}
-              placeholder="Transfer, cocuk yatagi, erken giris gibi taleplerini yazabilirsin."
+              placeholder={pickLocalized(
+                locale,
+                "Transfer, cocuk yatagi, erken giris gibi taleplerini yazabilirsin.",
+                "You can add notes such as transfer, baby cot or early check-in.",
+              )}
               className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
             />
           </div>
@@ -280,7 +322,7 @@ export function RequestForm({
           <div className="flex flex-col gap-4 md:flex-row md:items-end">
             <div className="flex-1">
               <label htmlFor="couponCode" className="text-sm font-medium text-slate-700">
-                Kupon kodu
+                {pickLocalized(locale, "Kupon kodu", "Coupon code")}
               </label>
               <input
                 id="couponCode"
@@ -291,7 +333,7 @@ export function RequestForm({
                     resetCouponState();
                   }
                 }}
-                placeholder="Ornek: YAZBASLIYOR10"
+                placeholder={pickLocalized(locale, "Ornek: YAZBASLIYOR10", "Example: SUMMERSTART10")}
                 className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900"
               />
             </div>
@@ -301,7 +343,9 @@ export function RequestForm({
               disabled={isApplyingCoupon}
               className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {isApplyingCoupon ? "Kontrol ediliyor..." : "Kuponu Uygula"}
+              {isApplyingCoupon
+                ? pickLocalized(locale, "Kontrol ediliyor...", "Checking...")
+                : pickLocalized(locale, "Kuponu Uygula", "Apply Coupon")}
             </button>
           </div>
 
@@ -334,13 +378,15 @@ export function RequestForm({
             disabled={isSubmitting}
             className="inline-flex rounded-full bg-[var(--color-coral)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {isSubmitting ? "Kaydediliyor..." : "Talebi Gonder"}
+            {isSubmitting
+              ? pickLocalized(locale, "Kaydediliyor...", "Saving...")
+              : pickLocalized(locale, "Talebi Gonder", "Send Inquiry")}
           </button>
           <Link
             href={`/villalar/${villa.slug}`}
             className="inline-flex rounded-full border border-black/8 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
           >
-            Villa Detayina Don
+            {pickLocalized(locale, "Villa Detayina Don", "Back to Villa Details")}
           </Link>
         </div>
       </form>
@@ -348,28 +394,40 @@ export function RequestForm({
       <aside className="space-y-6">
         <div className="rounded-[2rem] bg-slate-900 p-8 text-white shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-200">
-            Secim Ozeti
+            {pickLocalized(locale, "Secim Ozeti", "Selection Summary")}
           </p>
-          <h3 className="mt-4 text-3xl font-semibold leading-tight">{villa.title}</h3>
+          <h3 className="mt-4 text-3xl font-semibold leading-tight">{localizedVilla.title}</h3>
           <div className="mt-5 space-y-3 text-sm text-slate-300">
-            <p>Giris: {formatShortDate(checkIn)}</p>
-            <p>Cikis: {formatShortDate(checkOut)}</p>
             <p>
-              Konaklama: {pricing.nightCount} gece, minimum {villa.minNightCount ?? 1} gece
+              {pickLocalized(locale, "Giris", "Check-in")}: {formatShortDate(checkIn, locale)}
             </p>
-            <p>Kapasite: en fazla {villa.capacity} misafir</p>
+            <p>
+              {pickLocalized(locale, "Cikis", "Check-out")}: {formatShortDate(checkOut, locale)}
+            </p>
+            <p>
+              {pickLocalized(locale, "Konaklama", "Stay")}: {pricing.nightCount}{" "}
+              {pickLocalized(locale, "gece", "nights")}, {pickLocalized(locale, "minimum", "minimum")}{" "}
+              {localizedVilla.minNightCount ?? 1} {pickLocalized(locale, "gece", "nights")}
+            </p>
+            <p>
+              {pickLocalized(locale, "Kapasite", "Capacity")}: {pickLocalized(
+                locale,
+                `en fazla ${localizedVilla.capacity} misafir`,
+                `up to ${localizedVilla.capacity} guests`,
+              )}
+            </p>
           </div>
         </div>
 
         <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-            Fiyat Ozeti
+            {pickLocalized(locale, "Fiyat Ozeti", "Price Summary")}
           </p>
           <div className="mt-6 space-y-4">
             <div className="flex items-center justify-between text-sm text-slate-600">
-              <span>Gecelik fiyat</span>
+              <span>{pickLocalized(locale, "Gecelik fiyat", "Nightly price")}</span>
               <span className="font-semibold text-slate-900">
-                {formatCurrency(pricing.discountedNightlyPrice)}
+                {formatCurrency(pricing.discountedNightlyPrice, locale)}
               </span>
             </div>
 
@@ -381,9 +439,11 @@ export function RequestForm({
             ))}
 
             <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-              <span className="text-base font-semibold text-slate-900">Toplam</span>
+              <span className="text-base font-semibold text-slate-900">
+                {pickLocalized(locale, "Toplam", "Total")}
+              </span>
               <span className="text-2xl font-semibold text-slate-900">
-                {formatCurrency(pricing.grandTotal)}
+                {formatCurrency(pricing.grandTotal, locale)}
               </span>
             </div>
           </div>
@@ -391,11 +451,20 @@ export function RequestForm({
 
         <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
-            Panel Etkisi
+            {pickLocalized(locale, "Panel Etkisi", "Panel Effect")}
           </p>
           <p className="mt-4 text-sm leading-8 text-slate-600">
-            Bu kayit admin panelindeki <strong>Talepler</strong> ekraninda durum degistirilebilir,
-            raporlara yansir ve ilgili villanin ilgi metriklerini besler.
+            {pickLocalized(
+              locale,
+              "Bu kayit admin panelindeki ",
+              "This record appears in the admin panel ",
+            )}
+            <strong>{pickLocalized(locale, "Talepler", "Inquiries")}</strong>
+            {pickLocalized(
+              locale,
+              " ekraninda durum degistirilebilir, raporlara yansir ve ilgili villanin ilgi metriklerini besler.",
+              " screen, where its status can be updated, reflected in reports and used to feed the villa's interest metrics.",
+            )}
           </p>
         </div>
       </aside>

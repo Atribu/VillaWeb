@@ -4,6 +4,7 @@ import "server-only";
 import type { MembershipRole, PlatformRole } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getDemoCompanies } from "@/lib/demo-companies";
+import { getAllCompanyRecords } from "@/lib/server/company-store";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export type AppRole = "SUPER_ADMIN" | "ADMIN" | "STAFF";
@@ -17,6 +18,22 @@ export type AppUser = {
   companySlug?: string;
   companyName?: string;
 };
+
+export type LoginFailureReason =
+  | "INVALID_CREDENTIALS"
+  | "COMPANY_REQUIRED"
+  | "COMPANY_NOT_FOUND"
+  | "COMPANY_ACCESS_DENIED";
+
+export type LoginValidationResult =
+  | {
+      ok: true;
+      user: AppUser;
+    }
+  | {
+      ok: false;
+      reason: LoginFailureReason;
+    };
 
 export const loginCredentials = [
   {
@@ -96,8 +113,45 @@ function verifyScryptPassword(storedHash: string, password: string) {
   return timingSafeEqual(derived, stored);
 }
 
-export async function validateUser(username: string, password: string): Promise<AppUser | null> {
+function toSearchKey(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+async function resolveLoginCompany(companyName: string) {
+  const normalizedQuery = toSearchKey(companyName);
+
+  if (!normalizedQuery) {
+    return null;
+  }
+
+  const companies = await getAllCompanyRecords();
+
+  return (
+    companies.find((company) =>
+      [company.name, company.shortName, company.slug, company.panelLabel, company.primaryDomain].some(
+        (candidate) => toSearchKey(candidate) === normalizedQuery,
+      ),
+    ) ?? null
+  );
+}
+
+function isPlatformUser(platformRole: PlatformRole) {
+  return platformRole === "PLATFORM_OWNER" || platformRole === "PLATFORM_ADMIN";
+}
+
+export async function validateUser(
+  username: string,
+  password: string,
+  companyName?: string,
+): Promise<LoginValidationResult> {
   const normalizedUsername = username.trim().toLowerCase();
+  const normalizedCompanyName = companyName?.trim() ?? "";
 
   return withDevelopmentFallback(
     async () => {
@@ -115,16 +169,67 @@ export async function validateUser(username: string, password: string): Promise<
       });
 
       if (!user || !user.isActive) {
-        return null;
+        return {
+          ok: false,
+          reason: "INVALID_CREDENTIALS",
+        } satisfies LoginValidationResult;
       }
 
       if (!verifyScryptPassword(user.passwordHash, password)) {
-        return null;
+        return {
+          ok: false,
+          reason: "INVALID_CREDENTIALS",
+        } satisfies LoginValidationResult;
       }
 
-      const primaryMembership = user.memberships[0] ?? null;
-      const role = mapPlatformRoleToAppRole(user.platformRole, primaryMembership?.role);
       const now = new Date();
+
+      if (isPlatformUser(user.platformRole)) {
+        await db.user.update({
+          where: { id: user.id },
+          data: {
+            lastLoginAt: now,
+          },
+        });
+
+        return {
+          ok: true,
+          user: {
+            id: user.id,
+            username: user.username,
+            displayName: user.name,
+            role: "SUPER_ADMIN",
+          },
+        } satisfies LoginValidationResult;
+      }
+
+      if (!normalizedCompanyName) {
+        return {
+          ok: false,
+          reason: "COMPANY_REQUIRED",
+        } satisfies LoginValidationResult;
+      }
+
+      const selectedCompany = await resolveLoginCompany(normalizedCompanyName);
+
+      if (!selectedCompany) {
+        return {
+          ok: false,
+          reason: "COMPANY_NOT_FOUND",
+        } satisfies LoginValidationResult;
+      }
+
+      const membership =
+        user.memberships.find((item) => item.companyId === selectedCompany.id) ?? null;
+
+      if (!membership) {
+        return {
+          ok: false,
+          reason: "COMPANY_ACCESS_DENIED",
+        } satisfies LoginValidationResult;
+      }
+
+      const role = mapPlatformRoleToAppRole(user.platformRole, membership.role);
 
       await db.$transaction([
         db.user.update({
@@ -133,10 +238,10 @@ export async function validateUser(username: string, password: string): Promise<
             lastLoginAt: now,
           },
         }),
-        ...(primaryMembership
+        ...(membership
           ? [
               db.companyMembership.update({
-                where: { id: primaryMembership.id },
+                where: { id: membership.id },
                 data: {
                   lastActiveAt: now,
                 },
@@ -146,35 +251,84 @@ export async function validateUser(username: string, password: string): Promise<
       ]);
 
       return {
-        id: user.id,
-        username: user.username,
-        displayName: user.name,
-        role,
-        companyId: primaryMembership?.companyId,
-        companySlug: primaryMembership?.company.slug,
-        companyName: primaryMembership?.company.publicName,
-      };
+        ok: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName: user.name,
+          role,
+          companyId: membership.companyId,
+          companySlug: membership.company.slug,
+          companyName: membership.company.publicName,
+        },
+      } satisfies LoginValidationResult;
     },
     () => {
       const credential = loginCredentials.find((item) => item.username.toLowerCase() === normalizedUsername);
 
       if (!credential || credential.password !== password) {
-        return null;
+        return {
+          ok: false,
+          reason: "INVALID_CREDENTIALS",
+        } satisfies LoginValidationResult;
+      }
+
+      if (credential.role === "SUPER_ADMIN") {
+        return {
+          ok: true,
+          user: {
+            id: `dev-${credential.username}`,
+            username: credential.username,
+            displayName: credential.displayName,
+            role: credential.role,
+          },
+        } satisfies LoginValidationResult;
+      }
+
+      if (!normalizedCompanyName) {
+        return {
+          ok: false,
+          reason: "COMPANY_REQUIRED",
+        } satisfies LoginValidationResult;
+      }
+
+      const selectedCompany = getDemoCompanies().find(
+        (item) =>
+          [item.name, item.shortName, item.slug, item.panelLabel, item.primaryDomain].some(
+            (candidate) => toSearchKey(candidate) === toSearchKey(normalizedCompanyName),
+          ),
+      );
+
+      if (!selectedCompany) {
+        return {
+          ok: false,
+          reason: "COMPANY_NOT_FOUND",
+        } satisfies LoginValidationResult;
       }
 
       const company = credential.companyName
         ? getDemoCompanies().find((item) => item.name === credential.companyName)
         : null;
 
+      if (!company || company.id !== selectedCompany.id) {
+        return {
+          ok: false,
+          reason: "COMPANY_ACCESS_DENIED",
+        } satisfies LoginValidationResult;
+      }
+
       return {
-        id: `dev-${credential.username}`,
-        username: credential.username,
-        displayName: credential.displayName,
-        role: credential.role,
-        companyId: company?.id,
-        companySlug: company?.slug,
-        companyName: company?.name,
-      } satisfies AppUser;
+        ok: true,
+        user: {
+          id: `dev-${credential.username}`,
+          username: credential.username,
+          displayName: credential.displayName,
+          role: credential.role,
+          companyId: company.id,
+          companySlug: company.slug,
+          companyName: company.name,
+        },
+      } satisfies LoginValidationResult;
     },
   );
 }

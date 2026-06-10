@@ -92,7 +92,7 @@ export async function getDemoPricingRecords(input?: {
         }) satisfies DemoPricingRecord)
         .sort((left, right) => left.villaSlug.localeCompare(right.villaSlug));
     },
-    () => getFallbackPricingRecords(input?.companyId),
+    async () => getFallbackPricingRecords(await resolvePanelCompanyId(input)),
   );
 }
 
@@ -130,7 +130,7 @@ export async function getDemoDiscountCampaigns(input?: {
         createdAt: campaign.createdAt.toISOString(),
       })) satisfies DemoDiscountCampaign[];
     },
-    () => getFallbackDiscountCampaigns(input?.companyId),
+    async () => getFallbackDiscountCampaigns(await resolvePanelCompanyId(input)),
   );
 }
 
@@ -167,7 +167,7 @@ export async function getDemoCoupons(input?: { companyId?: string | null; includ
         createdAt: coupon.createdAt.toISOString(),
       })) satisfies DemoCoupon[];
     },
-    () => getFallbackCoupons(input?.companyId),
+    async () => getFallbackCoupons(await resolvePanelCompanyId(input)),
   );
 }
 
@@ -286,7 +286,7 @@ export async function getDemoRequests(input?: { companyId?: string | null; inclu
 
       return mapBookingRequestsToDemoRequests(requests, input);
     },
-    () => getFallbackRequests(input?.companyId),
+    async () => getFallbackRequests(await resolvePanelCompanyId(input)),
   );
 }
 
@@ -353,7 +353,7 @@ export async function getDemoRequestEvents(input?: {
         right.createdAt.localeCompare(left.createdAt),
       );
     },
-    () => getFallbackRequestEvents(input?.companyId),
+    async () => getFallbackRequestEvents(await resolvePanelCompanyId(input)),
   );
 }
 
@@ -403,7 +403,7 @@ export async function getDemoOperationTasks(input?: {
         createdAt: task.createdAt.toISOString(),
       })) satisfies DemoOperationTask[];
     },
-    () => getFallbackOperationTasks(input?.companyId),
+    async () => getFallbackOperationTasks(await resolvePanelCompanyId(input)),
   );
 }
 

@@ -21,6 +21,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const payload = (await request.json()) as {
       active?: boolean;
       syncMode?: DemoSyncMode;
+      remoteCalendarName?: string;
     };
 
     if (
@@ -30,7 +31,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new DemoCalendarSyncStoreError("Gecerli bir senkron modu secilmelidir.");
     }
 
-    if (payload.active === undefined && payload.syncMode === undefined) {
+    if (
+      payload.active === undefined &&
+      payload.syncMode === undefined &&
+      payload.remoteCalendarName === undefined
+    ) {
       throw new DemoCalendarSyncStoreError("Guncellenecek en az bir alan secilmelidir.");
     }
 

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
   getDefaultDemoCompany,
   getDemoCompanies,
@@ -8,9 +9,12 @@ import {
   seedDemoIcalSources,
   seedDemoChannelMappings,
   seedDemoSyncLogs,
+  type DemoCalendarSourceStatus,
   type DemoChannelMappingRecord,
   type DemoIcalSourceRecord,
+  type DemoSyncMode,
   type DemoSyncLogRecord,
+  type DemoSyncOutcome,
 } from "@/lib/demo-calendar-sync";
 import {
   seedDemoRegionAirportRecords,
@@ -56,6 +60,7 @@ import {
   type DemoCacheGroupRecord,
   type DemoCurrencyRateRecord,
   type DemoDocumentRecord,
+  type DemoPaymentMethodStatus,
   type DemoPaymentMethodRecord,
 } from "@/lib/demo-settings";
 import {
@@ -68,7 +73,9 @@ import {
   type DemoBranchRecord,
   type DemoCommissionRateRecord,
   type DemoInternalMessageRecord,
+  type DemoRoleId,
   type DemoTeamUserRecord,
+  type DemoTeamUserStatus,
 } from "@/lib/demo-users-messages";
 import {
   seedDemoLandingPages,
@@ -84,6 +91,7 @@ import {
   filterDevelopmentRecordsByCompany,
   normalizeDevelopmentCompanyId,
   readDevelopmentDataFile,
+  writeDevelopmentDataFile,
 } from "@/lib/server/development-fallback";
 
 const companies = getDemoCompanies();
@@ -94,6 +102,8 @@ const sahilCompanyId = companies[1]?.id ?? defaultCompany.id;
 function clone<T>(value: T) {
   return JSON.parse(JSON.stringify(value)) as T;
 }
+
+type PaymentMethodWithCompany = DemoPaymentMethodRecord & { companyId?: string };
 
 function inferCompanyIdFromText(...parts: Array<string | null | undefined>) {
   const text = parts
@@ -447,12 +457,15 @@ export async function getFallbackPaymentMethods(companyId?: string | null) {
     "demo-payment-methods.json",
     seedDemoPaymentMethods,
   );
-  const normalized = (fileData as DemoPaymentMethodRecord[]).map((record) => ({
+  const normalized = (fileData as PaymentMethodWithCompany[]).map((record) => ({
     ...record,
-    companyId: inferCompanyIdFromText(
-      record.label.includes("POS") ? "sahil" : "villavera",
-      record.label,
-      record.provider,
+    companyId: normalizeDevelopmentCompanyId(
+      record.companyId ??
+        inferCompanyIdFromText(
+          record.label.includes("POS") ? "sahil" : "villavera",
+          record.label,
+          record.provider,
+        ),
     ),
   }));
 
@@ -604,4 +617,423 @@ export async function getFallbackSyncLogs(companyId?: string | null) {
   }));
 
   return filterDevelopmentRecordsByCompany(normalized, companyId, (record) => record.companyId);
+}
+
+async function saveFallbackTeamUsers(records: DemoTeamUserRecord[]) {
+  await writeDevelopmentDataFile("demo-team-users.json", records);
+}
+
+async function saveFallbackPaymentMethods(records: PaymentMethodWithCompany[]) {
+  await writeDevelopmentDataFile("demo-payment-methods.json", records);
+}
+
+async function saveFallbackIcalSources(records: DemoIcalSourceRecord[]) {
+  await writeDevelopmentDataFile("demo-ical-sources.json", records);
+}
+
+async function saveFallbackChannelMappings(records: DemoChannelMappingRecord[]) {
+  await writeDevelopmentDataFile("demo-channel-mappings.json", records);
+}
+
+async function saveFallbackSyncLogs(records: DemoSyncLogRecord[]) {
+  await writeDevelopmentDataFile("demo-sync-logs.json", records);
+}
+
+export async function createFallbackTeamUser(input: {
+  companyId?: string | null;
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  roleId: DemoRoleId;
+  status: DemoTeamUserStatus;
+  branchId: string;
+  responsibility: string;
+}) {
+  const [users, branches] = await Promise.all([getFallbackTeamUsers(), getFallbackBranches()]);
+  const branch = branches.find((item) => item.id === input.branchId);
+
+  if (!branch) {
+    throw new Error("Kullanici icin gecerli bir sube secilmelidir.");
+  }
+
+  if (
+    users.some(
+      (user) => user.username === input.username || user.email.toLowerCase() === input.email.toLowerCase(),
+    )
+  ) {
+    throw new Error("Bu kullanici adi veya e-posta zaten kullanimda.");
+  }
+
+  const companyId = normalizeDevelopmentCompanyId(input.companyId ?? branch.companyId);
+  const now = new Date().toISOString();
+  const nextUser: DemoTeamUserRecord = {
+    id: `team-user-${randomUUID().slice(0, 8)}`,
+    companyId,
+    fullName: input.fullName,
+    username: input.username,
+    email: input.email,
+    phone: input.phone,
+    roleId: input.roleId,
+    status: input.status,
+    agencyId: branch.agencyId,
+    agencyName: branch.agencyName,
+    branchId: branch.id,
+    branchName: branch.name,
+    responsibility: input.responsibility || "Rol bazli erisim",
+    lastActiveAt: input.status === "ACTIVE" ? now : "",
+  };
+
+  await saveFallbackTeamUsers([...users, nextUser]);
+  return nextUser;
+}
+
+export async function updateFallbackTeamUser(
+  userId: string,
+  input: {
+    status?: DemoTeamUserStatus;
+    roleId?: DemoRoleId;
+    branchId?: string | null;
+    responsibility?: string;
+  },
+) {
+  const users = await getFallbackTeamUsers();
+  const index = users.findIndex((item) => item.id === userId);
+
+  if (index === -1) {
+    throw new Error("Kullanici bulunamadi.");
+  }
+
+  const current = users[index]!;
+  let nextBranch = null as DemoBranchRecord | null;
+
+  if (input.branchId !== undefined && input.branchId !== "") {
+    const branches = await getFallbackBranches();
+    nextBranch = branches.find((item) => item.id === input.branchId) ?? null;
+
+    if (!nextBranch) {
+      throw new Error("Secilen sube bulunamadi.");
+    }
+
+    if (normalizeDevelopmentCompanyId(nextBranch.companyId) !== normalizeDevelopmentCompanyId(current.companyId)) {
+      throw new Error("Kullanici farkli bir firmanin subesine atanamaz.");
+    }
+  }
+
+  const nextStatus = input.status ?? current.status;
+  const updated = {
+    ...current,
+    companyId: normalizeDevelopmentCompanyId(current.companyId),
+    roleId: input.roleId ?? current.roleId,
+    status: nextStatus,
+    responsibility:
+      input.responsibility !== undefined
+        ? input.responsibility.trim() || "Rol bazli erisim"
+        : current.responsibility,
+    ...(input.branchId === ""
+      ? {
+          agencyId: "",
+          agencyName: "Bagimsiz",
+          branchId: "",
+          branchName: "Atanmamis",
+        }
+      : nextBranch
+        ? {
+            agencyId: nextBranch.agencyId,
+            agencyName: nextBranch.agencyName,
+            branchId: nextBranch.id,
+            branchName: nextBranch.name,
+          }
+        : {}),
+    ...(nextStatus === "ACTIVE" ? { lastActiveAt: new Date().toISOString() } : {}),
+  } satisfies DemoTeamUserRecord & { companyId: string };
+
+  const nextUsers = [...users];
+  nextUsers[index] = updated;
+  await saveFallbackTeamUsers(nextUsers);
+  return updated;
+}
+
+export async function createFallbackPaymentMethod(input: {
+  companyId: string;
+  label: string;
+  provider: string;
+  feePercent: number;
+  settlementDays: number;
+  status: DemoPaymentMethodStatus;
+  supportsInstallment: boolean;
+  note: string;
+}) {
+  const methods = await getFallbackPaymentMethods();
+  const normalizedCompanyId = normalizeDevelopmentCompanyId(input.companyId);
+
+  if (
+    methods.some(
+      (method) =>
+        normalizeDevelopmentCompanyId(method.companyId) === normalizedCompanyId && method.label === input.label,
+    )
+  ) {
+    throw new Error("Bu firma icin ayni isimde bir odeme yontemi zaten var.");
+  }
+
+  const nextMethod: PaymentMethodWithCompany = {
+    id: `payment-${randomUUID().slice(0, 8)}`,
+    companyId: normalizedCompanyId,
+    label: input.label,
+    provider: input.provider,
+    feePercent: input.feePercent,
+    settlementDays: input.settlementDays,
+    status: input.status,
+    supportsInstallment: input.supportsInstallment,
+    note: input.note,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await saveFallbackPaymentMethods([...methods, nextMethod]);
+  return nextMethod;
+}
+
+export async function updateFallbackPaymentMethod(
+  paymentMethodId: string,
+  input: {
+    label?: string;
+    provider?: string;
+    status?: DemoPaymentMethodStatus;
+    feePercent?: number;
+    settlementDays?: number;
+    supportsInstallment?: boolean;
+    note?: string;
+  },
+) {
+  const methods = await getFallbackPaymentMethods();
+  const index = methods.findIndex((item) => item.id === paymentMethodId);
+
+  if (index === -1) {
+    throw new Error("Odeme yontemi bulunamadi.");
+  }
+
+  const current = methods[index]!;
+  const nextLabel = input.label?.trim();
+
+  if (
+    nextLabel &&
+    methods.some(
+      (method) =>
+        method.id !== paymentMethodId &&
+        normalizeDevelopmentCompanyId(method.companyId) === normalizeDevelopmentCompanyId(current.companyId) &&
+        method.label === nextLabel,
+    )
+  ) {
+    throw new Error("Bu firma icin ayni isimde bir odeme yontemi zaten var.");
+  }
+
+  const updated = {
+    ...current,
+    companyId: normalizeDevelopmentCompanyId(current.companyId),
+    ...(nextLabel !== undefined ? { label: nextLabel } : {}),
+    ...(input.provider !== undefined ? { provider: input.provider.trim() } : {}),
+    ...(input.status !== undefined ? { status: input.status } : {}),
+    ...(input.feePercent !== undefined ? { feePercent: input.feePercent } : {}),
+    ...(input.settlementDays !== undefined ? { settlementDays: input.settlementDays } : {}),
+    ...(input.supportsInstallment !== undefined
+      ? { supportsInstallment: input.supportsInstallment }
+      : {}),
+    ...(input.note !== undefined ? { note: input.note.trim() } : {}),
+    updatedAt: new Date().toISOString(),
+  } satisfies PaymentMethodWithCompany & { companyId: string };
+
+  const nextMethods = [...methods];
+  nextMethods[index] = updated;
+  await saveFallbackPaymentMethods(nextMethods);
+  return updated;
+}
+
+export async function createFallbackIcalSource(input: {
+  villaId: string;
+  channelName: string;
+  sourceUrl: string;
+  direction: "IMPORT" | "EXPORT";
+}) {
+  const [villas, sources] = await Promise.all([getFallbackVillas(), getFallbackIcalSources()]);
+  const villa = villas.find((item) => item.id === input.villaId);
+
+  if (!villa) {
+    throw new Error("Takvim kaynagi icin secilen villa bulunamadi.");
+  }
+
+  if (
+    sources.some(
+      (source) =>
+        normalizeDevelopmentCompanyId(source.companyId) === normalizeDevelopmentCompanyId(villa.companyId) &&
+        source.villaSlug === villa.slug &&
+        source.channelName === input.channelName &&
+        source.direction === input.direction,
+    )
+  ) {
+    throw new Error("Bu villa ve kanal icin ayni yonlu bir iCal kaynagi zaten var.");
+  }
+
+  const nextSource: DemoIcalSourceRecord = {
+    id: `ical-${randomUUID().slice(0, 8)}`,
+    companyId: normalizeDevelopmentCompanyId(villa.companyId, villa.slug),
+    villaSlug: villa.slug,
+    villaTitle: villa.title,
+    channelName: input.channelName,
+    sourceUrl: input.sourceUrl,
+    direction: input.direction,
+    active: true,
+    status: "HEALTHY",
+    lastSyncedAt: "",
+  };
+
+  await saveFallbackIcalSources([...sources, nextSource]);
+  return nextSource;
+}
+
+export async function updateFallbackIcalSource(
+  sourceId: string,
+  input: {
+    active?: boolean;
+    status?: DemoCalendarSourceStatus;
+    sourceUrl?: string;
+  },
+) {
+  const sources = await getFallbackIcalSources();
+  const index = sources.findIndex((item) => item.id === sourceId);
+
+  if (index === -1) {
+    throw new Error("iCal kaynagi bulunamadi.");
+  }
+
+  const updated = {
+    ...sources[index]!,
+    companyId: normalizeDevelopmentCompanyId(sources[index]!.companyId),
+    ...(input.active !== undefined ? { active: input.active } : {}),
+    ...(input.status !== undefined ? { status: input.status } : {}),
+    ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl } : {}),
+  } satisfies DemoIcalSourceRecord & { companyId: string };
+
+  const nextSources = [...sources];
+  nextSources[index] = updated;
+  await saveFallbackIcalSources(nextSources);
+  return updated;
+}
+
+export async function runFallbackCalendarSync(sourceId: string) {
+  const [sources, logs] = await Promise.all([getFallbackIcalSources(), getFallbackSyncLogs()]);
+  const index = sources.findIndex((item) => item.id === sourceId);
+
+  if (index === -1) {
+    throw new Error("Senkron baslatilacak kaynak bulunamadi.");
+  }
+
+  const current = sources[index]!;
+  const createdAt = new Date().toISOString();
+  const outcome: DemoSyncOutcome = current.status === "ERROR" ? "WARNING" : "SUCCESS";
+  const nextStatus: DemoCalendarSourceStatus = outcome === "SUCCESS" ? "HEALTHY" : "WARNING";
+  const eventCount = current.direction === "IMPORT" ? 2 : 1;
+  const message =
+    current.direction === "IMPORT"
+      ? "Kanal takvimindeki yeni bloklar iceri aktariildi ve kontrol tamamlandi."
+      : "Dis kanal icin guncel export linki tekrar yayinlandi.";
+
+  const updatedSource = {
+    ...current,
+    companyId: normalizeDevelopmentCompanyId(current.companyId, current.villaSlug),
+    status: nextStatus,
+    lastSyncedAt: createdAt,
+  } satisfies DemoIcalSourceRecord & { companyId: string };
+  const log = {
+    id: `sync-log-${randomUUID().slice(0, 8)}`,
+    companyId: normalizeDevelopmentCompanyId(current.companyId, current.villaSlug),
+    sourceId: current.id,
+    villaSlug: current.villaSlug,
+    villaTitle: current.villaTitle,
+    channelName: current.channelName,
+    outcome,
+    eventCount,
+    message,
+    createdAt,
+  } satisfies DemoSyncLogRecord & { companyId: string };
+
+  const nextSources = [...sources];
+  nextSources[index] = updatedSource;
+  await Promise.all([saveFallbackIcalSources(nextSources), saveFallbackSyncLogs([log, ...logs])]);
+
+  return {
+    source: updatedSource,
+    log,
+  };
+}
+
+export async function createFallbackChannelMapping(input: {
+  villaId: string;
+  channelName: string;
+  remoteCalendarName: string;
+  syncMode: DemoSyncMode;
+}) {
+  const [villas, mappings] = await Promise.all([getFallbackVillas(), getFallbackChannelMappings()]);
+  const villa = villas.find((item) => item.id === input.villaId);
+
+  if (!villa) {
+    throw new Error("Eslestirme icin secilen villa bulunamadi.");
+  }
+
+  if (
+    mappings.some(
+      (mapping) =>
+        normalizeDevelopmentCompanyId(mapping.companyId) === normalizeDevelopmentCompanyId(villa.companyId) &&
+        mapping.villaSlug === villa.slug &&
+        mapping.channelName === input.channelName,
+    )
+  ) {
+    throw new Error("Bu villa ve kanal icin eslestirme zaten tanimli.");
+  }
+
+  const nextMapping: DemoChannelMappingRecord = {
+    id: `mapping-${randomUUID().slice(0, 8)}`,
+    companyId: normalizeDevelopmentCompanyId(villa.companyId, villa.slug),
+    villaSlug: villa.slug,
+    villaTitle: villa.title,
+    channelName: input.channelName,
+    remoteCalendarName: input.remoteCalendarName,
+    syncMode: input.syncMode,
+    active: true,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await saveFallbackChannelMappings([...mappings, nextMapping]);
+  return nextMapping;
+}
+
+export async function updateFallbackChannelMapping(
+  mappingId: string,
+  input: {
+    active?: boolean;
+    syncMode?: DemoSyncMode;
+    remoteCalendarName?: string;
+  },
+) {
+  const mappings = await getFallbackChannelMappings();
+  const index = mappings.findIndex((item) => item.id === mappingId);
+
+  if (index === -1) {
+    throw new Error("Kanal eslestirmesi bulunamadi.");
+  }
+
+  const updated = {
+    ...mappings[index]!,
+    companyId: normalizeDevelopmentCompanyId(mappings[index]!.companyId, mappings[index]!.villaSlug),
+    ...(input.active !== undefined ? { active: input.active } : {}),
+    ...(input.syncMode !== undefined ? { syncMode: input.syncMode } : {}),
+    ...(input.remoteCalendarName !== undefined
+      ? { remoteCalendarName: input.remoteCalendarName }
+      : {}),
+    updatedAt: new Date().toISOString(),
+  } satisfies DemoChannelMappingRecord & { companyId: string };
+
+  const nextMappings = [...mappings];
+  nextMappings[index] = updated;
+  await saveFallbackChannelMappings(nextMappings);
+  return updated;
 }

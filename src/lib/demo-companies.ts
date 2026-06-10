@@ -1,3 +1,5 @@
+import type { AppLocale } from "@/lib/i18n";
+
 export const DEMO_COMPANY_COOKIE_NAME = "villaweb_public_company";
 
 export type DemoCompanyRecord = {
@@ -93,4 +95,50 @@ export function getFallbackCompanyIdForVillaSlug(villaSlug: string) {
 export function getDemoCompanySiteHref(companySlug: string, pathname = "/") {
   const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
   return `${normalizedPath}?company=${companySlug}`;
+}
+
+const localizedCompanyContent: Record<
+  string,
+  Partial<Record<keyof Pick<DemoCompanyRecord, "tagline" | "supportHours" | "accentLabel" | "heroTitle" | "heroDescription">, string>>
+> = {
+  villavera: {
+    tagline: "Premium villa collection",
+    supportHours: "Daily 09:00 - 22:00",
+    accentLabel: "Sea-view and honeymoon-focused selections",
+    heroTitle: "A sea-view, premium and conversion-focused villa showcase.",
+    heroDescription:
+      "VillaVera captures demand with premium selections focused on Kalkan and Kas, a honeymoon segment and strong SEO landing structures.",
+  },
+  "sahil-collection": {
+    tagline: "Family and group villas",
+    supportHours: "Weekdays 09:00 - 20:00",
+    accentLabel: "Operations-led portfolio for family and group stays",
+    heroTitle: "A corporate villa showcase for families and large groups.",
+    heroDescription:
+      "Sahil Collection is ready for sales with high-capacity villas in Fethiye and Bodrum, campaign structure and operations tracking.",
+  },
+};
+
+export function getLocalizedDemoCompanyRecord(
+  company: DemoCompanyRecord,
+  locale: AppLocale,
+): DemoCompanyRecord {
+  if (locale === "tr") {
+    return company;
+  }
+
+  const localized = localizedCompanyContent[company.slug];
+
+  if (!localized) {
+    return company;
+  }
+
+  return {
+    ...company,
+    tagline: localized.tagline ?? company.tagline,
+    supportHours: localized.supportHours ?? company.supportHours,
+    accentLabel: localized.accentLabel ?? company.accentLabel,
+    heroTitle: localized.heroTitle ?? company.heroTitle,
+    heroDescription: localized.heroDescription ?? company.heroDescription,
+  };
 }

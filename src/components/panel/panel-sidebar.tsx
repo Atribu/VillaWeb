@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
-import {
-  getPanelEntryState,
-  getPanelNavigation,
-  type PanelIconName,
-} from "@/lib/auth/panel-access";
+import { getPanelEntryState, type PanelIconName } from "@/lib/auth/panel-access";
 import type { AppRole } from "@/lib/auth/users";
+import type { AppLocale } from "@/lib/i18n";
+import { getLocalizedPanelNavigation } from "@/lib/panel-i18n";
 
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -148,9 +146,9 @@ function PanelSidebarRailButton({
   );
 }
 
-export function PanelSidebar({ role }: { role: AppRole }) {
+export function PanelSidebar({ role, locale }: { role: AppRole; locale: AppLocale }) {
   const pathname = usePathname();
-  const navigation = getPanelNavigation(role);
+  const navigation = getLocalizedPanelNavigation(role, locale);
 
   const activeGroupId = useMemo(() => {
     const activeGroup = navigation.find(

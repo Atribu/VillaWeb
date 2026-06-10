@@ -1,10 +1,10 @@
 import { TeamUsersManager } from "@/components/panel/team-users-manager";
-import { getDemoTeamUsers } from "@/lib/server/demo-users-messages-store";
+import { getDemoBranches, getDemoTeamUsers } from "@/lib/server/demo-users-messages-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function PanelStaffPage() {
-  const users = await getDemoTeamUsers();
+  const [users, branches] = await Promise.all([getDemoTeamUsers(), getDemoBranches()]);
 
   return (
     <div className="space-y-6">
@@ -21,7 +21,7 @@ export default async function PanelStaffPage() {
         </p>
       </section>
 
-      <TeamUsersManager users={users} />
+      <TeamUsersManager users={users} branches={branches} />
     </div>
   );
 }

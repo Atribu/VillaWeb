@@ -1,10 +1,11 @@
 import { CalendarSourcesManager } from "@/components/panel/calendar-sources-manager";
 import { getDemoIcalSources } from "@/lib/server/demo-calendar-sync-store";
+import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function PanelCalendarSourcesPage() {
-  const sources = await getDemoIcalSources();
+  const [sources, villas] = await Promise.all([getDemoIcalSources(), getDemoVillas()]);
 
   return (
     <div className="space-y-6">
@@ -21,7 +22,7 @@ export default async function PanelCalendarSourcesPage() {
         </p>
       </div>
 
-      <CalendarSourcesManager sources={sources} />
+      <CalendarSourcesManager sources={sources} villas={villas} />
     </div>
   );
 }

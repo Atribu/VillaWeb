@@ -22,33 +22,43 @@ export type CatalogVilla = {
   id: string;
   companyId: string;
   title: string;
+  titleEn?: string;
   slug: string;
   locationLabel: string;
   city: string;
   district: string;
   badge: string;
+  badgeEn?: string;
   category: string;
+  categoryEn?: string;
   status: "ACTIVE" | "DRAFT";
   featured: boolean;
   rating?: number;
   reviewCount?: number;
   isSuperhost?: boolean;
   shortDescription: string;
+  shortDescriptionEn?: string;
   description: string;
+  descriptionEn?: string;
   nightlyPrice: number;
   discountedNightlyPrice?: number;
   capacity: number;
   bedroomCount: number;
   bathroomCount: number;
   poolType: string;
+  poolTypeEn?: string;
   imageCount: number;
   imageUrls: string[];
   coverImageUrl?: string;
   coverGradient: string;
   seoTitle: string;
+  seoTitleEn?: string;
   seoDescription: string;
+  seoDescriptionEn?: string;
   focusKeyword: string;
+  focusKeywordEn?: string;
   coverAlt: string;
+  coverAltEn?: string;
   viewCount: number;
   requestCount: number;
   revenueLabel: string;
@@ -306,8 +316,8 @@ export const seedVillaCatalog: CatalogVilla[] = [
   },
 ];
 
-export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("tr-TR", {
+export function formatCurrency(amount: number, locale: AppLocale = "tr") {
+  return new Intl.NumberFormat(locale === "en" ? "en-US" : "tr-TR", {
     style: "currency",
     currency: "TRY",
     maximumFractionDigits: 0,
@@ -374,10 +384,11 @@ export function chooseCoverGradient(index: number) {
   return coverGradients[index % coverGradients.length];
 }
 
-export function formatShortDate(dateString: string) {
-  return new Intl.DateTimeFormat("tr-TR", {
+export function formatShortDate(dateString: string, locale: AppLocale = "tr") {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "tr-TR", {
     day: "2-digit",
     month: "long",
     year: "numeric",
   }).format(new Date(dateString));
 }
+import type { AppLocale } from "@/lib/i18n";

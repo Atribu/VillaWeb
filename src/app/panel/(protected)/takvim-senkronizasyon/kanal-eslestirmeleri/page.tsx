@@ -1,10 +1,11 @@
 import { ChannelMappingsManager } from "@/components/panel/channel-mappings-manager";
 import { getDemoChannelMappings } from "@/lib/server/demo-calendar-sync-store";
+import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function PanelChannelMappingsPage() {
-  const mappings = await getDemoChannelMappings();
+  const [mappings, villas] = await Promise.all([getDemoChannelMappings(), getDemoVillas()]);
 
   return (
     <div className="space-y-6">
@@ -21,7 +22,7 @@ export default async function PanelChannelMappingsPage() {
         </p>
       </div>
 
-      <ChannelMappingsManager mappings={mappings} />
+      <ChannelMappingsManager mappings={mappings} villas={villas} />
     </div>
   );
 }

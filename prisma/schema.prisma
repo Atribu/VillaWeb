@@ -534,11 +534,16 @@ model Villa {
   regionId           String?
   createdByUserId    String?
   title              String
+  titleEn            String?
   slug               String
   badge              String?
+  badgeEn            String?
   category           String?
+  categoryEn         String?
   shortDescription   String?
+  shortDescriptionEn String?
   description        String
+  descriptionEn      String?
   city               String
   district           String?
   address            String?
@@ -548,6 +553,7 @@ model Villa {
   bedroomCount       Int
   bathroomCount      Int
   poolType           String?
+  poolTypeEn         String?
   nightlyBasePrice   Decimal                 @db.Decimal(12, 2)
   cleaningFee        Decimal                 @default(0) @db.Decimal(12, 2)
   minNightCount      Int                     @default(1)
@@ -559,9 +565,13 @@ model Villa {
   isSuperhost        Boolean                 @default(false)
   coverImageUrl      String?
   coverAlt           String?
+  coverAltEn         String?
   seoTitle           String?
+  seoTitleEn         String?
   seoDescription     String?
+  seoDescriptionEn   String?
   focusKeyword       String?
+  focusKeywordEn     String?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)

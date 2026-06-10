@@ -1,38 +1,40 @@
 import { NextResponse } from "next/server";
 import type { DemoPaymentMethodStatus } from "@/lib/demo-settings";
 import {
+  createDemoPaymentMethod,
   DemoSettingsStoreError,
-  updateDemoPaymentMethod,
 } from "@/lib/server/demo-settings-store";
 
 export const runtime = "nodejs";
 
-type RouteContext = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
 const ALLOWED_STATUSES = new Set<DemoPaymentMethodStatus>(["ACTIVE", "PASSIVE"]);
 
-export async function PATCH(request: Request, context: RouteContext) {
+export async function POST(request: Request) {
   try {
-    const { id } = await context.params;
     const payload = (await request.json()) as {
       label?: string;
       provider?: string;
-      status?: DemoPaymentMethodStatus;
       feePercent?: number;
       settlementDays?: number;
+      status?: DemoPaymentMethodStatus;
       supportsInstallment?: boolean;
       note?: string;
     };
 
-    if (payload.status !== undefined && !ALLOWED_STATUSES.has(payload.status)) {
+    if (!payload.status || !ALLOWED_STATUSES.has(payload.status)) {
       throw new DemoSettingsStoreError("Gecerli bir odeme durumu secilmelidir.");
     }
 
-    const method = await updateDemoPaymentMethod(id, payload);
+    const method = await createDemoPaymentMethod({
+      label: String(payload.label ?? ""),
+      provider: String(payload.provider ?? ""),
+      feePercent: Number(payload.feePercent ?? 0),
+      settlementDays: Number(payload.settlementDays ?? 0),
+      status: payload.status,
+      supportsInstallment: Boolean(payload.supportsInstallment),
+      note: String(payload.note ?? ""),
+    });
+
     return NextResponse.json({ method });
   } catch (error) {
     if (error instanceof DemoSettingsStoreError) {
@@ -40,6 +42,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     console.error(error);
-    return NextResponse.json({ error: "Odeme ayari guncellenirken hata olustu." }, { status: 500 });
+    return NextResponse.json({ error: "Odeme yontemi olusturulurken hata olustu." }, { status: 500 });
   }
 }

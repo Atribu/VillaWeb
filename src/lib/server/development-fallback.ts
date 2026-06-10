@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDefaultDemoCompany, getFallbackCompanyIdForVillaSlug } from "@/lib/demo-companies";
 
@@ -83,6 +83,14 @@ export async function readDevelopmentDataFile<T>(fileName: string, fallbackValue
   } catch {
     return cloneDevelopmentValue(fallbackValue);
   }
+}
+
+export async function writeDevelopmentDataFile<T>(fileName: string, value: T) {
+  const dataDir = path.join(process.cwd(), "data");
+  const targetPath = path.join(dataDir, fileName);
+
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(targetPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 export function normalizeDevelopmentCompanyId(

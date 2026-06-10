@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID, scryptSync } from "node:crypto";
 import { db } from "@/lib/db";
 import type {
   DemoAgencyStatus,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/server/demo-company-context";
 import {
   decimalToNumber,
+  getDefaultCompanyId,
   iso,
   mapDemoRoleToMembershipRole,
   mapDemoUserStatusToMembershipStatus,
@@ -24,15 +26,26 @@ import {
   mapMessageStatusToDemo,
 } from "@/lib/server/prisma-demo-shared";
 import {
+  createFallbackTeamUser,
   getFallbackAgencies,
   getFallbackBranches,
   getFallbackCommissionRates,
   getFallbackInternalMessages,
   getFallbackTeamUsers,
+  updateFallbackTeamUser,
 } from "@/lib/server/development-fallback-data";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export class DemoUsersMessagesStoreError extends Error {}
+
+function buildPasswordHash(password: string, saltSeed: string) {
+  const salt = `${saltSeed}:${randomUUID().slice(0, 8)}`;
+  return `scrypt:${salt}:${scryptSync(password, salt, 64).toString("hex")}`;
+}
+
+async function resolveUsersMessagesCompanyId() {
+  return (await resolvePanelCompanyId()) ?? (await getDefaultCompanyId());
+}
 
 function mapCommissionScopeType(scopeType: "AGENCY" | "BRANCH" | "USER" | "WEB_DIRECT") {
   if (scopeType === "USER") {
@@ -278,6 +291,130 @@ export async function getDemoTeamUsers() {
   );
 }
 
+export async function createDemoTeamUser(input: {
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  password: string;
+  roleId: DemoRoleId;
+  status: DemoTeamUserStatus;
+  branchId: string;
+  responsibility?: string;
+}) {
+  const fullName = input.fullName.trim();
+  const username = input.username.trim().toLowerCase();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone.trim();
+  const password = input.password.trim();
+  const responsibility = input.responsibility?.trim() ?? "";
+
+  if (!fullName || !username || !email || !phone || !password || !input.branchId) {
+    throw new DemoUsersMessagesStoreError("Yeni kullanici icin tum zorunlu alanlar doldurulmalidir.");
+  }
+
+  if (!email.includes("@")) {
+    throw new DemoUsersMessagesStoreError("Gecerli bir e-posta adresi girilmelidir.");
+  }
+
+  if (password.length < 8) {
+    throw new DemoUsersMessagesStoreError("Gecici sifre en az 8 karakter olmalidir.");
+  }
+
+  return withDevelopmentFallback(
+    async () => {
+      const [branch, existingUser] = await Promise.all([
+        db.branch.findUnique({
+          where: { id: input.branchId },
+          select: { id: true, companyId: true },
+        }),
+        db.user.findFirst({
+          where: {
+            OR: [{ username }, { email }],
+          },
+          select: { id: true, username: true, email: true },
+        }),
+      ]);
+
+      if (!branch) {
+        throw new DemoUsersMessagesStoreError("Kullanici icin gecerli bir sube secilmelidir.");
+      }
+
+      await assertPanelCompanyAccess(branch.companyId);
+
+      if (existingUser) {
+        throw new DemoUsersMessagesStoreError("Bu kullanici adi veya e-posta zaten kullanimda.");
+      }
+
+      const companyId = branch.companyId ?? (await resolveUsersMessagesCompanyId());
+
+      if (!companyId) {
+        throw new DemoUsersMessagesStoreError("Kullanici icin aktif firma bulunamadi.");
+      }
+
+      const now = new Date();
+
+      const created = await db.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            username,
+            email,
+            name: fullName,
+            phone,
+            passwordHash: buildPasswordHash(password, username),
+            platformRole: "COMPANY_USER",
+            isActive: input.status !== "PASSIVE",
+            lastLoginAt: input.status === "ACTIVE" ? now : null,
+          },
+        });
+
+        const membership = await tx.companyMembership.create({
+          data: {
+            companyId,
+            userId: user.id,
+            branchId: branch.id,
+            role: mapDemoRoleToMembershipRole(input.roleId),
+            status: mapDemoUserStatusToMembershipStatus(input.status),
+            responsibility: responsibility || "Rol bazli erisim",
+            isPrimary: true,
+            invitedAt: now,
+            acceptedAt: input.status === "ACTIVE" ? now : null,
+            lastActiveAt: input.status === "ACTIVE" ? now : null,
+          },
+          select: { id: true },
+        });
+
+        return membership.id;
+      });
+
+      const users = await getDemoTeamUsers();
+      return users.find((user) => user.id === created) ?? null;
+    },
+    async () => {
+      const branches = await getFallbackBranches();
+      const branch = branches.find((item) => item.id === input.branchId);
+
+      if (!branch) {
+        throw new DemoUsersMessagesStoreError("Kullanici icin gecerli bir sube secilmelidir.");
+      }
+
+      await assertPanelCompanyAccess(branch.companyId);
+
+      return createFallbackTeamUser({
+        companyId: branch.companyId ?? (await resolveUsersMessagesCompanyId()),
+        fullName,
+        username,
+        email,
+        phone,
+        roleId: input.roleId,
+        status: input.status,
+        branchId: input.branchId,
+        responsibility: responsibility || "Rol bazli erisim",
+      });
+    },
+  );
+}
+
 export async function getDemoRoles() {
   const users = await getDemoTeamUsers();
   return buildDemoRoles(users);
@@ -390,29 +527,78 @@ export async function updateDemoTeamUser(
   input: {
     status?: DemoTeamUserStatus;
     roleId?: DemoRoleId;
+    branchId?: string;
+    responsibility?: string;
   },
 ) {
-  const membership = await db.companyMembership.findUnique({
-    where: { id: userId },
-  });
+  return withDevelopmentFallback(
+    async () => {
+      const membership = await db.companyMembership.findUnique({
+        where: { id: userId },
+      });
 
-  if (!membership) {
-    throw new DemoUsersMessagesStoreError("Kullanici bulunamadi.");
-  }
+      if (!membership) {
+        throw new DemoUsersMessagesStoreError("Kullanici bulunamadi.");
+      }
 
-  await assertPanelCompanyAccess(membership.companyId);
+      await assertPanelCompanyAccess(membership.companyId);
 
-  await db.companyMembership.update({
-    where: { id: userId },
-    data: {
-      ...(input.status ? { status: mapDemoUserStatusToMembershipStatus(input.status) } : {}),
-      ...(input.roleId ? { role: mapDemoRoleToMembershipRole(input.roleId) } : {}),
-      ...(input.status === "ACTIVE" ? { acceptedAt: membership.acceptedAt ?? new Date() } : {}),
+      let branchId: string | null | undefined = undefined;
+
+      if (input.branchId !== undefined) {
+        if (!input.branchId) {
+          branchId = null;
+        } else {
+          const branch = await db.branch.findUnique({
+            where: { id: input.branchId },
+            select: { id: true, companyId: true },
+          });
+
+          if (!branch) {
+            throw new DemoUsersMessagesStoreError("Secilen sube bulunamadi.");
+          }
+
+          if (branch.companyId !== membership.companyId) {
+            throw new DemoUsersMessagesStoreError("Kullanici farkli bir firmanin subesine atanamaz.");
+          }
+
+          branchId = branch.id;
+        }
+      }
+
+      await db.companyMembership.update({
+        where: { id: userId },
+        data: {
+          ...(input.status ? { status: mapDemoUserStatusToMembershipStatus(input.status) } : {}),
+          ...(input.roleId ? { role: mapDemoRoleToMembershipRole(input.roleId) } : {}),
+          ...(branchId !== undefined ? { branchId } : {}),
+          ...(input.responsibility !== undefined
+            ? { responsibility: input.responsibility.trim() || "Rol bazli erisim" }
+            : {}),
+          ...(input.status === "ACTIVE" ? { acceptedAt: membership.acceptedAt ?? new Date() } : {}),
+        },
+      });
+
+      const users = await getDemoTeamUsers();
+      return users.find((user) => user.id === userId) ?? null;
     },
-  });
+    async () => {
+      const current = (await getFallbackTeamUsers()).find((item) => item.id === userId);
 
-  const users = await getDemoTeamUsers();
-  return users.find((user) => user.id === userId) ?? null;
+      if (!current) {
+        throw new DemoUsersMessagesStoreError("Kullanici bulunamadi.");
+      }
+
+      await assertPanelCompanyAccess(current.companyId);
+
+      return updateFallbackTeamUser(userId, {
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.roleId !== undefined ? { roleId: input.roleId } : {}),
+        ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
+        ...(input.responsibility !== undefined ? { responsibility: input.responsibility } : {}),
+      });
+    },
+  );
 }
 
 export async function updateDemoInternalMessageStatus(messageId: string, status: DemoMessageStatus) {

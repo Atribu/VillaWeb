@@ -176,6 +176,69 @@ const pricingBySlug = {
   "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand": { cleaningFee: 4500, minNightCount: 4 },
 };
 
+const villaTranslationsBySlug = {
+  "kalkan-deniz-manzarali-luks-villa-soleia-lagoon": {
+    titleEn: "Villa Soleia Lagoon",
+    badgeEn: "Sea view",
+    categoryEn: "Luxury with a view",
+    shortDescriptionEn:
+      "Panoramic sea views, an infinity pool and a premium living setup for up to 8 guests.",
+    descriptionEn:
+      "Located close to the heart of Kalkan, Villa Soleia Lagoon offers a spacious and refined holiday setting for large families and guests looking for a premium stay.",
+    poolTypeEn: "Infinity pool",
+    coverAltEn: "Pool and terrace view of Villa Soleia Lagoon with panoramic sea views in Kalkan",
+    seoTitleEn: "Luxury sea-view villa in Kalkan | Villa Soleia Lagoon",
+    seoDescriptionEn:
+      "A premium 8-guest villa in Kalkan with sea views and a private pool. Discover a calm and luxurious holiday at Villa Soleia Lagoon.",
+    focusKeywordEn: "sea-view villa in Kalkan",
+  },
+  "fethiye-ozel-havuzlu-aile-villasi-palm-serenity": {
+    titleEn: "Villa Palm Serenity",
+    badgeEn: "Family friendly",
+    categoryEn: "Large family",
+    shortDescriptionEn:
+      "Private garden use, a children's pool and a layout designed for family holidays up to 10 guests.",
+    descriptionEn:
+      "Surrounded by nature, Villa Palm Serenity is designed to give families a relaxed stay with its spacious kitchen and open-air lounge areas.",
+    poolTypeEn: "Private pool + kids' pool",
+    coverAltEn: "Large garden and pool area of Villa Palm Serenity in Fethiye",
+    seoTitleEn: "Private pool family villa in Fethiye | Villa Palm Serenity",
+    seoDescriptionEn:
+      "A premium family villa in Fethiye with a private pool, spacious garden and comfortable layout for larger groups.",
+    focusKeywordEn: "family villa in Fethiye",
+  },
+  "kas-balayi-icin-muhafazakar-villa-verde-cove": {
+    titleEn: "Villa Verde Cove",
+    badgeEn: "Honeymoon choice",
+    categoryEn: "Honeymoon",
+    shortDescriptionEn:
+      "A private concept for two with an isolated pool and a sunset terrace for a peaceful getaway.",
+    descriptionEn:
+      "Villa Verde Cove blends the natural character of Kas with a calm luxury experience and was designed for honeymoon couples seeking privacy.",
+    poolTypeEn: "Secluded pool",
+    coverAltEn: "Private hideaway pool terrace of Villa Verde Cove in Kas",
+    seoTitleEn: "Private honeymoon villa in Kas | Villa Verde Cove",
+    seoDescriptionEn:
+      "A secluded honeymoon villa in Kas with a sheltered pool, privacy-focused layout and romantic sunset atmosphere.",
+    focusKeywordEn: "private honeymoon villa in Kas",
+  },
+  "bodrum-kalabalik-gruplar-icin-luks-villa-marea-grand": {
+    titleEn: "Villa Marea Grand",
+    badgeEn: "Large group stay",
+    categoryEn: "Luxury with a view",
+    shortDescriptionEn:
+      "Designed for larger groups with generous outdoor living areas, a broad pool deck and premium entertaining spaces.",
+    descriptionEn:
+      "Villa Marea Grand in Bodrum is positioned for larger group holidays, combining scale, comfort and a luxury coastal atmosphere in one stay.",
+    poolTypeEn: "Temperature-controlled pool",
+    coverAltEn: "Grand exterior and pool deck of Villa Marea Grand in Bodrum",
+    seoTitleEn: "Luxury group villa in Bodrum | Villa Marea Grand",
+    seoDescriptionEn:
+      "A spacious luxury villa in Bodrum for large groups, with a temperature-controlled pool and premium social areas.",
+    focusKeywordEn: "luxury group villa in Bodrum",
+  },
+};
+
 const villaPresentationBySlug = {
   "kalkan-deniz-manzarali-luks-villa-soleia-lagoon": {
     averageRating: 4.94,
@@ -609,6 +672,7 @@ async function seedVillas() {
     const meta = villaMetaBySlug[demoVilla.slug];
     const pricing = pricingBySlug[demoVilla.slug];
     const presentation = villaPresentationBySlug[demoVilla.slug];
+    const translation = villaTranslationsBySlug[demoVilla.slug] ?? {};
 
     await upsertById(prisma.villa, {
       id: meta.id,
@@ -617,11 +681,16 @@ async function seedVillas() {
       regionId: meta.regionId,
       createdByUserId: meta.createdByUserId,
       title: demoVilla.title,
+      titleEn: translation.titleEn ?? null,
       slug: demoVilla.slug,
       badge: demoVilla.badge ?? null,
+      badgeEn: translation.badgeEn ?? null,
       category: demoVilla.category ?? null,
+      categoryEn: translation.categoryEn ?? null,
       shortDescription: demoVilla.shortDescription,
+      shortDescriptionEn: translation.shortDescriptionEn ?? null,
       description: demoVilla.description,
+      descriptionEn: translation.descriptionEn ?? null,
       city: demoVilla.city,
       district: demoVilla.district ?? null,
       address: demoVilla.locationLabel,
@@ -629,6 +698,7 @@ async function seedVillas() {
       bedroomCount: demoVilla.bedroomCount,
       bathroomCount: demoVilla.bathroomCount,
       poolType: demoVilla.poolType ?? null,
+      poolTypeEn: translation.poolTypeEn ?? null,
       nightlyBasePrice: money(demoVilla.nightlyPrice),
       cleaningFee: money(pricing.cleaningFee),
       minNightCount: pricing.minNightCount,
@@ -640,9 +710,13 @@ async function seedVillas() {
       isSuperhost: presentation.isSuperhost,
       coverImageUrl: demoVilla.coverImageUrl,
       coverAlt: demoVilla.coverAlt ?? null,
+      coverAltEn: translation.coverAltEn ?? null,
       seoTitle: demoVilla.seoTitle ?? null,
+      seoTitleEn: translation.seoTitleEn ?? null,
       seoDescription: demoVilla.seoDescription ?? null,
+      seoDescriptionEn: translation.seoDescriptionEn ?? null,
       focusKeyword: demoVilla.focusKeyword ?? null,
+      focusKeywordEn: translation.focusKeywordEn ?? null,
       createdAt: at(demoVilla.createdAt),
     });
 

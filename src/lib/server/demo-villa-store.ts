@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   VILLA_IMAGE_RULES,
@@ -109,6 +110,81 @@ function validateImageFiles(files: File[]) {
       );
     }
   }
+}
+
+function getFileSystemErrorCode(error: unknown) {
+  if (typeof error === "object" && error && "code" in error) {
+    return String(error.code);
+  }
+
+  return "";
+}
+
+async function writeVillaImages(slug: string, files: File[]) {
+  const villaUploadDirectory = path.join(demoUploadDirectory, slug);
+  const imageUrls: string[] = [];
+
+  try {
+    await mkdir(villaUploadDirectory, { recursive: true });
+
+    for (const [index, file] of files.entries()) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileBaseName = sanitizeFileName(file.name) || `villa-gorsel-${index + 1}`;
+      const fileName = `${String(index + 1).padStart(2, "0")}-${fileBaseName}.webp`;
+      const targetPath = path.join(villaUploadDirectory, fileName);
+      await writeFile(targetPath, buffer);
+      imageUrls.push(`/uploads/villas/${slug}/${fileName}`);
+    }
+  } catch (error) {
+    const code = getFileSystemErrorCode(error);
+
+    console.error("Villa image upload failed", {
+      code,
+      uploadDirectory: villaUploadDirectory,
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    if (code === "EACCES" || code === "EPERM" || code === "EROFS") {
+      throw new DemoVillaStoreError(
+        "Gorseller sunucudaki upload klasorune yazilamadi. public/uploads/villas icin yazma izni veya kalici storage ayari gerekiyor.",
+      );
+    }
+
+    throw new DemoVillaStoreError("Gorseller sunucuda kaydedilirken hata olustu.");
+  }
+
+  return imageUrls;
+}
+
+async function resolveExistingSessionUserId() {
+  const session = await getUserSession().catch(() => null);
+
+  if (!session?.id) {
+    return null;
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: session.id },
+    select: { id: true },
+  });
+
+  return user?.id ?? null;
+}
+
+function mapPrismaVillaCreateError(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
+    }
+
+    if (error.code === "P2003") {
+      throw new DemoVillaStoreError(
+        "Villa kaydi bagli firma, web sitesi veya kullanici kaydiyla eslestirilemedi. Canli veritabaninda seed/migration ve oturum bilgileri kontrol edilmeli.",
+      );
+    }
+  }
+
+  throw error;
 }
 
 function mapAvailabilityRange(
@@ -281,6 +357,12 @@ export async function createDemoVillaFromFormData(
   formData: FormData,
   input?: { companyId?: string | null },
 ) {
+  const session = await getUserSession().catch(() => null);
+
+  if (!session) {
+    throw new DemoVillaStoreError("Villa eklemek icin panel oturumu gereklidir.");
+  }
+
   const resolvedCompanyId = (await resolvePanelCompanyId(input)) ?? (await getDefaultCompanyId());
 
   if (!resolvedCompanyId) {
@@ -381,21 +463,8 @@ export async function createDemoVillaFromFormData(
     throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
   }
 
-  const villaUploadDirectory = path.join(demoUploadDirectory, slug);
-  await mkdir(villaUploadDirectory, { recursive: true });
-
-  const imageUrls: string[] = [];
-
-  for (const [index, file] of files.entries()) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileBaseName = sanitizeFileName(file.name) || `villa-gorsel-${index + 1}`;
-    const fileName = `${String(index + 1).padStart(2, "0")}-${fileBaseName}.webp`;
-    const targetPath = path.join(villaUploadDirectory, fileName);
-    await writeFile(targetPath, buffer);
-    imageUrls.push(`/uploads/villas/${slug}/${fileName}`);
-  }
-
-  const session = await getUserSession().catch(() => null);
+  const imageUrls = await writeVillaImages(slug, files);
+  const createdByUserId = await resolveExistingSessionUserId();
   const websiteId = await getPrimaryWebsiteIdForCompany(resolvedCompanyId);
   const region = await db.region.findFirst({
     where: {
@@ -405,60 +474,62 @@ export async function createDemoVillaFromFormData(
     select: { id: true },
   });
 
-  const villa = await db.villa.create({
-    data: {
-      companyId: resolvedCompanyId,
-      websiteId,
-      regionId: region?.id,
-      createdByUserId: session?.id,
-      title,
-      titleEn,
-      slug,
-      badge,
-      badgeEn,
-      category,
-      categoryEn,
-      shortDescription,
-      shortDescriptionEn,
-      description,
-      descriptionEn,
-      city,
-      district,
-      address: `${district}, ${city}`,
-      capacity,
-      bedroomCount,
-      bathroomCount,
-      poolType,
-      poolTypeEn,
-      nightlyBasePrice: nightlyPrice,
-      cleaningFee: 0,
-      minNightCount: 1,
-      currency: "TRY",
-      status,
-      featured,
-      averageRating: 0,
-      reviewCount: 0,
-      isSuperhost: false,
-      coverImageUrl: imageUrls[0],
-      coverAlt,
-      coverAltEn,
-      seoTitle,
-      seoTitleEn,
-      seoDescription,
-      seoDescriptionEn,
-      focusKeyword,
-      focusKeywordEn,
-      images: {
-        create: imageUrls.map((url, index) => ({
-          url,
-          storageKey: url.replace("/uploads/villas/", ""),
-          altText: index === 0 ? coverAlt : `${title} galeri gorseli ${index + 1}`,
-          sortOrder: index + 1,
-          isCover: index === 0,
-        })),
+  const villa = await db.villa
+    .create({
+      data: {
+        companyId: resolvedCompanyId,
+        websiteId,
+        regionId: region?.id,
+        createdByUserId,
+        title,
+        titleEn,
+        slug,
+        badge,
+        badgeEn,
+        category,
+        categoryEn,
+        shortDescription,
+        shortDescriptionEn,
+        description,
+        descriptionEn,
+        city,
+        district,
+        address: `${district}, ${city}`,
+        capacity,
+        bedroomCount,
+        bathroomCount,
+        poolType,
+        poolTypeEn,
+        nightlyBasePrice: nightlyPrice,
+        cleaningFee: 0,
+        minNightCount: 1,
+        currency: "TRY",
+        status,
+        featured,
+        averageRating: 0,
+        reviewCount: 0,
+        isSuperhost: false,
+        coverImageUrl: imageUrls[0],
+        coverAlt,
+        coverAltEn,
+        seoTitle,
+        seoTitleEn,
+        seoDescription,
+        seoDescriptionEn,
+        focusKeyword,
+        focusKeywordEn,
+        images: {
+          create: imageUrls.map((url, index) => ({
+            url,
+            storageKey: url.replace("/uploads/villas/", ""),
+            altText: index === 0 ? coverAlt : `${title} galeri gorseli ${index + 1}`,
+            sortOrder: index + 1,
+            isCover: index === 0,
+          })),
+        },
       },
-    },
-  });
+    })
+    .catch(mapPrismaVillaCreateError);
 
   return {
     id: villa.id,

@@ -230,6 +230,27 @@ export async function getFallbackVillas(companyId?: string | null) {
   return filterDevelopmentRecordsByCompany(normalized, companyId, (record) => record.companyId);
 }
 
+export async function saveFallbackVilla(record: CatalogVilla) {
+  const fileData = await readDevelopmentDataFile("demo-villas.json", seedVillaCatalog);
+  const existingRecords = fileData as CatalogVilla[];
+  const normalizedRecord = normalizeVillaRecord(record);
+  const nextRecords = [
+    normalizedRecord,
+    ...existingRecords.filter(
+      (villa) =>
+        !(
+          normalizeDevelopmentCompanyId(villa.companyId, villa.slug) ===
+            normalizeDevelopmentCompanyId(normalizedRecord.companyId) &&
+          villa.slug === normalizedRecord.slug
+        ),
+    ),
+  ];
+
+  await writeDevelopmentDataFile("demo-villas.json", nextRecords);
+
+  return normalizedRecord;
+}
+
 export async function getFallbackPricingRecords(companyId?: string | null) {
   const fileData = await readDevelopmentDataFile("demo-pricing.json", seedDemoPricingRecords);
   const normalized = fileData.map((record) => ({

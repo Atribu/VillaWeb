@@ -27,8 +27,11 @@ import {
 } from "@/lib/server/prisma-demo-shared";
 import {
   getFallbackVillas,
+  saveFallbackVilla,
 } from "@/lib/server/development-fallback-data";
 import {
+  isDevelopmentFallbackForced,
+  isPrismaConnectionError,
   withDevelopmentFallback,
 } from "@/lib/server/development-fallback";
 import {
@@ -369,7 +372,9 @@ export async function createDemoVillaFromFormData(
     throw new DemoVillaStoreError("Villa icin firma scope belirlenemedi.");
   }
 
-  await assertPanelCompanyAccess(resolvedCompanyId);
+  const companyId = resolvedCompanyId;
+
+  await assertPanelCompanyAccess(companyId);
 
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
@@ -451,13 +456,87 @@ export async function createDemoVillaFromFormData(
 
   validateImageFiles(files);
 
-  const existing = await db.villa.findFirst({
-    where: {
-      companyId: resolvedCompanyId,
+  async function createFallbackVilla() {
+    const fallbackVillas = await getFallbackVillas(companyId);
+    const existingFallback = fallbackVillas.find((villa) => villa.slug === slug);
+
+    if (existingFallback) {
+      throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
+    }
+
+    const imageUrls = await writeVillaImages(slug, files);
+    const fallbackVilla = await saveFallbackVilla({
+      id: `villa-${randomUUID().slice(0, 8)}`,
+      companyId,
+      title,
+      titleEn,
       slug,
-    },
-    select: { id: true },
-  });
+      locationLabel: `${district}, ${city}`,
+      city,
+      district,
+      badge,
+      badgeEn,
+      category,
+      categoryEn,
+      status,
+      featured,
+      isSuperhost: false,
+      shortDescription,
+      shortDescriptionEn,
+      description,
+      descriptionEn,
+      nightlyPrice,
+      discountedNightlyPrice,
+      cleaningFee: 0,
+      minNightCount: 1,
+      capacity,
+      bedroomCount,
+      bathroomCount,
+      poolType,
+      poolTypeEn,
+      imageCount: imageUrls.length,
+      imageUrls,
+      coverImageUrl: imageUrls[0],
+      coverGradient: chooseCoverGradient(fallbackVillas.length),
+      seoTitle,
+      seoTitleEn,
+      seoDescription,
+      seoDescriptionEn,
+      focusKeyword,
+      focusKeywordEn,
+      coverAlt,
+      coverAltEn,
+      viewCount: 0,
+      requestCount: 0,
+      revenueLabel: formatCurrency(0),
+      createdAt: new Date().toISOString(),
+      availabilityRanges: [],
+    } satisfies CatalogVilla);
+
+    return fallbackVilla;
+  }
+
+  if (isDevelopmentFallbackForced()) {
+    return await createFallbackVilla();
+  }
+
+  let existing: { id: string } | null;
+
+  try {
+    existing = await db.villa.findFirst({
+      where: {
+        companyId,
+        slug,
+      },
+      select: { id: true },
+    });
+  } catch (error) {
+    if (isPrismaConnectionError(error)) {
+      return await createFallbackVilla();
+    }
+
+    throw error;
+  }
 
   if (existing) {
     throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
@@ -465,10 +544,10 @@ export async function createDemoVillaFromFormData(
 
   const imageUrls = await writeVillaImages(slug, files);
   const createdByUserId = await resolveExistingSessionUserId();
-  const websiteId = await getPrimaryWebsiteIdForCompany(resolvedCompanyId);
+  const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
   const region = await db.region.findFirst({
     where: {
-      companyId: resolvedCompanyId,
+      companyId,
       OR: [{ name: { equals: district, mode: "insensitive" } }, { name: { equals: city, mode: "insensitive" } }],
     },
     select: { id: true },
@@ -477,7 +556,7 @@ export async function createDemoVillaFromFormData(
   const villa = await db.villa
     .create({
       data: {
-        companyId: resolvedCompanyId,
+        companyId,
         websiteId,
         regionId: region?.id,
         createdByUserId,

@@ -125,7 +125,10 @@ export function VillaForm() {
         continue;
       }
 
-      if (file.size > VILLA_IMAGE_RULES.maxFileSizeInMb * 1024 * 1024) {
+      if (
+        VILLA_IMAGE_RULES.maxFileSizeInMb !== null &&
+        file.size > VILLA_IMAGE_RULES.maxFileSizeInMb * 1024 * 1024
+      ) {
         nextErrors.push(
           `${file.name}: dosya boyutu ${VILLA_IMAGE_RULES.maxFileSizeInMb} MB sinirini asiyor.`,
         );
@@ -144,7 +147,7 @@ export function VillaForm() {
         continue;
       }
 
-      if (nextFiles.length >= VILLA_IMAGE_RULES.maxFiles) {
+      if (VILLA_IMAGE_RULES.maxFiles !== null && nextFiles.length >= VILLA_IMAGE_RULES.maxFiles) {
         nextErrors.push(
           `Villa basina en fazla ${VILLA_IMAGE_RULES.maxFiles} adet gorsel yukleyebilirsin.`,
         );
@@ -255,7 +258,7 @@ export function VillaForm() {
             </h2>
           </div>
           <div className="rounded-full bg-[var(--color-soft-white)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-            Foto limiti: {selectedFiles.length}/{VILLA_IMAGE_RULES.maxFiles}
+            Secilen gorsel: {selectedFiles.length}
           </div>
         </div>
 
@@ -385,7 +388,7 @@ export function VillaForm() {
           Gorsel Yukleme
         </p>
         <h2 className="mt-3 text-3xl font-semibold text-[var(--color-ink)]">
-          Sadece WEBP, en fazla 8 MB ve villa basina maksimum 30 gorsel
+          Sadece WEBP formatinda gorsel yukleyebilirsin
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
           Demo icin secilen dosyalar proje klasorundeki `public/uploads/villas` altina kaydedilir.
@@ -403,7 +406,7 @@ export function VillaForm() {
               Gorselleri sec veya buraya surukle
             </span>
             <span className="text-sm text-slate-500">
-              Her dosya en fazla {VILLA_IMAGE_RULES.maxFileSizeInMb} MB olabilir.
+              Adet ve boyut siniri yoktur; sunucu yukleme limitleri uygulanabilir.
             </span>
           </label>
           <input

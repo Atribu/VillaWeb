@@ -1,9 +1,14 @@
-export const VILLA_IMAGE_RULES = {
-  maxFiles: 30,
-  maxFileSizeInMb: 8,
+export const VILLA_IMAGE_RULES: {
+  maxFiles: number | null;
+  maxFileSizeInMb: number | null;
+  acceptedMimeTypes: readonly ["image/webp"];
+  acceptedExtensions: readonly [".webp"];
+} = {
+  maxFiles: null,
+  maxFileSizeInMb: null,
   acceptedMimeTypes: ["image/webp"],
   acceptedExtensions: [".webp"],
-} as const;
+};
 
 export type AvailabilityRange = {
   id: string;

@@ -6,6 +6,7 @@ import {
 } from "@/lib/server/demo-villa-store";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {

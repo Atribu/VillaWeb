@@ -91,12 +91,6 @@ function validateImageFiles(files: File[]) {
     throw new DemoVillaStoreError("En az 1 adet WEBP gorsel secmelisin.");
   }
 
-  if (VILLA_IMAGE_RULES.maxFiles !== null && files.length > VILLA_IMAGE_RULES.maxFiles) {
-    throw new DemoVillaStoreError(
-      `Villa basina en fazla ${VILLA_IMAGE_RULES.maxFiles} adet gorsel yuklenebilir.`,
-    );
-  }
-
   for (const file of files) {
     const lowerCaseName = file.name.toLowerCase();
     const isWebp =
@@ -105,15 +99,6 @@ function validateImageFiles(files: File[]) {
 
     if (!isWebp) {
       throw new DemoVillaStoreError(`${file.name} dosyasi WEBP formatinda olmali.`);
-    }
-
-    if (
-      VILLA_IMAGE_RULES.maxFileSizeInMb !== null &&
-      file.size > VILLA_IMAGE_RULES.maxFileSizeInMb * 1024 * 1024
-    ) {
-      throw new DemoVillaStoreError(
-        `${file.name} dosyasi ${VILLA_IMAGE_RULES.maxFileSizeInMb} MB sinirini asiyor.`,
-      );
     }
   }
 }

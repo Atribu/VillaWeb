@@ -91,10 +91,6 @@ const englishSeoFields = [
   },
 ];
 
-function formatFileSize(size: number) {
-  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-}
-
 export function VillaForm() {
   const router = useRouter();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -125,16 +121,6 @@ export function VillaForm() {
         continue;
       }
 
-      if (
-        VILLA_IMAGE_RULES.maxFileSizeInMb !== null &&
-        file.size > VILLA_IMAGE_RULES.maxFileSizeInMb * 1024 * 1024
-      ) {
-        nextErrors.push(
-          `${file.name}: dosya boyutu ${VILLA_IMAGE_RULES.maxFileSizeInMb} MB sinirini asiyor.`,
-        );
-        continue;
-      }
-
       const alreadyExists = nextFiles.some(
         (currentFile) =>
           currentFile.name === file.name &&
@@ -145,13 +131,6 @@ export function VillaForm() {
       if (alreadyExists) {
         nextErrors.push(`${file.name}: bu gorsel zaten secildi.`);
         continue;
-      }
-
-      if (VILLA_IMAGE_RULES.maxFiles !== null && nextFiles.length >= VILLA_IMAGE_RULES.maxFiles) {
-        nextErrors.push(
-          `Villa basina en fazla ${VILLA_IMAGE_RULES.maxFiles} adet gorsel yukleyebilirsin.`,
-        );
-        break;
       }
 
       nextFiles.push(file);
@@ -406,7 +385,7 @@ export function VillaForm() {
               Gorselleri sec veya buraya surukle
             </span>
             <span className="text-sm text-slate-500">
-              Adet ve boyut siniri yoktur; sunucu yukleme limitleri uygulanabilir.
+              Sadece WEBP formatindaki gorseller kabul edilir.
             </span>
           </label>
           <input
@@ -451,7 +430,6 @@ export function VillaForm() {
                   Sil
                 </button>
               </div>
-              <p className="mt-4 text-sm text-slate-500">{formatFileSize(file.size)}</p>
             </div>
           ))}
         </div>

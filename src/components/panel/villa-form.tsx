@@ -91,6 +91,44 @@ const englishSeoFields = [
   },
 ];
 
+type VillaApiPayload = {
+  error?: string;
+  errorId?: string;
+  stage?: string;
+  villa?: { title: string };
+};
+
+async function readVillaApiPayload(response: Response): Promise<VillaApiPayload & { raw?: string }> {
+  const body = await response.text();
+
+  if (!body) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(body) as VillaApiPayload;
+  } catch {
+    return { raw: body.slice(0, 240) };
+  }
+}
+
+function buildVillaApiErrorMessage(
+  response: Response,
+  payload: VillaApiPayload & { raw?: string },
+) {
+  const errorDetails = [
+    payload.stage ? `asama: ${payload.stage}` : null,
+    payload.errorId ? `hata kodu: ${payload.errorId}` : null,
+  ].filter(Boolean);
+  const suffix = errorDetails.length > 0 ? ` (${errorDetails.join(" / ")})` : "";
+
+  return (
+    payload.error ??
+    payload.raw ??
+    `Villa kaydi sirasinda HTTP ${response.status} hatasi olustu.`
+  ) + suffix;
+}
+
 export function VillaForm() {
   const router = useRouter();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -195,10 +233,15 @@ export function VillaForm() {
         body: formData,
       });
 
-      const payload = (await response.json()) as { error?: string; villa?: { title: string } };
+      const payload = await readVillaApiPayload(response);
 
       if (!response.ok) {
-        setSubmitMessage(payload.error ?? "Villa kaydi sirasinda bir hata olustu.");
+        console.error("Villa upload API error", {
+          status: response.status,
+          statusText: response.statusText,
+          payload,
+        });
+        setSubmitMessage(buildVillaApiErrorMessage(response, payload));
         return;
       }
 
@@ -217,7 +260,8 @@ export function VillaForm() {
       );
       router.push("/panel/villalar");
       router.refresh();
-    } catch {
+    } catch (error) {
+      console.error("Villa upload request failed", error);
       setSubmitMessage("Villa kaydi sirasinda baglanti hatasi olustu.");
     } finally {
       setIsSubmitting(false);

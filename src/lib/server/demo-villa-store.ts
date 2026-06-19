@@ -213,7 +213,13 @@ function mapAvailabilityRange(
   };
 }
 
-async function queryVillas(input?: { companyId?: string | null; includeAll?: boolean }) {
+type DemoVillaQueryInput = {
+  companyId?: string | null;
+  includeAll?: boolean;
+  includeMetrics?: boolean;
+};
+
+async function queryVillas(input?: DemoVillaQueryInput) {
   const companyId = await resolvePanelCompanyId(input);
 
   return db.villa.findMany({
@@ -231,17 +237,22 @@ async function queryVillas(input?: { companyId?: string | null; includeAll?: boo
   });
 }
 
-export async function getDemoVillas(input?: { companyId?: string | null; includeAll?: boolean }) {
+export async function getDemoVillas(input?: DemoVillaQueryInput) {
+  const includeMetrics = input?.includeMetrics ?? true;
+
   return withDevelopmentFallback(
     async () => {
       const [villas, pricingRecords, discountCampaigns, requests] = await Promise.all([
         queryVillas(input),
         getDemoPricingRecords(input),
         getDemoDiscountCampaigns(input),
-        getDemoRequests(input),
+        includeMetrics ? getDemoRequests(input) : Promise.resolve([]),
       ]);
 
       return villas.map((villa, index) => {
+        const villaRequests = includeMetrics
+          ? requests.filter((request) => request.villaSlug === villa.slug)
+          : [];
         const baseVilla: CatalogVilla = {
           id: villa.id,
           companyId: villa.companyId,
@@ -286,12 +297,14 @@ export async function getDemoVillas(input?: { companyId?: string | null; include
           coverAlt: villa.coverAlt ?? villa.title,
           coverAltEn: villa.coverAltEn ?? undefined,
           viewCount: villa.dailyMetrics.reduce((sum, metric) => sum + metric.viewCount, 0),
-          requestCount: requests.filter((request) => request.villaSlug === villa.slug).length,
-          revenueLabel: formatCurrency(
-            requests
-              .filter((request) => request.villaSlug === villa.slug && request.status === "APPROVED")
-              .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
-          ),
+          requestCount: includeMetrics ? villaRequests.length : 0,
+          revenueLabel: includeMetrics
+            ? formatCurrency(
+                villaRequests
+                  .filter((request) => request.status === "APPROVED")
+                  .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
+              )
+            : formatCurrency(0),
           createdAt: villa.createdAt.toISOString(),
           availabilityRanges: sortAvailabilityRanges(
             villa.availabilityBlocks.map((range) =>
@@ -325,20 +338,25 @@ export async function getDemoVillas(input?: { companyId?: string | null; include
         getFallbackVillas(await resolvePanelCompanyId(input)),
         getDemoPricingRecords(input),
         getDemoDiscountCampaigns(input),
-        getDemoRequests(input),
+        includeMetrics ? getDemoRequests(input) : Promise.resolve([]),
       ]);
 
       return villas.map((villa) => {
         const resolvedPricing = getResolvedVillaPricing(villa, pricingRecords, discountCampaigns);
+        const villaRequests = includeMetrics
+          ? requests.filter((request) => request.villaSlug === villa.slug)
+          : [];
 
         return {
           ...villa,
-          requestCount: requests.filter((request) => request.villaSlug === villa.slug).length,
-          revenueLabel: formatCurrency(
-            requests
-              .filter((request) => request.villaSlug === villa.slug && request.status === "APPROVED")
-              .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
-          ),
+          requestCount: includeMetrics ? villaRequests.length : 0,
+          revenueLabel: includeMetrics
+            ? formatCurrency(
+                villaRequests
+                  .filter((request) => request.status === "APPROVED")
+                  .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
+              )
+            : formatCurrency(0),
           nightlyPrice: resolvedPricing.baseNightlyPrice,
           discountedNightlyPrice: resolvedPricing.discountedNightlyPrice,
           cleaningFee: resolvedPricing.cleaningFee,
@@ -353,7 +371,7 @@ export async function getDemoVillas(input?: { companyId?: string | null; include
 
 export async function getDemoVillaBySlug(
   slug: string,
-  input?: { companyId?: string | null; includeAll?: boolean },
+  input?: DemoVillaQueryInput,
 ) {
   const villas = await getDemoVillas(input);
   return villas.find((villa) => villa.slug === slug) ?? null;

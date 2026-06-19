@@ -28,7 +28,6 @@ import {
   assertPanelCompanyAccess,
   resolvePanelCompanyId,
 } from "@/lib/server/demo-company-context";
-import { getDemoVillaBySlug } from "@/lib/server/demo-villa-store";
 import {
   dateKey,
   decimalToNumber,
@@ -171,6 +170,57 @@ export async function getDemoCoupons(input?: { companyId?: string | null; includ
   );
 }
 
+function createPricingVillaSnapshot(
+  request: {
+    id: string;
+    companyId: string;
+    guestCount: number;
+    createdAt: Date;
+    villa: {
+      slug: string;
+      title: string;
+    };
+  },
+  pricingRecords: DemoPricingRecord[],
+) {
+  const pricingRecord = pricingRecords.find((record) => record.villaSlug === request.villa.slug);
+
+  return {
+    id: request.villa.slug,
+    companyId: request.companyId,
+    title: request.villa.title,
+    slug: request.villa.slug,
+    locationLabel: "",
+    city: "",
+    district: "",
+    badge: "",
+    category: "Villa",
+    status: "ACTIVE",
+    featured: false,
+    shortDescription: "",
+    description: "",
+    nightlyPrice: pricingRecord?.baseNightlyPrice ?? 0,
+    capacity: request.guestCount,
+    bedroomCount: 0,
+    bathroomCount: 0,
+    poolType: "",
+    imageCount: 0,
+    imageUrls: [],
+    coverGradient: "from-slate-700 via-cyan-700 to-amber-200",
+    seoTitle: request.villa.title,
+    seoDescription: "",
+    focusKeyword: request.villa.slug,
+    coverAlt: request.villa.title,
+    viewCount: 0,
+    requestCount: 0,
+    revenueLabel: formatCurrency(0),
+    cleaningFee: pricingRecord?.cleaningFee ?? 0,
+    minNightCount: pricingRecord?.minNightCount ?? 1,
+    createdAt: request.createdAt.toISOString(),
+    availabilityRanges: [],
+  } satisfies CatalogVilla;
+}
+
 async function mapBookingRequestsToDemoRequests(
   requests: Array<{
     id: string;
@@ -202,23 +252,10 @@ async function mapBookingRequestsToDemoRequests(
     getDemoCoupons(options),
   ]);
 
-  const villaCache = new Map<string, CatalogVilla | null>();
-
   const demoRequests: DemoRequest[] = [];
 
   for (const request of requests) {
-    let catalogVilla = villaCache.get(request.villa.slug);
-
-    if (catalogVilla === undefined) {
-      catalogVilla = await getDemoVillaBySlug(request.villa.slug, {
-        companyId: request.companyId,
-      });
-      villaCache.set(request.villa.slug, catalogVilla);
-    }
-
-    if (!catalogVilla) {
-      continue;
-    }
+    const catalogVilla = createPricingVillaSnapshot(request, pricingRecords);
 
     const resolved = getResolvedStayPricing({
       villa: catalogVilla,

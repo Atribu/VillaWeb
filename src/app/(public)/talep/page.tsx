@@ -47,7 +47,9 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
   const params = await searchParams;
   const checkIn = params.checkIn ?? "";
   const checkOut = params.checkOut ?? "";
-  const villa = params.villa ? await getDemoVillaBySlug(params.villa, { companyId: company.id }) : null;
+  const villa = params.villa
+    ? await getDemoVillaBySlug(params.villa, { companyId: company.id, includeMetrics: false })
+    : null;
   const localizedVilla = villa ? getLocalizedVilla(villa, locale) : null;
   const blockedRange =
     villa && checkIn && checkOut

@@ -21,7 +21,7 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const locale = await getCurrentLocale();
-  const villa = await getDemoVillaBySlug(slug);
+  const villa = await getDemoVillaBySlug(slug, { includeMetrics: false });
 
   if (!villa) {
     return {
@@ -56,7 +56,7 @@ export default async function VillaDetailPage({ params }: PageProps) {
   const { slug } = await params;
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const rawVilla = await getDemoVillaBySlug(slug, { companyId: company.id });
+  const rawVilla = await getDemoVillaBySlug(slug, { companyId: company.id, includeMetrics: false });
 
   if (!rawVilla) {
     notFound();
@@ -64,7 +64,7 @@ export default async function VillaDetailPage({ params }: PageProps) {
 
   const villa = getLocalizedVilla(rawVilla, locale);
 
-  const allVillas = await getDemoVillas({ companyId: company.id });
+  const allVillas = await getDemoVillas({ companyId: company.id, includeMetrics: false });
   const relatedVillas = allVillas
     .filter((item) => item.slug !== villa.slug && item.city === villa.city)
     .slice(0, 3);

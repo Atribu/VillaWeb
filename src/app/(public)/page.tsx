@@ -77,7 +77,7 @@ function buildLocationCollections(villas: Awaited<ReturnType<typeof getDemoVilla
 export default async function HomePage() {
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const villas = await getDemoVillas({ companyId: company.id });
+  const villas = await getDemoVillas({ companyId: company.id, includeMetrics: false });
   const heroVilla = villas[0] ?? null;
   const locationCollections = buildLocationCollections(villas);
   const showcaseVillas = villas.slice(0, 8);

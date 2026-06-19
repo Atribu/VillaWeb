@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import {
@@ -8,9 +9,45 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function createUnexpectedUploadErrorResponse(error: unknown, stage: string) {
+  const errorId = randomUUID();
+  const message = getErrorMessage(error);
+  const shouldExposeDetails =
+    process.env.NODE_ENV !== "production" || process.env.VILLA_UPLOAD_DEBUG_ERRORS === "true";
+
+  console.error("Villa upload failed", {
+    errorId,
+    stage,
+    message,
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+
+  return NextResponse.json(
+    {
+      error: shouldExposeDetails
+        ? `Villa kaydi ${stage} asamasinda hata verdi: ${message}`
+        : `Villa kaydi sirasinda beklenmeyen bir hata olustu. Hata kodu: ${errorId}`,
+      errorId,
+      stage,
+    },
+    { status: 500 },
+  );
+}
+
 export async function POST(request: Request) {
+  let formData: FormData;
+
   try {
-    const formData = await request.formData();
+    formData = await request.formData();
+  } catch (error) {
+    return createUnexpectedUploadErrorResponse(error, "FORM_DATA_PARSE");
+  }
+
+  try {
     const villa = await createDemoVillaFromFormData(formData);
 
     revalidatePath("/");
@@ -25,11 +62,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    console.error(error);
-
-    return NextResponse.json(
-      { error: "Villa kaydi sirasinda beklenmeyen bir hata olustu." },
-      { status: 500 },
-    );
+    return createUnexpectedUploadErrorResponse(error, "VILLA_CREATE");
   }
 }

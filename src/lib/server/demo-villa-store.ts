@@ -44,6 +44,34 @@ const demoUploadDirectory = path.join(process.cwd(), "public", "uploads", "villa
 
 export class DemoVillaStoreError extends Error {}
 
+export class DemoVillaUnexpectedError extends Error {
+  readonly stage: string;
+  override cause: unknown;
+
+  constructor(stage: string, cause: unknown) {
+    super(getUnknownErrorMessage(cause));
+    this.name = "DemoVillaUnexpectedError";
+    this.stage = stage;
+    this.cause = cause;
+  }
+}
+
+function getUnknownErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function runVillaCreateStep<T>(stage: string, action: () => Promise<T>) {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError || error instanceof DemoVillaUnexpectedError) {
+      throw error;
+    }
+
+    throw new DemoVillaUnexpectedError(stage, error);
+  }
+}
+
 function sortAvailabilityRanges(ranges: AvailabilityRange[]) {
   return [...ranges].sort(
     (left, right) => new Date(left.startDate).getTime() - new Date(right.startDate).getTime(),
@@ -372,7 +400,10 @@ export async function createDemoVillaFromFormData(
     throw new DemoVillaStoreError("Villa eklemek icin panel oturumu gereklidir.");
   }
 
-  const resolvedCompanyId = (await resolvePanelCompanyId(input)) ?? (await getDefaultCompanyId());
+  const resolvedCompanyId = await runVillaCreateStep(
+    "VILLA_COMPANY_SCOPE",
+    async () => (await resolvePanelCompanyId(input)) ?? (await getDefaultCompanyId()),
+  );
 
   if (!resolvedCompanyId) {
     throw new DemoVillaStoreError("Villa icin firma scope belirlenemedi.");
@@ -380,7 +411,7 @@ export async function createDemoVillaFromFormData(
 
   const companyId = resolvedCompanyId;
 
-  await assertPanelCompanyAccess(companyId);
+  await runVillaCreateStep("VILLA_COMPANY_ACCESS", async () => assertPanelCompanyAccess(companyId));
 
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
@@ -463,61 +494,67 @@ export async function createDemoVillaFromFormData(
   validateImageFiles(files);
 
   async function createFallbackVilla() {
-    const fallbackVillas = await getFallbackVillas(companyId);
+    const fallbackVillas = await runVillaCreateStep("VILLA_FALLBACK_LIST", async () =>
+      getFallbackVillas(companyId),
+    );
     const existingFallback = fallbackVillas.find((villa) => villa.slug === slug);
 
     if (existingFallback) {
       throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
     }
 
-    const imageUrls = await writeVillaImages(slug, files);
-    const fallbackVilla = await saveFallbackVilla({
-      id: `villa-${randomUUID().slice(0, 8)}`,
-      companyId,
-      title,
-      titleEn,
-      slug,
-      locationLabel: `${district}, ${city}`,
-      city,
-      district,
-      badge,
-      badgeEn,
-      category,
-      categoryEn,
-      status,
-      featured,
-      isSuperhost: false,
-      shortDescription,
-      shortDescriptionEn,
-      description,
-      descriptionEn,
-      nightlyPrice,
-      discountedNightlyPrice,
-      cleaningFee: 0,
-      minNightCount: 1,
-      capacity,
-      bedroomCount,
-      bathroomCount,
-      poolType,
-      poolTypeEn,
-      imageCount: imageUrls.length,
-      imageUrls,
-      coverImageUrl: imageUrls[0],
-      coverGradient: chooseCoverGradient(fallbackVillas.length),
-      seoTitle,
-      seoTitleEn,
-      seoDescription,
-      seoDescriptionEn,
-      focusKeyword,
-      focusKeywordEn,
-      coverAlt,
-      coverAltEn,
-      viewCount: 0,
-      requestCount: 0,
-      revenueLabel: formatCurrency(0),
-      createdAt: new Date().toISOString(),
-      availabilityRanges: [],
-    } satisfies CatalogVilla);
+    const imageUrls = await runVillaCreateStep("VILLA_IMAGE_WRITE", async () =>
+      writeVillaImages(slug, files),
+    );
+    const fallbackVilla = await runVillaCreateStep("VILLA_FALLBACK_SAVE", async () =>
+      saveFallbackVilla({
+        id: `villa-${randomUUID().slice(0, 8)}`,
+        companyId,
+        title,
+        titleEn,
+        slug,
+        locationLabel: `${district}, ${city}`,
+        city,
+        district,
+        badge,
+        badgeEn,
+        category,
+        categoryEn,
+        status,
+        featured,
+        isSuperhost: false,
+        shortDescription,
+        shortDescriptionEn,
+        description,
+        descriptionEn,
+        nightlyPrice,
+        discountedNightlyPrice,
+        cleaningFee: 0,
+        minNightCount: 1,
+        capacity,
+        bedroomCount,
+        bathroomCount,
+        poolType,
+        poolTypeEn,
+        imageCount: imageUrls.length,
+        imageUrls,
+        coverImageUrl: imageUrls[0],
+        coverGradient: chooseCoverGradient(fallbackVillas.length),
+        seoTitle,
+        seoTitleEn,
+        seoDescription,
+        seoDescriptionEn,
+        focusKeyword,
+        focusKeywordEn,
+        coverAlt,
+        coverAltEn,
+        viewCount: 0,
+        requestCount: 0,
+        revenueLabel: formatCurrency(0),
+        createdAt: new Date().toISOString(),
+        availabilityRanges: [],
+      } satisfies CatalogVilla),
+    );
 
     return fallbackVilla;
   }
@@ -541,80 +578,93 @@ export async function createDemoVillaFromFormData(
       return await createFallbackVilla();
     }
 
-    throw error;
+    throw new DemoVillaUnexpectedError("VILLA_DUPLICATE_CHECK", error);
   }
 
   if (existing) {
     throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
   }
 
-  const imageUrls = await writeVillaImages(slug, files);
-  const createdByUserId = await resolveExistingSessionUserId();
-  const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
-  const region = await db.region.findFirst({
-    where: {
-      companyId,
-      OR: [{ name: { equals: district, mode: "insensitive" } }, { name: { equals: city, mode: "insensitive" } }],
-    },
-    select: { id: true },
-  });
-
-  const villa = await db.villa
-    .create({
-      data: {
+  const imageUrls = await runVillaCreateStep("VILLA_IMAGE_WRITE", async () =>
+    writeVillaImages(slug, files),
+  );
+  const createdByUserId = await runVillaCreateStep("VILLA_SESSION_USER_LOOKUP", async () =>
+    resolveExistingSessionUserId(),
+  );
+  const websiteId = await runVillaCreateStep("VILLA_WEBSITE_LOOKUP", async () =>
+    getPrimaryWebsiteIdForCompany(companyId),
+  );
+  const region = await runVillaCreateStep("VILLA_REGION_LOOKUP", async () =>
+    db.region.findFirst({
+      where: {
         companyId,
-        websiteId,
-        regionId: region?.id,
-        createdByUserId,
-        title,
-        titleEn,
-        slug,
-        badge,
-        badgeEn,
-        category,
-        categoryEn,
-        shortDescription,
-        shortDescriptionEn,
-        description,
-        descriptionEn,
-        city,
-        district,
-        address: `${district}, ${city}`,
-        capacity,
-        bedroomCount,
-        bathroomCount,
-        poolType,
-        poolTypeEn,
-        nightlyBasePrice: nightlyPrice,
-        cleaningFee: 0,
-        minNightCount: 1,
-        currency: "TRY",
-        status,
-        featured,
-        averageRating: 0,
-        reviewCount: 0,
-        isSuperhost: false,
-        coverImageUrl: imageUrls[0],
-        coverAlt,
-        coverAltEn,
-        seoTitle,
-        seoTitleEn,
-        seoDescription,
-        seoDescriptionEn,
-        focusKeyword,
-        focusKeywordEn,
-        images: {
-          create: imageUrls.map((url, index) => ({
-            url,
-            storageKey: url.replace("/uploads/villas/", ""),
-            altText: index === 0 ? coverAlt : `${title} galeri gorseli ${index + 1}`,
-            sortOrder: index + 1,
-            isCover: index === 0,
-          })),
-        },
+        OR: [
+          { name: { equals: district, mode: "insensitive" } },
+          { name: { equals: city, mode: "insensitive" } },
+        ],
       },
-    })
-    .catch(mapPrismaVillaCreateError);
+      select: { id: true },
+    }),
+  );
+
+  const villa = await runVillaCreateStep("VILLA_DB_CREATE", async () =>
+    db.villa
+      .create({
+        data: {
+          companyId,
+          websiteId,
+          regionId: region?.id,
+          createdByUserId,
+          title,
+          titleEn,
+          slug,
+          badge,
+          badgeEn,
+          category,
+          categoryEn,
+          shortDescription,
+          shortDescriptionEn,
+          description,
+          descriptionEn,
+          city,
+          district,
+          address: `${district}, ${city}`,
+          capacity,
+          bedroomCount,
+          bathroomCount,
+          poolType,
+          poolTypeEn,
+          nightlyBasePrice: nightlyPrice,
+          cleaningFee: 0,
+          minNightCount: 1,
+          currency: "TRY",
+          status,
+          featured,
+          averageRating: 0,
+          reviewCount: 0,
+          isSuperhost: false,
+          coverImageUrl: imageUrls[0],
+          coverAlt,
+          coverAltEn,
+          seoTitle,
+          seoTitleEn,
+          seoDescription,
+          seoDescriptionEn,
+          focusKeyword,
+          focusKeywordEn,
+          images: {
+            create: imageUrls.map((url, index) => ({
+              url,
+              storageKey: url.replace("/uploads/villas/", ""),
+              altText: index === 0 ? coverAlt : `${title} galeri gorseli ${index + 1}`,
+              sortOrder: index + 1,
+              isCover: index === 0,
+            })),
+          },
+        },
+      })
+      .catch(mapPrismaVillaCreateError),
+  );
 
   return {
     id: villa.id,

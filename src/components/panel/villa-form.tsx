@@ -236,11 +236,17 @@ export function VillaForm() {
       const payload = await readVillaApiPayload(response);
 
       if (!response.ok) {
+        const debugPayload = {
+          status: response.status,
+          statusText: response.statusText,
+          payload,
+        };
         console.error("Villa upload API error", {
           status: response.status,
           statusText: response.statusText,
           payload,
         });
+        console.error("Villa upload API error JSON", JSON.stringify(debugPayload));
         setSubmitMessage(buildVillaApiErrorMessage(response, payload));
         return;
       }

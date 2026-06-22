@@ -35,7 +35,11 @@ export const dynamic = "force-dynamic";
 export default async function VillasPage() {
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const villaCatalog = await getDemoVillas({ companyId: company.id, includeMetrics: false });
+  const villaCatalog = await getDemoVillas({
+    companyId: company.id,
+    includeMetrics: false,
+    includeInactive: false,
+  });
 
   const villaListJsonLd = {
     "@context": "https://schema.org",

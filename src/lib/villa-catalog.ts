@@ -29,7 +29,7 @@ export type CatalogVilla = {
   badgeEn?: string;
   category: string;
   categoryEn?: string;
-  status: "ACTIVE" | "DRAFT";
+  status: "ACTIVE" | "DRAFT" | "PAUSED" | "ARCHIVED";
   featured: boolean;
   rating?: number;
   reviewCount?: number;

@@ -251,6 +251,63 @@ export async function saveFallbackVilla(record: CatalogVilla) {
   return normalizedRecord;
 }
 
+export async function updateFallbackVillaStatus(
+  companyId: string,
+  slug: string,
+  status: CatalogVilla["status"],
+) {
+  const fileData = await readDevelopmentDataFile("demo-villas.json", seedVillaCatalog);
+  const existingRecords = fileData as CatalogVilla[];
+  const normalizedCompanyId = normalizeDevelopmentCompanyId(companyId, slug);
+  let updatedVilla: CatalogVilla | null = null;
+
+  const nextRecords = existingRecords.map((villa) => {
+    const matches =
+      normalizeDevelopmentCompanyId(villa.companyId, villa.slug) === normalizedCompanyId &&
+      villa.slug === slug;
+
+    if (!matches) {
+      return villa;
+    }
+
+    updatedVilla = normalizeVillaRecord({
+      ...villa,
+      status,
+    });
+
+    return updatedVilla;
+  });
+
+  if (!updatedVilla) {
+    return null;
+  }
+
+  await writeDevelopmentDataFile("demo-villas.json", nextRecords);
+
+  return updatedVilla;
+}
+
+export async function deleteFallbackVilla(companyId: string, slug: string) {
+  const fileData = await readDevelopmentDataFile("demo-villas.json", seedVillaCatalog);
+  const existingRecords = fileData as CatalogVilla[];
+  const normalizedCompanyId = normalizeDevelopmentCompanyId(companyId, slug);
+  const nextRecords = existingRecords.filter(
+    (villa) =>
+      !(
+        normalizeDevelopmentCompanyId(villa.companyId, villa.slug) === normalizedCompanyId &&
+        villa.slug === slug
+      ),
+  );
+
+  if (nextRecords.length === existingRecords.length) {
+    return false;
+  }
+
+  await writeDevelopmentDataFile("demo-villas.json", nextRecords);
+
+  return true;
+}
+
 export async function getFallbackPricingRecords(companyId?: string | null) {
   const fileData = await readDevelopmentDataFile("demo-pricing.json", seedDemoPricingRecords);
   const normalized = fileData.map((record) => ({

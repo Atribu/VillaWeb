@@ -1,8 +1,23 @@
 import Link from "next/link";
+import { VillaStatusActions } from "@/components/panel/villa-status-actions";
 import { formatCurrency, getSeoScore } from "@/lib/villa-catalog";
 import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export const dynamic = "force-dynamic";
+
+const villaStatusLabels = {
+  ACTIVE: "Aktif",
+  DRAFT: "Taslak",
+  PAUSED: "Pasif",
+  ARCHIVED: "Arsiv",
+} as const;
+
+const villaStatusClasses = {
+  ACTIVE: "bg-emerald-50 text-emerald-700",
+  DRAFT: "bg-slate-100 text-slate-600",
+  PAUSED: "bg-amber-50 text-amber-700",
+  ARCHIVED: "bg-zinc-100 text-zinc-600",
+} as const;
 
 export default async function PanelVillasPage() {
   const villaCatalog = await getDemoVillas();
@@ -61,8 +76,10 @@ export default async function PanelVillasPage() {
                   {villa.locationLabel} • {villa.category}
                 </p>
               </div>
-              <div className="rounded-full bg-[var(--color-soft-white)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
-                {villa.status}
+              <div
+                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] ${villaStatusClasses[villa.status]}`}
+              >
+                {villaStatusLabels[villa.status]}
               </div>
             </div>
 
@@ -76,7 +93,7 @@ export default async function PanelVillasPage() {
               <div className="rounded-[1.5rem] bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Gorsel</p>
                 <p className="mt-2 text-xl font-semibold text-[var(--color-ink)]">
-                  {villa.imageCount} / 30
+                  {villa.imageCount} gorsel
                 </p>
               </div>
               <div className="rounded-[1.5rem] bg-slate-50 p-4">
@@ -111,12 +128,18 @@ export default async function PanelVillasPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href={`/villalar/${villa.slug}`}
-                className="inline-flex rounded-full bg-[var(--color-teal)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:rgba(15,118,110,0.9)]"
-              >
-                Public Detayi Ac
-              </Link>
+              {villa.status === "ACTIVE" ? (
+                <Link
+                  href={`/villalar/${villa.slug}`}
+                  className="inline-flex rounded-full bg-[var(--color-teal)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:rgba(15,118,110,0.9)]"
+                >
+                  Public Detayi Ac
+                </Link>
+              ) : (
+                <span className="inline-flex rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500">
+                  Publicte gizli
+                </span>
+              )}
               <Link
                 href="/panel/villalar/yeni"
                 className="inline-flex rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-[var(--color-aqua)] hover:text-[var(--color-teal)]"
@@ -129,6 +152,10 @@ export default async function PanelVillasPage() {
               >
                 Uygunluk Yonet
               </Link>
+            </div>
+
+            <div className="mt-5 border-t border-slate-100 pt-5">
+              <VillaStatusActions slug={villa.slug} title={villa.title} status={villa.status} />
             </div>
           </article>
         ))}

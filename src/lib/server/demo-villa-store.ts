@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -26,8 +26,10 @@ import {
   getPrimaryWebsiteIdForCompany,
 } from "@/lib/server/prisma-demo-shared";
 import {
+  deleteFallbackVilla,
   getFallbackVillas,
   saveFallbackVilla,
+  updateFallbackVillaStatus,
 } from "@/lib/server/development-fallback-data";
 import {
   isDevelopmentFallbackForced,
@@ -230,13 +232,18 @@ type DemoVillaQueryInput = {
   companyId?: string | null;
   includeAll?: boolean;
   includeMetrics?: boolean;
+  includeInactive?: boolean;
 };
 
 async function queryVillas(input?: DemoVillaQueryInput) {
   const companyId = await resolvePanelCompanyId(input);
+  const where: Prisma.VillaWhereInput = {
+    ...(companyId ? { companyId } : {}),
+    ...(input?.includeInactive === false ? { status: "ACTIVE" } : {}),
+  };
 
   return db.villa.findMany({
-    where: companyId ? { companyId } : undefined,
+    where,
     include: {
       images: {
         orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
@@ -248,6 +255,14 @@ async function queryVillas(input?: DemoVillaQueryInput) {
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+function filterVisibleVillas(villas: CatalogVilla[], input?: DemoVillaQueryInput) {
+  if (input?.includeInactive === false) {
+    return villas.filter((villa) => villa.status === "ACTIVE");
+  }
+
+  return villas;
 }
 
 export async function getDemoVillas(input?: DemoVillaQueryInput) {
@@ -279,7 +294,7 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
           badgeEn: villa.badgeEn ?? undefined,
           category: villa.category ?? "Villa",
           categoryEn: villa.categoryEn ?? undefined,
-          status: villa.status === "ACTIVE" ? "ACTIVE" : "DRAFT",
+          status: villa.status,
           featured: villa.featured,
           rating: decimalToNumber(villa.averageRating) || undefined,
           reviewCount: villa.reviewCount || undefined,
@@ -354,7 +369,7 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
         includeMetrics ? getDemoRequests(input) : Promise.resolve([]),
       ]);
 
-      return villas.map((villa) => {
+      return filterVisibleVillas(villas, input).map((villa) => {
         const resolvedPricing = getResolvedVillaPricing(villa, pricingRecords, discountCampaigns);
         const villaRequests = includeMetrics
           ? requests.filter((request) => request.villaSlug === villa.slug)
@@ -679,7 +694,7 @@ export async function createDemoVillaFromFormData(
     badgeEn: villa.badgeEn ?? badgeEn,
     category: villa.category ?? category,
     categoryEn: villa.categoryEn ?? categoryEn,
-    status: villa.status === "ACTIVE" ? "ACTIVE" : "DRAFT",
+    status: villa.status,
     featured: villa.featured,
     shortDescription: villa.shortDescription ?? shortDescription,
     shortDescriptionEn: villa.shortDescriptionEn ?? shortDescriptionEn,
@@ -710,6 +725,213 @@ export async function createDemoVillaFromFormData(
     createdAt: villa.createdAt.toISOString(),
     availabilityRanges: [],
   } satisfies CatalogVilla;
+}
+
+async function getFallbackVillaForMutation(slug: string, input?: { companyId?: string | null }) {
+  const companyId = await resolvePanelCompanyId(input);
+  const villas = await getFallbackVillas(companyId);
+  const villa = villas.find((item) => item.slug === slug) ?? null;
+
+  if (!villa) {
+    throw new DemoVillaStoreError("Villa bulunamadi.");
+  }
+
+  await assertPanelCompanyAccess(villa.companyId);
+
+  return villa;
+}
+
+async function resolveDbVillaForMutation(slug: string, input?: { companyId?: string | null }) {
+  const companyId = await resolvePanelCompanyId(input);
+  const villa = await db.villa.findFirst({
+    where: {
+      slug,
+      ...(companyId ? { companyId } : {}),
+    },
+    select: {
+      id: true,
+      companyId: true,
+      slug: true,
+    },
+  });
+
+  if (!villa) {
+    throw new DemoVillaStoreError("Villa bulunamadi.");
+  }
+
+  await assertPanelCompanyAccess(villa.companyId);
+
+  return villa;
+}
+
+export async function updateDemoVillaStatus(
+  slug: string,
+  status: Extract<CatalogVilla["status"], "ACTIVE" | "DRAFT" | "PAUSED" | "ARCHIVED">,
+  input?: { companyId?: string | null },
+) {
+  async function updateFallbackStatus() {
+    const villa = await getFallbackVillaForMutation(slug, input);
+    const updatedVilla = await updateFallbackVillaStatus(villa.companyId, slug, status);
+
+    if (!updatedVilla) {
+      throw new DemoVillaStoreError("Villa bulunamadi.");
+    }
+
+    return updatedVilla;
+  }
+
+  if (isDevelopmentFallbackForced()) {
+    return await updateFallbackStatus();
+  }
+
+  try {
+    const villa = await resolveDbVillaForMutation(slug, input);
+    const updated = await db.villa.update({
+      where: { id: villa.id },
+      data: { status },
+      include: {
+        images: {
+          orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
+        availabilityBlocks: {
+          orderBy: { startsAt: "asc" },
+        },
+        dailyMetrics: true,
+      },
+    });
+
+    return {
+      id: updated.id,
+      companyId: updated.companyId,
+      title: updated.title,
+      titleEn: updated.titleEn ?? undefined,
+      slug: updated.slug,
+      locationLabel: updated.district ? `${updated.district}, ${updated.city}` : updated.city,
+      city: updated.city,
+      district: updated.district ?? updated.city,
+      badge: updated.badge ?? "Secili Villa",
+      badgeEn: updated.badgeEn ?? undefined,
+      category: updated.category ?? "Villa",
+      categoryEn: updated.categoryEn ?? undefined,
+      status: updated.status,
+      featured: updated.featured,
+      rating: decimalToNumber(updated.averageRating) || undefined,
+      reviewCount: updated.reviewCount || undefined,
+      isSuperhost: updated.isSuperhost,
+      shortDescription: updated.shortDescription ?? updated.description,
+      shortDescriptionEn: updated.shortDescriptionEn ?? undefined,
+      description: updated.description,
+      descriptionEn: updated.descriptionEn ?? undefined,
+      nightlyPrice: decimalToNumber(updated.nightlyBasePrice),
+      cleaningFee: decimalToNumber(updated.cleaningFee),
+      minNightCount: updated.minNightCount,
+      capacity: updated.capacity,
+      bedroomCount: updated.bedroomCount,
+      bathroomCount: updated.bathroomCount,
+      poolType: updated.poolType ?? "Ozel havuz",
+      poolTypeEn: updated.poolTypeEn ?? undefined,
+      imageCount: updated.images.length,
+      imageUrls: updated.images.map((image) => image.url),
+      coverImageUrl:
+        updated.images.find((image) => image.isCover)?.url ??
+        updated.coverImageUrl ??
+        updated.images[0]?.url,
+      coverGradient: chooseCoverGradient(0),
+      seoTitle: updated.seoTitle ?? updated.title,
+      seoTitleEn: updated.seoTitleEn ?? undefined,
+      seoDescription: updated.seoDescription ?? updated.shortDescription ?? updated.description,
+      seoDescriptionEn: updated.seoDescriptionEn ?? undefined,
+      focusKeyword: updated.focusKeyword ?? updated.slug,
+      focusKeywordEn: updated.focusKeywordEn ?? undefined,
+      coverAlt: updated.coverAlt ?? updated.title,
+      coverAltEn: updated.coverAltEn ?? undefined,
+      viewCount: updated.dailyMetrics.reduce((sum, metric) => sum + metric.viewCount, 0),
+      requestCount: 0,
+      revenueLabel: formatCurrency(0),
+      createdAt: updated.createdAt.toISOString(),
+      availabilityRanges: sortAvailabilityRanges(
+        updated.availabilityBlocks.map((range) =>
+          mapAvailabilityRange({
+            id: range.id,
+            startsAt: range.startsAt,
+            endsAt: range.endsAt,
+            note: range.note,
+            blockType: range.blockType,
+            sourceRequestId: range.sourceRequestId,
+          }),
+        ),
+      ),
+    } satisfies CatalogVilla;
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      throw error;
+    }
+
+    if (isPrismaConnectionError(error)) {
+      return await updateFallbackStatus();
+    }
+
+    throw error;
+  }
+}
+
+async function removeVillaUploadDirectory(slug: string) {
+  const villaUploadDirectory = path.join(demoUploadDirectory, slug);
+
+  try {
+    await rm(villaUploadDirectory, { recursive: true, force: true });
+  } catch (error) {
+    console.error("Villa upload directory cleanup failed", {
+      slug,
+      uploadDirectory: villaUploadDirectory,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function deleteDemoVilla(slug: string, input?: { companyId?: string | null }) {
+  async function deleteFallbackRecord() {
+    const villa = await getFallbackVillaForMutation(slug, input);
+    const deleted = await deleteFallbackVilla(villa.companyId, slug);
+
+    if (!deleted) {
+      throw new DemoVillaStoreError("Villa bulunamadi.");
+    }
+
+    await removeVillaUploadDirectory(slug);
+
+    return { slug };
+  }
+
+  if (isDevelopmentFallbackForced()) {
+    return await deleteFallbackRecord();
+  }
+
+  try {
+    const villa = await resolveDbVillaForMutation(slug, input);
+
+    await db.villa.delete({
+      where: { id: villa.id },
+    });
+
+    await removeVillaUploadDirectory(slug);
+
+    return { slug };
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      throw error;
+    }
+
+    if (isPrismaConnectionError(error)) {
+      return await deleteFallbackRecord();
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      throw new DemoVillaStoreError("Villa bulunamadi.");
+    }
+
+    throw error;
+  }
 }
 
 export async function addDemoVillaAvailability(input: {

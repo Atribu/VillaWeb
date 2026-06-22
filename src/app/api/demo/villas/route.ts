@@ -42,7 +42,13 @@ function createUnexpectedUploadErrorResponse(error: unknown, stage: string) {
       errorId,
       stage,
     },
-    { status: 500 },
+    {
+      status: 500,
+      headers: {
+        "x-villa-upload-error-id": errorId,
+        "x-villa-upload-stage": stage,
+      },
+    },
   );
 }
 
@@ -61,7 +67,10 @@ export async function POST(request: Request) {
     villa = await createDemoVillaFromFormData(formData);
   } catch (error) {
     if (error instanceof DemoVillaStoreError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(
+        { error: error.message, stage: "VILLA_VALIDATION" },
+        { status: 400, headers: { "x-villa-upload-stage": "VILLA_VALIDATION" } },
+      );
     }
 
     return createUnexpectedUploadErrorResponse(

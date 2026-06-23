@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Prisma } from "@prisma/client";
+import sharp from "sharp";
 import { db } from "@/lib/db";
 import {
   VILLA_IMAGE_RULES,
@@ -81,7 +82,7 @@ function sortAvailabilityRanges(ranges: AvailabilityRange[]) {
 }
 
 function sanitizeFileName(value: string) {
-  return normalizeVillaSlug(value.replace(/\.webp$/i, "")) || "villa-gorsel";
+  return normalizeVillaSlug(path.parse(value).name) || "villa-gorsel";
 }
 
 function getTextField(formData: FormData, key: string) {
@@ -128,18 +129,57 @@ function validateImageFiles(files: File[], options: { requireAtLeastOne?: boolea
   const requireAtLeastOne = options.requireAtLeastOne ?? true;
 
   if (requireAtLeastOne && files.length === 0) {
-    throw new DemoVillaStoreError("En az 1 adet WEBP gorsel secmelisin.");
+    throw new DemoVillaStoreError("En az 1 adet gorsel secmelisin.");
   }
 
   for (const file of files) {
     const lowerCaseName = file.name.toLowerCase();
-    const isWebp =
-      VILLA_IMAGE_RULES.acceptedMimeTypes.includes(file.type as "image/webp") ||
-      VILLA_IMAGE_RULES.acceptedExtensions.some((extension) => lowerCaseName.endsWith(extension));
+    const hasImageMime = file.type.startsWith("image/");
+    const hasAcceptedMime = VILLA_IMAGE_RULES.acceptedMimeTypes.some(
+      (mimeType) => mimeType === file.type,
+    );
+    const hasAcceptedExtension = VILLA_IMAGE_RULES.acceptedExtensions.some((extension) =>
+      lowerCaseName.endsWith(extension),
+    );
 
-    if (!isWebp) {
-      throw new DemoVillaStoreError(`${file.name} dosyasi WEBP formatinda olmali.`);
+    if (!hasImageMime && !hasAcceptedMime && !hasAcceptedExtension) {
+      throw new DemoVillaStoreError(
+        `${file.name} dosyasi desteklenen bir resim formati olmali. Desteklenen formatlar: ${VILLA_IMAGE_RULES.acceptedInputLabel}.`,
+      );
     }
+  }
+}
+
+async function convertImageToWebpBuffer(file: File) {
+  const sourceBuffer = Buffer.from(await file.arrayBuffer());
+
+  try {
+    return await sharp(sourceBuffer, {
+      failOn: "error",
+      limitInputPixels: 100_000_000,
+    })
+      .rotate()
+      .resize({
+        width: 2400,
+        height: 2400,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({
+        quality: 82,
+        effort: 4,
+      })
+      .toBuffer();
+  } catch (error) {
+    console.error("Villa image conversion failed", {
+      fileName: file.name,
+      fileType: file.type,
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    throw new DemoVillaStoreError(
+      `${file.name} dosyasi WEBP formatina cevrilemedi. Lutfen JPG, PNG, WEBP veya desteklenen bir resim dosyasi yukle.`,
+    );
   }
 }
 
@@ -159,7 +199,7 @@ async function writeVillaImages(slug: string, files: File[], startIndex = 0) {
     await mkdir(villaUploadDirectory, { recursive: true });
 
     for (const [index, file] of files.entries()) {
-      const buffer = Buffer.from(await file.arrayBuffer());
+      const buffer = await convertImageToWebpBuffer(file);
       const imageIndex = startIndex + index + 1;
       const fileBaseName = sanitizeFileName(file.name) || `villa-gorsel-${imageIndex}`;
       const fileName = `${String(imageIndex).padStart(2, "0")}-${fileBaseName}.webp`;

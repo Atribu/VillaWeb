@@ -1,6 +1,31 @@
 export const VILLA_IMAGE_RULES = {
-  acceptedMimeTypes: ["image/webp"],
-  acceptedExtensions: [".webp"],
+  acceptedMimeTypes: [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/avif",
+    "image/gif",
+    "image/tiff",
+    "image/heic",
+    "image/heif",
+    "image/bmp",
+  ],
+  acceptedExtensions: [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".avif",
+    ".gif",
+    ".tif",
+    ".tiff",
+    ".heic",
+    ".heif",
+    ".bmp",
+  ],
+  acceptedInputLabel: "JPG, PNG, WEBP, AVIF, GIF, TIFF, HEIC",
+  outputExtension: ".webp",
+  outputMimeType: "image/webp",
 } as const;
 
 export type AvailabilityRange = {

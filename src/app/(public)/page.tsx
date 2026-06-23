@@ -74,6 +74,16 @@ function buildLocationCollections(villas: Awaited<ReturnType<typeof getDemoVilla
     .slice(0, 4);
 }
 
+function buildCompanyListingHref(companySlug: string, filters?: { location?: string }) {
+  const params = new URLSearchParams({ company: companySlug });
+
+  if (filters?.location) {
+    params.set("location", filters.location);
+  }
+
+  return `/villalar?${params.toString()}`;
+}
+
 export default async function HomePage() {
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
@@ -88,6 +98,7 @@ export default async function HomePage() {
   const heroImage = getCompanyHeroImage(company.slug, heroVilla?.coverImageUrl);
   const faqItems = getFaqItems(locale);
   const testimonials = getHomeTestimonials(locale);
+  const todayKey = new Date().toISOString().slice(0, 10);
 
   const faqJsonLd = {
     "@context": "https://schema.org",
@@ -133,40 +144,82 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <div className="mt-12 max-w-5xl rounded-[999px] bg-white p-2 shadow-[0_24px_54px_rgba(15,23,42,0.22)]">
+          <form
+            action="/villalar"
+            method="get"
+            className="mt-12 max-w-5xl rounded-[30px] bg-white p-2 shadow-[0_24px_54px_rgba(15,23,42,0.22)] md:rounded-[999px]"
+          >
+            <input type="hidden" name="company" value={company.slug} />
             <div className="flex flex-col md:flex-row md:items-center">
-              {[
-                [
-                  pickLocalized(locale, "Konum", "Location"),
-                  pickLocalized(locale, "Nereye gitmek isteriniz?", "Where would you like to go?"),
-                ],
-                [
-                  pickLocalized(locale, "Giris - Cikis", "Check-in / Check-out"),
-                  pickLocalized(locale, "Tarih secin", "Choose your dates"),
-                ],
-                [
-                  pickLocalized(locale, "Misafir", "Guests"),
-                  pickLocalized(locale, "Kisi sayisi", "Guest count"),
-                ],
-              ].map(([label, value], index) => (
-                <div
-                  key={label}
-                  className={`flex-1 px-6 py-4 text-left ${index < 2 ? "md:border-r md:border-slate-200" : ""}`}
-                >
-                  <p className="text-sm font-semibold text-slate-900">{label}</p>
-                  <p className="mt-1 text-base text-slate-500">{value}</p>
+              <div className="flex-1 px-6 py-4 text-left md:border-r md:border-slate-200">
+                <label htmlFor="home-location" className="text-sm font-semibold text-slate-900">
+                  {pickLocalized(locale, "Konum", "Location")}
+                </label>
+                <input
+                  id="home-location"
+                  name="location"
+                  list="home-location-options"
+                  placeholder={pickLocalized(
+                    locale,
+                    "Nereye gitmek isteriniz?",
+                    "Where would you like to go?",
+                  )}
+                  className="mt-1 w-full bg-transparent text-base text-slate-500 outline-none placeholder:text-slate-400"
+                />
+                <datalist id="home-location-options">
+                  {locationCollections.map((collection) => (
+                    <option key={collection.district} value={collection.district} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="flex-[1.25] px-6 py-4 text-left md:border-r md:border-slate-200">
+                <p className="text-sm font-semibold text-slate-900">
+                  {pickLocalized(locale, "Giris - Cikis", "Check-in / Check-out")}
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <input
+                    aria-label={pickLocalized(locale, "Giris tarihi", "Check-in date")}
+                    name="checkIn"
+                    type="date"
+                    min={todayKey}
+                    className="w-full bg-transparent text-sm text-slate-500 outline-none"
+                  />
+                  <input
+                    aria-label={pickLocalized(locale, "Cikis tarihi", "Check-out date")}
+                    name="checkOut"
+                    type="date"
+                    min={todayKey}
+                    className="w-full bg-transparent text-sm text-slate-500 outline-none"
+                  />
                 </div>
-              ))}
+              </div>
+
+              <div className="flex-1 px-6 py-4 text-left">
+                <label htmlFor="home-guests" className="text-sm font-semibold text-slate-900">
+                  {pickLocalized(locale, "Misafir", "Guests")}
+                </label>
+                <input
+                  id="home-guests"
+                  name="guests"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  placeholder={pickLocalized(locale, "Kisi sayisi", "Guest count")}
+                  className="mt-1 w-full bg-transparent text-base text-slate-500 outline-none placeholder:text-slate-400"
+                />
+              </div>
+
               <div className="px-2 pb-2 pt-0 md:pb-0 md:pt-0">
-                <Link
-                  href={getDemoCompanySiteHref(company.slug, "/villalar")}
+                <button
+                  type="submit"
                   className="inline-flex h-[58px] min-w-[170px] items-center justify-center rounded-[999px] bg-[#2f6eb1] px-8 text-lg font-semibold text-white transition hover:bg-[#275f9a]"
                 >
                   {pickLocalized(locale, "Ara", "Search")}
-                </Link>
+                </button>
               </div>
             </div>
-          </div>
+          </form>
         </Container>
       </section>
 
@@ -182,7 +235,7 @@ export default async function HomePage() {
             {locationCollections.map((collection) => (
               <Link
                 key={collection.district}
-                href={getDemoCompanySiteHref(company.slug, "/villalar")}
+                href={buildCompanyListingHref(company.slug, { location: collection.district })}
                 className="group relative overflow-hidden rounded-[16px] border border-[#dfe5ea] bg-white shadow-[0_14px_30px_rgba(15,23,42,0.06)]"
               >
                 <div

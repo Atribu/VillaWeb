@@ -195,12 +195,15 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
 
     for (const file of incomingFiles) {
       const lowerCaseName = file.name.toLowerCase();
-      const isWebp =
-        VILLA_IMAGE_RULES.acceptedMimeTypes.includes(file.type as "image/webp") ||
+      const isAcceptedImage =
+        file.type.startsWith("image/") ||
+        VILLA_IMAGE_RULES.acceptedMimeTypes.some((mimeType) => mimeType === file.type) ||
         VILLA_IMAGE_RULES.acceptedExtensions.some((extension) => lowerCaseName.endsWith(extension));
 
-      if (!isWebp) {
-        nextErrors.push(`${file.name}: sadece WEBP formatinda gorsel kabul edilir.`);
+      if (!isAcceptedImage) {
+        nextErrors.push(
+          `${file.name}: desteklenen bir resim formati olmali (${VILLA_IMAGE_RULES.acceptedInputLabel}).`,
+        );
         continue;
       }
 
@@ -260,7 +263,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
     event.preventDefault();
 
     if (!isEditMode && selectedFiles.length === 0) {
-      setSubmitMessage("En az 1 adet WEBP gorsel eklemeden villa kaydi tamamlanamaz.");
+      setSubmitMessage("En az 1 adet gorsel eklemeden villa kaydi tamamlanamaz.");
       return;
     }
 
@@ -484,13 +487,13 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         </p>
         <h2 className="mt-3 text-3xl font-semibold text-[var(--color-ink)]">
           {isEditMode
-            ? "Yeni WEBP gorselleri mevcut galeriye ekleyebilirsin"
-            : "Sadece WEBP formatinda gorsel yukleyebilirsin"}
+            ? "Yeni gorselleri mevcut galeriye ekleyebilirsin"
+            : "Yuklenen gorseller otomatik WEBP formatina cevrilir"}
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
           {isEditMode
-            ? "Duzenleme sirasinda gorsel secmezsen mevcut villa gorselleri korunur. Yeni secilen WEBP dosyalari galerinin sonuna eklenir."
-            : "Demo icin secilen dosyalar proje klasorundeki `public/uploads/villas` altina kaydedilir."}
+            ? "Duzenleme sirasinda gorsel secmezsen mevcut villa gorselleri korunur. Yeni secilen resimler WEBP'e cevrilip galerinin sonuna eklenir."
+            : "JPG, PNG, WEBP ve diger desteklenen resim dosyalari sunucuda WEBP'e cevrilip kaydedilir."}
         </p>
 
         {isEditMode && initialVilla?.imageUrls.length ? (
@@ -532,20 +535,20 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[1.5rem] bg-white px-6 py-10 text-center shadow-sm shadow-slate-200/50"
           >
             <span className="rounded-full bg-[var(--color-sand)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-700">
-              WEBP Yukle
+              Gorsel Yukle
             </span>
             <span className="text-lg font-semibold text-[var(--color-ink)]">
               Gorselleri sec veya buraya surukle
             </span>
             <span className="text-sm text-slate-500">
-              Sadece WEBP formatindaki gorseller kabul edilir.
+              {VILLA_IMAGE_RULES.acceptedInputLabel} gibi formatlar WEBP&apos;e donusturulur.
             </span>
           </label>
           <input
             id="villa-images"
             name="images"
             type="file"
-            accept=".webp,image/webp"
+            accept="image/*"
             multiple
             onChange={handleImageSelection}
             className="sr-only"
@@ -572,7 +575,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                 <div>
                   <p className="text-sm font-semibold text-[var(--color-ink)]">{file.name}</p>
                   <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">
-                    {file.type || "image/webp"}
+                    {file.type || "image"} {"- WEBP'e cevrilecek"}
                   </p>
                 </div>
                 <button

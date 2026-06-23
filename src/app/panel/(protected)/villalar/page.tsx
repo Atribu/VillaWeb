@@ -128,6 +128,12 @@ export default async function PanelVillasPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={`/panel/villalar/${villa.slug}/duzenle`}
+                className="inline-flex rounded-full bg-[var(--color-ink)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+              >
+                Duzenle
+              </Link>
               {villa.status === "ACTIVE" ? (
                 <Link
                   href={`/villalar/${villa.slug}`}

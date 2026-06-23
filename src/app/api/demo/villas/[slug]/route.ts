@@ -4,6 +4,7 @@ import { getUserSession } from "@/lib/auth/server-session";
 import {
   deleteDemoVilla,
   DemoVillaStoreError,
+  updateDemoVillaFromFormData,
   updateDemoVillaStatus,
 } from "@/lib/server/demo-villa-store";
 import type { CatalogVilla } from "@/lib/villa-catalog";
@@ -31,6 +32,7 @@ function revalidateVillaMutationPaths(slug: string) {
   revalidatePath("/talep");
   revalidatePath("/panel");
   revalidatePath("/panel/villalar");
+  revalidatePath(`/panel/villalar/${slug}/duzenle`);
   revalidatePath(`/panel/villalar/${slug}/uygunluk`);
 }
 
@@ -66,6 +68,42 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json(
       { error: "Villa durumu guncellenirken beklenmeyen bir hata olustu." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PUT(request: Request, context: RouteContext) {
+  const session = await getUserSession();
+
+  if (!session) {
+    return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
+  }
+
+  let formData: FormData;
+
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Villa form verisi okunamadi." }, { status: 400 });
+  }
+
+  try {
+    const { slug } = await context.params;
+    const villa = await updateDemoVillaFromFormData(slug, formData);
+    revalidateVillaMutationPaths(slug);
+    revalidateVillaMutationPaths(villa.slug);
+
+    return NextResponse.json({ villa });
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    console.error(error);
+
+    return NextResponse.json(
+      { error: "Villa guncellenirken beklenmeyen bir hata olustu." },
       { status: 500 },
     );
   }

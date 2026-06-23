@@ -116,8 +116,18 @@ function validateRequiredText(value: string, fieldLabel: string) {
   return value;
 }
 
-function validateImageFiles(files: File[]) {
-  if (files.length === 0) {
+function parseVillaStatus(value: string, fallback: CatalogVilla["status"] = "ACTIVE") {
+  if (value === "ACTIVE" || value === "DRAFT" || value === "PAUSED" || value === "ARCHIVED") {
+    return value;
+  }
+
+  return fallback;
+}
+
+function validateImageFiles(files: File[], options: { requireAtLeastOne?: boolean } = {}) {
+  const requireAtLeastOne = options.requireAtLeastOne ?? true;
+
+  if (requireAtLeastOne && files.length === 0) {
     throw new DemoVillaStoreError("En az 1 adet WEBP gorsel secmelisin.");
   }
 
@@ -141,7 +151,7 @@ function getFileSystemErrorCode(error: unknown) {
   return "";
 }
 
-async function writeVillaImages(slug: string, files: File[]) {
+async function writeVillaImages(slug: string, files: File[], startIndex = 0) {
   const villaUploadDirectory = path.join(demoUploadDirectory, slug);
   const imageUrls: string[] = [];
 
@@ -150,8 +160,9 @@ async function writeVillaImages(slug: string, files: File[]) {
 
     for (const [index, file] of files.entries()) {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const fileBaseName = sanitizeFileName(file.name) || `villa-gorsel-${index + 1}`;
-      const fileName = `${String(index + 1).padStart(2, "0")}-${fileBaseName}.webp`;
+      const imageIndex = startIndex + index + 1;
+      const fileBaseName = sanitizeFileName(file.name) || `villa-gorsel-${imageIndex}`;
+      const fileName = `${String(imageIndex).padStart(2, "0")}-${fileBaseName}.webp`;
       const targetPath = path.join(villaUploadDirectory, fileName);
       await writeFile(targetPath, buffer);
       imageUrls.push(`/uploads/villas/${slug}/${fileName}`);
@@ -501,7 +512,7 @@ export async function createDemoVillaFromFormData(
   const poolType = validateRequiredText(getTextField(formData, "poolType"), "Havuz tipi");
   const poolTypeEn = validateRequiredText(getTextField(formData, "poolTypeEn"), "Havuz tipi (EN)");
   const featured = getTextField(formData, "featured") === "on";
-  const status = getTextField(formData, "status") === "DRAFT" ? "DRAFT" : "ACTIVE";
+  const status = parseVillaStatus(getTextField(formData, "status"));
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File && value.size > 0);
@@ -762,6 +773,271 @@ async function resolveDbVillaForMutation(slug: string, input?: { companyId?: str
   await assertPanelCompanyAccess(villa.companyId);
 
   return villa;
+}
+
+export async function updateDemoVillaFromFormData(
+  slug: string,
+  formData: FormData,
+  input?: { companyId?: string | null },
+) {
+  const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
+  const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
+  const slugInput = getTextField(formData, "slug") || title;
+  const nextSlug = normalizeVillaSlug(slugInput);
+  const city = validateRequiredText(getTextField(formData, "city"), "Sehir");
+  const district = validateRequiredText(getTextField(formData, "district"), "Ilce");
+  const badge = validateRequiredText(getTextField(formData, "badge"), "Vitrin etiketi");
+  const badgeEn = validateRequiredText(getTextField(formData, "badgeEn"), "Vitrin etiketi (EN)");
+  const category = validateRequiredText(getTextField(formData, "category"), "Kategori");
+  const categoryEn = validateRequiredText(getTextField(formData, "categoryEn"), "Kategori (EN)");
+  const shortDescription = validateRequiredText(
+    getTextField(formData, "shortDescription"),
+    "Kisa aciklama",
+  );
+  const shortDescriptionEn = validateRequiredText(
+    getTextField(formData, "shortDescriptionEn"),
+    "Kisa aciklama (EN)",
+  );
+  const description = validateRequiredText(
+    getTextField(formData, "description"),
+    "Detayli aciklama",
+  );
+  const descriptionEn = validateRequiredText(
+    getTextField(formData, "descriptionEn"),
+    "Detayli aciklama (EN)",
+  );
+  const seoTitle = validateRequiredText(getTextField(formData, "seoTitle"), "SEO basligi");
+  const seoTitleEn = validateRequiredText(getTextField(formData, "seoTitleEn"), "SEO basligi (EN)");
+  const seoDescription = validateRequiredText(
+    getTextField(formData, "seoDescription"),
+    "Meta aciklama",
+  );
+  const seoDescriptionEn = validateRequiredText(
+    getTextField(formData, "seoDescriptionEn"),
+    "Meta aciklama (EN)",
+  );
+  const focusKeyword = validateRequiredText(
+    getTextField(formData, "focusKeyword"),
+    "Odak anahtar kelime",
+  );
+  const focusKeywordEn = validateRequiredText(
+    getTextField(formData, "focusKeywordEn"),
+    "Odak anahtar kelime (EN)",
+  );
+  const coverAlt = validateRequiredText(
+    getTextField(formData, "coverAlt"),
+    "Kapak gorseli alt metni",
+  );
+  const coverAltEn = validateRequiredText(
+    getTextField(formData, "coverAltEn"),
+    "Kapak gorseli alt metni (EN)",
+  );
+
+  if (!nextSlug) {
+    throw new DemoVillaStoreError("SEO uyumlu bir slug olusturulamadi.");
+  }
+
+  const capacity = parseIntegerField(getTextField(formData, "capacity"), "Kapasite");
+  const bedroomCount = parseIntegerField(getTextField(formData, "bedroomCount"), "Oda sayisi");
+  const bathroomCount = parseIntegerField(getTextField(formData, "bathroomCount"), "Banyo sayisi");
+  const nightlyPrice = parsePriceField(getTextField(formData, "nightlyPrice"), "Gecelik fiyat");
+  const discountedNightlyPriceValue = getTextField(formData, "discountedNightlyPrice");
+  const discountedNightlyPrice = discountedNightlyPriceValue
+    ? parsePriceField(discountedNightlyPriceValue, "Indirimli fiyat")
+    : undefined;
+
+  if (discountedNightlyPrice && discountedNightlyPrice >= nightlyPrice) {
+    throw new DemoVillaStoreError("Indirimli fiyat normal fiyattan kucuk olmalidir.");
+  }
+
+  const poolType = validateRequiredText(getTextField(formData, "poolType"), "Havuz tipi");
+  const poolTypeEn = validateRequiredText(getTextField(formData, "poolTypeEn"), "Havuz tipi (EN)");
+  const featured = getTextField(formData, "featured") === "on";
+  const status = parseVillaStatus(getTextField(formData, "status"));
+  const files = formData
+    .getAll("images")
+    .filter((value): value is File => value instanceof File && value.size > 0);
+
+  validateImageFiles(files, { requireAtLeastOne: false });
+
+  async function updateFallbackVillaRecord() {
+    const current = await getFallbackVillaForMutation(slug, input);
+    const fallbackVillas = await getFallbackVillas(current.companyId);
+    const duplicate = fallbackVillas.find(
+      (villa) => villa.slug === nextSlug && villa.slug !== current.slug,
+    );
+
+    if (duplicate) {
+      throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
+    }
+
+    const newImageUrls =
+      files.length > 0
+        ? await writeVillaImages(nextSlug, files, current.imageUrls.length)
+        : [];
+    const imageUrls = [...current.imageUrls, ...newImageUrls];
+    const updatedVilla = {
+      ...current,
+      title,
+      titleEn,
+      slug: nextSlug,
+      locationLabel: `${district}, ${city}`,
+      city,
+      district,
+      badge,
+      badgeEn,
+      category,
+      categoryEn,
+      status,
+      featured,
+      shortDescription,
+      shortDescriptionEn,
+      description,
+      descriptionEn,
+      nightlyPrice,
+      discountedNightlyPrice,
+      capacity,
+      bedroomCount,
+      bathroomCount,
+      poolType,
+      poolTypeEn,
+      imageCount: imageUrls.length,
+      imageUrls,
+      coverImageUrl: current.coverImageUrl ?? imageUrls[0],
+      seoTitle,
+      seoTitleEn,
+      seoDescription,
+      seoDescriptionEn,
+      focusKeyword,
+      focusKeywordEn,
+      coverAlt,
+      coverAltEn,
+    } satisfies CatalogVilla;
+
+    if (nextSlug !== current.slug) {
+      await deleteFallbackVilla(current.companyId, current.slug);
+    }
+
+    return await saveFallbackVilla(updatedVilla);
+  }
+
+  if (isDevelopmentFallbackForced()) {
+    return await updateFallbackVillaRecord();
+  }
+
+  try {
+    const scopedCompanyId = await resolvePanelCompanyId(input);
+    const current = await db.villa.findFirst({
+      where: {
+        slug,
+        ...(scopedCompanyId ? { companyId: scopedCompanyId } : {}),
+      },
+      include: {
+        images: {
+          orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        },
+      },
+    });
+
+    if (!current) {
+      throw new DemoVillaStoreError("Villa bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    if (nextSlug !== current.slug) {
+      const duplicate = await db.villa.findFirst({
+        where: {
+          companyId: current.companyId,
+          slug: nextSlug,
+          NOT: { id: current.id },
+        },
+        select: { id: true },
+      });
+
+      if (duplicate) {
+        throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
+      }
+    }
+
+    const newImageUrls =
+      files.length > 0 ? await writeVillaImages(nextSlug, files, current.images.length) : [];
+    const coverImageUrl = current.coverImageUrl ?? current.images[0]?.url ?? newImageUrls[0];
+
+    await db.villa.update({
+      where: { id: current.id },
+      data: {
+        title,
+        titleEn,
+        slug: nextSlug,
+        badge,
+        badgeEn,
+        category,
+        categoryEn,
+        shortDescription,
+        shortDescriptionEn,
+        description,
+        descriptionEn,
+        city,
+        district,
+        address: `${district}, ${city}`,
+        capacity,
+        bedroomCount,
+        bathroomCount,
+        poolType,
+        poolTypeEn,
+        nightlyBasePrice: nightlyPrice,
+        status,
+        featured,
+        coverImageUrl,
+        coverAlt,
+        coverAltEn,
+        seoTitle,
+        seoTitleEn,
+        seoDescription,
+        seoDescriptionEn,
+        focusKeyword,
+        focusKeywordEn,
+        ...(newImageUrls.length > 0
+          ? {
+              images: {
+                create: newImageUrls.map((url, index) => ({
+                  url,
+                  storageKey: url.replace("/uploads/villas/", ""),
+                  altText:
+                    current.images.length + index === 0
+                      ? coverAlt
+                      : `${title} galeri gorseli ${current.images.length + index + 1}`,
+                  sortOrder: current.images.length + index + 1,
+                  isCover: current.images.length === 0 && index === 0,
+                })),
+              },
+            }
+          : {}),
+      },
+    });
+
+    const updatedVilla = await getDemoVillaBySlug(nextSlug, {
+      companyId: current.companyId,
+      includeMetrics: false,
+    });
+
+    if (!updatedVilla) {
+      throw new DemoVillaStoreError("Villa guncellendi ancak tekrar okunamadi.");
+    }
+
+    return updatedVilla;
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      throw error;
+    }
+
+    if (isPrismaConnectionError(error)) {
+      return await updateFallbackVillaRecord();
+    }
+
+    throw error;
+  }
 }
 
 export async function updateDemoVillaStatus(

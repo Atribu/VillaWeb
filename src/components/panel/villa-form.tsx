@@ -3,7 +3,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { VILLA_IMAGE_RULES } from "@/lib/villa-catalog";
+import { VILLA_IMAGE_RULES, type CatalogVilla } from "@/lib/villa-catalog";
 
 const baseFields = [
   { name: "title", label: "Villa basligi", placeholder: "Villa Soleia Lagoon", required: true },
@@ -98,6 +98,11 @@ type VillaApiPayload = {
   villa?: { title: string };
 };
 
+type VillaFormProps = {
+  mode?: "create" | "edit";
+  initialVilla?: CatalogVilla;
+};
+
 async function readVillaApiPayload(response: Response): Promise<VillaApiPayload & { raw?: string }> {
   const body = await response.text();
 
@@ -129,18 +134,58 @@ function buildVillaApiErrorMessage(
   ) + suffix;
 }
 
-export function VillaForm() {
+function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string) {
+  if (!villa) {
+    return "";
+  }
+
+  const values: Record<string, string | number | undefined> = {
+    title: villa.title,
+    slug: villa.slug,
+    city: villa.city,
+    district: villa.district,
+    badge: villa.badge,
+    category: villa.category,
+    capacity: villa.capacity,
+    bedroomCount: villa.bedroomCount,
+    bathroomCount: villa.bathroomCount,
+    poolType: villa.poolType,
+    nightlyPrice: villa.nightlyPrice,
+    discountedNightlyPrice: villa.discountedNightlyPrice,
+    titleEn: villa.titleEn,
+    badgeEn: villa.badgeEn,
+    categoryEn: villa.categoryEn,
+    poolTypeEn: villa.poolTypeEn,
+    shortDescription: villa.shortDescription,
+    shortDescriptionEn: villa.shortDescriptionEn,
+    description: villa.description,
+    descriptionEn: villa.descriptionEn,
+    seoTitle: villa.seoTitle,
+    seoTitleEn: villa.seoTitleEn,
+    seoDescription: villa.seoDescription,
+    seoDescriptionEn: villa.seoDescriptionEn,
+    focusKeyword: villa.focusKeyword,
+    focusKeywordEn: villa.focusKeywordEn,
+    coverAlt: villa.coverAlt,
+    coverAltEn: villa.coverAltEn,
+  };
+
+  return values[fieldName] ?? "";
+}
+
+export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
   const router = useRouter();
+  const isEditMode = mode === "edit";
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [submitMessage, setSubmitMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [seoPreview, setSeoPreview] = useState({
-    title: "",
-    slug: "",
-    seoTitle: "",
-    seoDescription: "",
-    focusKeyword: "",
+    title: initialVilla?.title ?? "",
+    slug: initialVilla?.slug ?? "",
+    seoTitle: initialVilla?.seoTitle ?? "",
+    seoDescription: initialVilla?.seoDescription ?? "",
+    focusKeyword: initialVilla?.focusKeyword ?? "",
   });
 
   function handleImageSelection(event: ChangeEvent<HTMLInputElement>) {
@@ -214,7 +259,7 @@ export function VillaForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (selectedFiles.length === 0) {
+    if (!isEditMode && selectedFiles.length === 0) {
       setSubmitMessage("En az 1 adet WEBP gorsel eklemeden villa kaydi tamamlanamaz.");
       return;
     }
@@ -228,8 +273,12 @@ export function VillaForm() {
       formData.delete("images");
       selectedFiles.forEach((file) => formData.append("images", file));
 
-      const response = await fetch("/api/demo/villas", {
-        method: "POST",
+      const endpoint =
+        isEditMode && initialVilla
+          ? `/api/demo/villas/${encodeURIComponent(initialVilla.slug)}`
+          : "/api/demo/villas";
+      const response = await fetch(endpoint, {
+        method: isEditMode ? "PUT" : "POST",
         body: formData,
       });
 
@@ -255,14 +304,16 @@ export function VillaForm() {
       setSelectedFiles([]);
       setUploadErrors([]);
       setSeoPreview({
-        title: "",
+        title: payload.villa?.title ?? "",
         slug: "",
         seoTitle: "",
         seoDescription: "",
         focusKeyword: "",
       });
       setSubmitMessage(
-        `${payload.villa?.title ?? "Villa"} demo kaydina eklendi. Liste ekrani yenileniyor.`,
+        isEditMode
+          ? `${payload.villa?.title ?? "Villa"} guncellendi. Liste ekrani yenileniyor.`
+          : `${payload.villa?.title ?? "Villa"} demo kaydina eklendi. Liste ekrani yenileniyor.`,
       );
       router.push("/panel/villalar");
       router.refresh();
@@ -287,7 +338,9 @@ export function VillaForm() {
             </h2>
           </div>
           <div className="rounded-full bg-[var(--color-soft-white)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-            Secilen gorsel: {selectedFiles.length}
+            {isEditMode
+              ? `Mevcut: ${initialVilla?.imageCount ?? 0} / Yeni: ${selectedFiles.length}`
+              : `Secilen gorsel: ${selectedFiles.length}`}
           </div>
         </div>
 
@@ -301,6 +354,7 @@ export function VillaForm() {
                 id={field.name}
                 name={field.name}
                 required={field.required}
+                defaultValue={getInitialFieldValue(initialVilla, field.name)}
                 placeholder={field.placeholder}
                 onChange={handleSeoFieldChange}
                 className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
@@ -315,16 +369,23 @@ export function VillaForm() {
             <select
               id="status"
               name="status"
-              defaultValue="ACTIVE"
+              defaultValue={initialVilla?.status ?? "ACTIVE"}
               className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
             >
               <option value="ACTIVE">Aktif</option>
               <option value="DRAFT">Taslak</option>
+              <option value="PAUSED">Pasif</option>
+              <option value="ARCHIVED">Arsiv</option>
             </select>
           </div>
 
           <label className="flex items-center gap-3 rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            <input type="checkbox" name="featured" className="h-4 w-4 rounded border-slate-300" />
+            <input
+              type="checkbox"
+              name="featured"
+              defaultChecked={initialVilla?.featured ?? false}
+              className="h-4 w-4 rounded border-slate-300"
+            />
             One cikan villa olarak vitrinde goster
           </label>
 
@@ -337,6 +398,7 @@ export function VillaForm() {
               name="shortDescription"
               rows={3}
               required
+              defaultValue={getInitialFieldValue(initialVilla, "shortDescription")}
               placeholder="Panoramik manzarali, ozel havuzlu premium villa."
               className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
             />
@@ -351,6 +413,7 @@ export function VillaForm() {
               name="description"
               rows={5}
               required
+              defaultValue={getInitialFieldValue(initialVilla, "description")}
               placeholder="Villa detay sayfasinda yer alacak uzun aciklama metni."
               className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
             />
@@ -374,6 +437,7 @@ export function VillaForm() {
                     id={field.name}
                     name={field.name}
                     required
+                    defaultValue={getInitialFieldValue(initialVilla, field.name)}
                     placeholder={field.placeholder}
                     className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                   />
@@ -389,6 +453,7 @@ export function VillaForm() {
                   name="shortDescriptionEn"
                   rows={3}
                   required
+                  defaultValue={getInitialFieldValue(initialVilla, "shortDescriptionEn")}
                   placeholder="Panoramic sea views, an infinity pool and a premium stay for up to 8 guests."
                   className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                 />
@@ -403,6 +468,7 @@ export function VillaForm() {
                   name="descriptionEn"
                   rows={5}
                   required
+                  defaultValue={getInitialFieldValue(initialVilla, "descriptionEn")}
                   placeholder="Long English copy for the villa detail page."
                   className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                 />
@@ -417,11 +483,48 @@ export function VillaForm() {
           Gorsel Yukleme
         </p>
         <h2 className="mt-3 text-3xl font-semibold text-[var(--color-ink)]">
-          Sadece WEBP formatinda gorsel yukleyebilirsin
+          {isEditMode
+            ? "Yeni WEBP gorselleri mevcut galeriye ekleyebilirsin"
+            : "Sadece WEBP formatinda gorsel yukleyebilirsin"}
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Demo icin secilen dosyalar proje klasorundeki `public/uploads/villas` altina kaydedilir.
+          {isEditMode
+            ? "Duzenleme sirasinda gorsel secmezsen mevcut villa gorselleri korunur. Yeni secilen WEBP dosyalari galerinin sonuna eklenir."
+            : "Demo icin secilen dosyalar proje klasorundeki `public/uploads/villas` altina kaydedilir."}
         </p>
+
+        {isEditMode && initialVilla?.imageUrls.length ? (
+          <div className="mt-8 rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Mevcut Galeri
+                </p>
+                <p className="mt-2 text-sm text-slate-600">
+                  Bu gorseller kayitli kalir; yeni secilenler listenin sonuna eklenir.
+                </p>
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                {initialVilla.imageUrls.length} gorsel
+              </p>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {initialVilla.imageUrls.map((imageUrl, index) => (
+                <div
+                  key={`${imageUrl}-${index}`}
+                  className="relative min-h-36 overflow-hidden rounded-[1.25rem] bg-slate-200 bg-cover bg-center"
+                  style={{ backgroundImage: `url(${imageUrl})` }}
+                >
+                  {imageUrl === initialVilla.coverImageUrl || index === 0 ? (
+                    <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">
+                      Kapak
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-8 rounded-[1.75rem] border border-dashed border-[var(--color-aqua)] bg-[var(--color-soft-white)] p-6">
           <label
@@ -506,6 +609,7 @@ export function VillaForm() {
                     name={field.name}
                     required
                     rows={4}
+                    defaultValue={getInitialFieldValue(initialVilla, field.name)}
                     placeholder={field.placeholder}
                     onChange={handleSeoFieldChange}
                     className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
@@ -515,6 +619,7 @@ export function VillaForm() {
                     id={field.name}
                     name={field.name}
                     required
+                    defaultValue={getInitialFieldValue(initialVilla, field.name)}
                     placeholder={field.placeholder}
                     onChange={handleSeoFieldChange}
                     className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
@@ -540,6 +645,7 @@ export function VillaForm() {
                         name={field.name}
                         required
                         rows={4}
+                        defaultValue={getInitialFieldValue(initialVilla, field.name)}
                         placeholder={field.placeholder}
                         className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                       />
@@ -548,6 +654,7 @@ export function VillaForm() {
                         id={field.name}
                         name={field.name}
                         required
+                        defaultValue={getInitialFieldValue(initialVilla, field.name)}
                         placeholder={field.placeholder}
                         className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                       />
@@ -595,15 +702,20 @@ export function VillaForm() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm leading-7 text-slate-500">
-          Demo akisinda kayitlar yerel veri dosyasina yazilir ve proje icindeki gorsel klasorunde
-          saklanir.
+          Kayitlar PostgreSQL veritabanina, gorseller ise sunucudaki villa upload klasorune yazilir.
         </p>
         <button
           type="submit"
           disabled={isSubmitting}
           className="rounded-full bg-[var(--color-teal)] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[color:rgba(15,118,110,0.9)] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isSubmitting ? "Villa kaydediliyor..." : "Villa Kaydini Tamamla"}
+          {isSubmitting
+            ? isEditMode
+              ? "Villa guncelleniyor..."
+              : "Villa kaydediliyor..."
+            : isEditMode
+              ? "Villa Bilgilerini Guncelle"
+              : "Villa Kaydini Tamamla"}
         </button>
       </div>
     </form>

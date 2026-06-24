@@ -120,19 +120,19 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
 
-      <section className="relative min-h-[82vh] overflow-hidden bg-slate-950">
+      <section className="relative min-h-[82vh] overflow-hidden bg-[var(--serene-primary)]">
         {heroImage ? (
           <div
             className="absolute inset-0 bg-cover bg-center"
             style={{ backgroundImage: `url(${heroImage})` }}
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/72 via-slate-950/40 to-slate-950/24" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.24),rgba(15,23,42,0.44))]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#001b3c]/78 via-[#001b3c]/44 to-[#1a365d]/22" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,27,60,0.18),rgba(0,27,60,0.5))]" />
 
         <Container className="relative flex min-h-[82vh] flex-col justify-center pb-24 pt-36">
           <div className="max-w-3xl text-white">
-            <h1 className="max-w-2xl font-sans text-5xl font-semibold tracking-[-0.04em] text-balance sm:text-6xl lg:text-[4.6rem]">
+            <h1 className="max-w-2xl font-display text-5xl font-semibold tracking-[-0.04em] text-balance sm:text-6xl lg:text-[4.6rem]">
               {pickLocalized(locale, "Kusursuz kacamaginizi kesfedin", "Discover your perfect escape")}
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/84">
@@ -147,12 +147,12 @@ export default async function HomePage() {
           <form
             action="/villalar"
             method="get"
-            className="mt-12 max-w-5xl rounded-[30px] bg-white p-2 shadow-[0_24px_54px_rgba(15,23,42,0.22)] md:rounded-[999px]"
+            className="mt-12 max-w-5xl rounded-[24px] border border-white/30 bg-white p-2 shadow-[0_24px_54px_rgba(0,32,69,0.24)]"
           >
             <input type="hidden" name="company" value={company.slug} />
             <div className="flex flex-col md:flex-row md:items-center">
-              <div className="flex-1 px-6 py-4 text-left md:border-r md:border-slate-200">
-                <label htmlFor="home-location" className="text-sm font-semibold text-slate-900">
+              <div className="flex-1 px-6 py-4 text-left md:border-r md:border-[var(--serene-outline-variant)]">
+                <label htmlFor="home-location" className="text-sm font-semibold text-[var(--serene-on-surface)]">
                   {pickLocalized(locale, "Konum", "Location")}
                 </label>
                 <input
@@ -164,7 +164,7 @@ export default async function HomePage() {
                     "Nereye gitmek isteriniz?",
                     "Where would you like to go?",
                   )}
-                  className="mt-1 w-full bg-transparent text-base text-slate-500 outline-none placeholder:text-slate-400"
+                  className="mt-1 w-full bg-transparent text-base text-[var(--serene-on-surface-variant)] outline-none placeholder:text-[var(--serene-outline)]"
                 />
                 <datalist id="home-location-options">
                   {locationCollections.map((collection) => (
@@ -173,8 +173,8 @@ export default async function HomePage() {
                 </datalist>
               </div>
 
-              <div className="flex-[1.25] px-6 py-4 text-left md:border-r md:border-slate-200">
-                <p className="text-sm font-semibold text-slate-900">
+              <div className="flex-[1.25] px-6 py-4 text-left md:border-r md:border-[var(--serene-outline-variant)]">
+                <p className="text-sm font-semibold text-[var(--serene-on-surface)]">
                   {pickLocalized(locale, "Giris - Cikis", "Check-in / Check-out")}
                 </p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -183,20 +183,20 @@ export default async function HomePage() {
                     name="checkIn"
                     type="date"
                     min={todayKey}
-                    className="w-full bg-transparent text-sm text-slate-500 outline-none"
+                    className="w-full rounded-[8px] bg-[var(--serene-surface-low)] px-3 py-2 text-sm text-[var(--serene-on-surface-variant)] outline-none transition focus:ring-2 focus:ring-[var(--serene-primary-muted)]"
                   />
                   <input
                     aria-label={pickLocalized(locale, "Cikis tarihi", "Check-out date")}
                     name="checkOut"
                     type="date"
                     min={todayKey}
-                    className="w-full bg-transparent text-sm text-slate-500 outline-none"
+                    className="w-full rounded-[8px] bg-[var(--serene-surface-low)] px-3 py-2 text-sm text-[var(--serene-on-surface-variant)] outline-none transition focus:ring-2 focus:ring-[var(--serene-primary-muted)]"
                   />
                 </div>
               </div>
 
               <div className="flex-1 px-6 py-4 text-left">
-                <label htmlFor="home-guests" className="text-sm font-semibold text-slate-900">
+                <label htmlFor="home-guests" className="text-sm font-semibold text-[var(--serene-on-surface)]">
                   {pickLocalized(locale, "Misafir", "Guests")}
                 </label>
                 <input
@@ -206,14 +206,14 @@ export default async function HomePage() {
                   min={1}
                   inputMode="numeric"
                   placeholder={pickLocalized(locale, "Kisi sayisi", "Guest count")}
-                  className="mt-1 w-full bg-transparent text-base text-slate-500 outline-none placeholder:text-slate-400"
+                  className="mt-1 w-full bg-transparent text-base text-[var(--serene-on-surface-variant)] outline-none placeholder:text-[var(--serene-outline)]"
                 />
               </div>
 
               <div className="px-2 pb-2 pt-0 md:pb-0 md:pt-0">
                 <button
                   type="submit"
-                  className="inline-flex h-[58px] min-w-[170px] items-center justify-center rounded-[999px] bg-[#2f6eb1] px-8 text-lg font-semibold text-white transition hover:bg-[#275f9a]"
+                  className="serene-button-primary inline-flex h-[58px] min-w-[170px] items-center justify-center px-8 text-lg font-semibold"
                 >
                   {pickLocalized(locale, "Ara", "Search")}
                 </button>
@@ -223,10 +223,10 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      <section className="pt-12">
+      <section className="pt-[120px]">
         <Container>
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-3xl font-semibold tracking-[-0.03em] text-slate-950">
+            <h2 className="font-display text-4xl font-semibold tracking-[-0.03em] text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "Populer Bolgeler", "Popular Destinations")}
             </h2>
           </div>
@@ -236,7 +236,7 @@ export default async function HomePage() {
               <Link
                 key={collection.district}
                 href={buildCompanyListingHref(company.slug, { location: collection.district })}
-                className="group relative overflow-hidden rounded-[16px] border border-[#dfe5ea] bg-white shadow-[0_14px_30px_rgba(15,23,42,0.06)]"
+                className="serene-card group relative overflow-hidden"
               >
                 <div
                   className="h-[220px] bg-cover bg-center transition duration-500 group-hover:scale-[1.03]"
@@ -264,14 +264,14 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      <section className="pt-16">
+      <section className="pt-[120px]">
         <Container>
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-slate-950">
+              <h2 className="font-display text-4xl font-semibold tracking-[-0.03em] text-[var(--serene-on-surface)]">
                 {pickLocalized(locale, "One Cikan Villalar", "Featured Villas")}
               </h2>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-[var(--serene-on-surface-variant)]">
                 {pickLocalized(
                   locale,
                   "En cok ilgi goren ve ilk bakista dikkat ceken secili konaklama secenekleri",
@@ -281,7 +281,7 @@ export default async function HomePage() {
             </div>
             <Link
               href={getDemoCompanySiteHref(company.slug, "/villalar")}
-              className="hidden text-sm font-semibold text-[#2f6eb1] transition hover:text-[#224d7d] md:inline-flex"
+              className="hidden text-sm font-semibold text-[var(--serene-primary)] transition hover:text-[var(--serene-primary-container)] md:inline-flex"
             >
               {pickLocalized(locale, "Tumunu gor", "View all")}
             </Link>
@@ -295,20 +295,20 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      <section className="pt-16">
+      <section className="pt-[120px]">
         <Container>
-          <div className="rounded-[18px] border border-[#e5eaef] bg-white p-8 shadow-[0_12px_28px_rgba(15,23,42,0.05)] sm:p-10">
-            <h2 className="text-center text-3xl font-semibold tracking-[-0.03em] text-slate-950">
+          <div className="serene-card p-8 sm:p-10">
+            <h2 className="text-center font-display text-4xl font-semibold tracking-[-0.03em] text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "Musteri Yorumlari", "Guest Reviews")}
             </h2>
             <div className="mt-8 grid gap-5 lg:grid-cols-3">
               {testimonials.map((item) => (
                 <article
                   key={item.name}
-                  className="rounded-[14px] border border-[#e8edf2] bg-[#fbfcfd] p-6"
+                  className="rounded-[14px] border border-[var(--color-border-soft)] bg-[var(--serene-surface)] p-6"
                 >
-                  <p className="text-sm leading-7 text-slate-600">{item.text}</p>
-                  <p className="mt-5 text-sm font-semibold text-slate-900">{item.name}</p>
+                  <p className="text-sm leading-7 text-[var(--serene-on-surface-variant)]">{item.text}</p>
+                  <p className="mt-5 text-sm font-semibold text-[var(--serene-on-surface)]">{item.name}</p>
                 </article>
               ))}
             </div>

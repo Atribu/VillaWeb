@@ -62,18 +62,18 @@ export default async function CampaignsPage() {
         {campaignCards.map((item) => (
           <div
             key={item.title}
-            className="rounded-[1.8rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+            className="serene-card p-6"
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+            <p className="serene-eyebrow">
               {item.value}
             </p>
-            <h2 className="mt-4 text-2xl font-semibold text-slate-900">{item.title}</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-600">{item.description}</p>
+            <h2 className="mt-4 font-display text-2xl font-semibold text-[var(--serene-on-surface)]">{item.title}</h2>
+            <p className="mt-4 text-sm leading-7 text-[var(--serene-on-surface-variant)]">{item.description}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-10 rounded-[16px] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+      <div className="serene-card mt-10 p-8">
         <SectionHeading
           eyebrow={pickLocalized(locale, "SEO ve Donusum", "SEO & Conversion")}
           title={pickLocalized(
@@ -89,14 +89,14 @@ export default async function CampaignsPage() {
         />
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
-          <p className="text-sm leading-8 text-slate-600">
+          <p className="text-sm leading-8 text-[var(--serene-on-surface-variant)]">
             {pickLocalized(
               locale,
               "Erken rezervasyon, uzun konaklama ve kupon kampanyalari kullanicinin kararini hizlandirir. Fiyat avantajlari public tarafta net sekilde gorundugunde, kullanici guvenli hissettigi bir secim ortaminda ilerler.",
               "Early booking, long-stay and coupon campaigns accelerate user decisions. When pricing advantages are clearly shown on the public side, users move forward in a more confident decision environment.",
             )}
           </p>
-          <p className="text-sm leading-8 text-slate-600">
+          <p className="text-sm leading-8 text-[var(--serene-on-surface-variant)]">
             {pickLocalized(
               locale,
               "Kampanya icerikleri SEO icin de degerlidir. “Kalkan erken rezervasyon villa indirimi” gibi niyet bazli aramalar icin bu sayfa zamanla daha da guclu bir giris noktasi haline gelebilir.",

@@ -93,16 +93,16 @@ export default async function AboutPage() {
         {valueCards.map((item) => (
           <div
             key={item.title}
-            className="rounded-[1.8rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+            className="serene-card p-6"
           >
-            <h2 className="text-2xl font-semibold text-slate-900">{item.title}</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-600">{item.text}</p>
+            <h2 className="font-display text-2xl font-semibold text-[var(--serene-on-surface)]">{item.title}</h2>
+            <p className="mt-4 text-sm leading-7 text-[var(--serene-on-surface-variant)]">{item.text}</p>
           </div>
         ))}
       </div>
 
       <div className="mt-10 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+        <div className="serene-card p-8">
           <SectionHeading
             eyebrow={pickLocalized(locale, "Operasyon Akisi", "Operational Flow")}
             title={pickLocalized(
@@ -122,18 +122,18 @@ export default async function AboutPage() {
           {processSteps.map((step, index) => (
             <div
               key={step}
-              className="flex gap-4 rounded-[1.6rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+              className="serene-card flex gap-4 p-6"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--serene-primary)] text-sm font-semibold text-white">
                 {index + 1}
               </div>
-              <p className="text-sm leading-7 text-slate-600">{step}</p>
+              <p className="text-sm leading-7 text-[var(--serene-on-surface-variant)]">{step}</p>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="mt-10 rounded-[16px] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+      <div className="serene-card mt-10 p-8">
         <SectionHeading
           eyebrow={pickLocalized(locale, "Kurumsal Not", "Corporate Note")}
           title={pickLocalized(
@@ -150,13 +150,13 @@ export default async function AboutPage() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
             href={getDemoCompanySiteHref(company.slug, "/villalar")}
-            className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="serene-button-primary px-5 py-3 text-sm font-semibold"
           >
             {pickLocalized(locale, "Villa Koleksiyonunu Incele", "Explore the Villa Collection")}
           </Link>
           <Link
             href={getDemoCompanySiteHref(company.slug, "/iletisim")}
-            className="rounded-full border border-black/8 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+            className="serene-button-secondary px-5 py-3 text-sm font-semibold"
           >
             {pickLocalized(locale, "Bize Ulas", "Contact Us")}
           </Link>

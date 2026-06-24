@@ -120,19 +120,19 @@ export function RequestDateSelector({
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : selection.status === "blocked" || selection.status === "invalid"
         ? "border-rose-200 bg-rose-50 text-rose-700"
-        : "border-slate-200 bg-slate-50 text-slate-600";
+        : "border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] text-[var(--serene-on-surface-variant)]";
 
   return (
-    <div className="rounded-[1.8rem] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+    <div className="serene-card p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+          <p className="serene-eyebrow">
             {pickLocalized(locale, "Tarih Secimi", "Date Selection")}
           </p>
-          <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+          <h2 className="mt-3 font-display text-2xl font-semibold text-[var(--serene-on-surface)]">
             {pickLocalized(locale, "Teklif formunu burada aktif hale getir", "Activate the inquiry form here")}
           </h2>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--serene-on-surface-variant)]">
             {pickLocalized(
               locale,
               "Villa secimi hazir. Simdi uygun giris ve cikis tarihini belirleyip ayni sayfadan talebini olusturabilirsin.",
@@ -145,7 +145,11 @@ export function RequestDateSelector({
           type="button"
           onClick={handleContinue}
           disabled={!isValid || !hasChanged}
-          className="inline-flex items-center justify-center rounded-[1rem] bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className={`inline-flex items-center justify-center px-5 py-3 text-sm font-semibold transition ${
+            isValid && hasChanged
+              ? "serene-button-primary"
+              : "cursor-not-allowed rounded-[8px] bg-[var(--serene-outline-variant)] text-white"
+          }`}
         >
           {isValid
             ? pickLocalized(locale, "Teklif Formunu Ac", "Open Inquiry Form")
@@ -155,7 +159,7 @@ export function RequestDateSelector({
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div>
-          <label htmlFor="request-checkin" className="text-sm font-medium text-slate-700">
+          <label htmlFor="request-checkin" className="text-sm font-medium text-[var(--serene-on-surface)]">
             {pickLocalized(locale, "Giris tarihi", "Check-in date")}
           </label>
           <input
@@ -171,12 +175,12 @@ export function RequestDateSelector({
                 setCheckOut("");
               }
             }}
-            className="mt-2 w-full rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
+            className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
           />
         </div>
 
         <div>
-          <label htmlFor="request-checkout" className="text-sm font-medium text-slate-700">
+          <label htmlFor="request-checkout" className="text-sm font-medium text-[var(--serene-on-surface)]">
             {pickLocalized(locale, "Cikis tarihi", "Check-out date")}
           </label>
           <input
@@ -185,12 +189,12 @@ export function RequestDateSelector({
             min={checkIn || today}
             value={checkOut}
             onChange={(event) => setCheckOut(event.target.value)}
-            className="mt-2 w-full rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
+            className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
           />
         </div>
       </div>
 
-      <div className={`mt-5 rounded-[1rem] border px-4 py-4 text-sm leading-7 ${statusClasses}`}>
+      <div className={`mt-5 rounded-[8px] border px-4 py-4 text-sm leading-7 ${statusClasses}`}>
         {selection.message}
       </div>
     </div>

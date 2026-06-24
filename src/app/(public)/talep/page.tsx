@@ -183,7 +183,7 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
 
       {isValidSelection && villa ? (
         <div className="mt-10 space-y-6">
-          <div className="rounded-[1.8rem] border border-emerald-200 bg-emerald-50 p-6 text-sm leading-7 text-emerald-700">
+          <div className="rounded-[16px] border border-emerald-200 bg-emerald-50 p-6 text-sm leading-7 text-emerald-700">
             {pickLocalized(
               locale,
               `${nightCount} gecelik uygun aralik secildi. Bu villa icin talep detaylarini doldurabilir, varsa kuponunu uygulayabilir ve formu dogrudan panel akisine dusurebilirsin.`,
@@ -202,28 +202,28 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
           ) : null}
         </div>
       ) : (
-        <div className="mt-10 rounded-[2rem] border border-rose-200 bg-rose-50 p-8">
+        <div className="serene-card mt-10 border-rose-200 bg-rose-50 p-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-600">
             {pickLocalized(locale, "Teklif Formu Henuz Acik Degil", "Inquiry Form Not Available Yet")}
           </p>
-          <h2 className="mt-4 text-3xl font-semibold text-slate-900">
+          <h2 className="mt-4 font-display text-3xl font-semibold text-[var(--serene-on-surface)]">
             {villa
               ? pickLocalized(locale, "Uygun tarih secimi tamamlaninca teklif formu otomatik acilir", "The inquiry form will open automatically once valid dates are selected")
               : pickLocalized(locale, "Gecerli bir villa ve tarih secimi olmadan talep formu kullanilamaz", "The inquiry form cannot be used without a valid villa and date selection")}
           </h2>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">{validationMessage}</p>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--serene-on-surface-variant)]">{validationMessage}</p>
           <div className="mt-6 flex flex-wrap gap-3">
             {villa ? (
               <Link
                 href={recoveryHref}
-                className="inline-flex rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="serene-button-primary inline-flex px-5 py-3 text-sm font-semibold"
               >
                 {pickLocalized(locale, "Villa Detayina Don", "Back to Villa Detail")}
               </Link>
             ) : null}
             <Link
               href="/villalar"
-              className="inline-flex rounded-full border border-black/8 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+              className="serene-button-secondary inline-flex px-5 py-3 text-sm font-semibold"
             >
               {pickLocalized(locale, "Tum Villalari Incele", "Browse All Villas")}
             </Link>

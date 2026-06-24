@@ -32,15 +32,15 @@ export async function SiteFooter() {
   ];
 
   return (
-    <footer className="mt-24 border-t border-black/6 bg-[#f7f8f9]">
+    <footer className="mt-24 border-t border-[var(--color-border-soft)] bg-[var(--serene-surface-low)]">
       <Container className="py-14">
-        <div className="rounded-[1rem] border border-black/6 bg-white p-6 shadow-[0_10px_22px_rgba(15,23,42,0.04)] sm:p-8">
+        <div className="serene-card p-6 sm:p-8">
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-[var(--color-coral)]">
+              <p className="serene-eyebrow">
                 {pickLocalized(locale, "Kampanya ve firsatlar", "Campaigns & Offers")}
               </p>
-              <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.05em] text-slate-950">
+              <h2 className="mt-4 font-display text-4xl font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
                 {pickLocalized(
                   locale,
                   "Firsatlarimizi ve yeni villalari aninda ogrenin",
@@ -56,16 +56,16 @@ export async function SiteFooter() {
               </p>
             </div>
 
-            <div className="grid gap-3 rounded-[12px] bg-[var(--color-slate-soft)] p-4 sm:grid-cols-[1fr_auto]">
-              <div className="rounded-[10px] bg-white px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <div className="grid gap-3 rounded-[12px] bg-[var(--serene-surface-low)] p-4 sm:grid-cols-[1fr_auto]">
+              <div className="rounded-[8px] border border-[var(--color-border-soft)] bg-white px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--serene-outline)]">
                   {pickLocalized(locale, "E-posta adresiniz", "Your email address")}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">kampanya@ornekmail.com</p>
               </div>
               <button
                 type="button"
-                className="rounded-[10px] bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="serene-button-primary px-6 py-3 text-sm font-semibold"
               >
                 {pickLocalized(locale, "Kaydol", "Subscribe")}
               </button>
@@ -75,10 +75,10 @@ export async function SiteFooter() {
 
         <div className="mt-10 grid gap-12 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.9fr]">
           <div>
-            <p className="font-display text-[2rem] font-semibold tracking-[-0.05em] text-slate-950">
+            <p className="font-display text-[2rem] font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
               {company.shortName}
             </p>
-            <p className="mt-2 text-[11px] uppercase tracking-[0.28em] text-slate-400">
+            <p className="mt-2 text-[11px] uppercase tracking-[0.28em] text-[var(--serene-outline)]">
               {localizedCompany.tagline}
             </p>
             <p className="mt-5 max-w-md text-sm leading-8 text-slate-600">
@@ -88,13 +88,13 @@ export async function SiteFooter() {
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={`tel:${company.phone.replace(/\s+/g, "")}`}
-                className="rounded-[8px] border border-black/8 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+                className="serene-button-secondary px-4 py-2 text-sm font-medium"
               >
                 {company.phone}
               </a>
               <Link
                 href={getDemoCompanySiteHref(company.slug, "/talep")}
-                className="rounded-[8px] bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="serene-button-primary px-4 py-2 text-sm font-semibold"
               >
                 {pickLocalized(locale, "Talep Olustur", "Create Inquiry")}
               </Link>
@@ -103,7 +103,7 @@ export async function SiteFooter() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--serene-outline)]">
               {pickLocalized(locale, "Kesfet", "Explore")}
             </p>
             <div className="mt-5 flex flex-col gap-3 text-sm text-slate-600">
@@ -120,7 +120,7 @@ export async function SiteFooter() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--serene-outline)]">
               {pickLocalized(locale, "Kategoriler", "Categories")}
             </p>
             <div className="mt-5 flex flex-col gap-3 text-sm text-slate-600">
@@ -137,7 +137,7 @@ export async function SiteFooter() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--serene-outline)]">
               {pickLocalized(locale, "Iletisim & Yasal", "Contact & Legal")}
             </p>
             <div className="mt-5 space-y-4 text-sm text-slate-600">
@@ -168,7 +168,7 @@ export async function SiteFooter() {
         </div>
       </Container>
 
-      <div className="border-t border-black/6 bg-white">
+      <div className="border-t border-[var(--color-border-soft)] bg-white">
         <Container className="flex flex-col gap-3 py-5 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <p>
             2026 {company.shortName}.{" "}

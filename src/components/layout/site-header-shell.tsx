@@ -28,14 +28,14 @@ export function SiteHeaderShell({ company, locale }: SiteHeaderShellProps) {
 
   const headerClassName = isHome
     ? "absolute inset-x-0 top-0 z-50"
-    : "sticky inset-x-0 top-0 z-50 border-b border-white/10 bg-[#163550]/95 backdrop-blur";
+    : "sticky inset-x-0 top-0 z-50 border-b border-white/10 bg-[rgba(0,32,69,0.94)] backdrop-blur-xl";
 
   const navLinkClassName = (href: string) => {
     const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
 
     return `border-b pb-1 transition ${
       isActive
-        ? "border-white text-white"
+        ? "border-[var(--serene-tertiary)] text-white"
         : "border-transparent text-white/82 hover:text-white"
     }`;
   };
@@ -53,11 +53,11 @@ export function SiteHeaderShell({ company, locale }: SiteHeaderShellProps) {
             )}
             className="flex items-center gap-3 transition hover:opacity-90"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-[10px] border border-white/24 bg-white/10 text-sm font-bold text-white backdrop-blur">
+            <div className="flex h-11 w-11 items-center justify-center rounded-[8px] border border-white/24 bg-white/10 text-sm font-bold text-white backdrop-blur">
               {initials}
             </div>
               <div>
-                <p className="font-display text-[2rem] font-semibold tracking-[-0.05em] text-white">
+                <p className="font-display text-[2rem] font-semibold tracking-[-0.04em] text-white">
                   {company.shortName}
                 </p>
                 <p className="text-[11px] uppercase tracking-[0.26em] text-white/60">
@@ -79,7 +79,7 @@ export function SiteHeaderShell({ company, locale }: SiteHeaderShellProps) {
               <LanguageSwitcher locale={locale} variant="dark" compact />
               <Link
                 href="/panel/giris"
-                className="rounded-[10px] border border-white/16 px-4 py-2 text-white/92 transition hover:border-white/28 hover:text-white"
+                className="rounded-[8px] border border-white/22 px-4 py-2 text-white/92 transition hover:border-[var(--serene-tertiary)] hover:text-white"
               >
                 {pickLocalized(locale, "Giris / Kayit", "Sign In / Register")}
               </Link>

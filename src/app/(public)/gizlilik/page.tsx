@@ -30,14 +30,14 @@ export default async function PrivacyPage() {
 
   return (
     <Container className="py-14 sm:py-16">
-      <div className="rounded-[2.3rem] border border-black/6 bg-white p-8 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+      <div className="serene-card p-8">
+        <p className="serene-eyebrow">
           {pickLocalized(locale, "Gizlilik Politikasi", "Privacy Policy")}
         </p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-900">
+        <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-[var(--serene-on-surface)]">
           {pickLocalized(locale, "Gizlilik ve veri kullanimi icin yasal sayfa iskeleti", "Legal page framework for privacy and data usage")}
         </h1>
-        <p className="mt-5 max-w-3xl text-sm leading-8 text-slate-600">
+        <p className="mt-5 max-w-3xl text-sm leading-8 text-[var(--serene-on-surface-variant)]">
           {pickLocalized(
             locale,
             "Bu alan talep formlari, cerezler, oturum yonetimi ve kullanici verilerinin hangi amaclarla islendigi konusunda ziyaretciyi bilgilendiren yasal omurgayi tasir.",
@@ -47,7 +47,7 @@ export default async function PrivacyPage() {
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {sections.map((item) => (
-            <div key={item} className="rounded-[1.4rem] bg-[var(--color-slate-soft)] px-5 py-5 text-sm font-medium text-slate-700">
+            <div key={item} className="rounded-[16px] border border-[var(--serene-outline-variant)]/60 bg-[var(--serene-surface-low)] px-5 py-5 text-sm font-medium text-[var(--serene-on-surface)]">
               {pickLocalized(
                 locale,
                 item,

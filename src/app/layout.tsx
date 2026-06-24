@@ -1,7 +1,20 @@
 import type { Metadata } from "next";
+import { Inter, Playfair_Display } from "next/font/google";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { pickLocalized } from "@/lib/i18n";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const playfairDisplay = Playfair_Display({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-playfair",
+  display: "swap",
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getCurrentLocale();
@@ -68,7 +81,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} data-scroll-behavior="smooth">
-      <body className="antialiased">{children}</body>
+      <body className={`${inter.variable} ${playfairDisplay.variable} antialiased`}>{children}</body>
     </html>
   );
 }

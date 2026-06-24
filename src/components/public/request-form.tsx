@@ -227,15 +227,15 @@ export function RequestForm({
     <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
       <form
         onSubmit={handleSubmit}
-        className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+        className="serene-card p-8"
       >
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+        <p className="serene-eyebrow">
           {pickLocalized(locale, "Talep Bilgileri", "Inquiry Details")}
         </p>
-        <h2 className="mt-4 text-3xl font-semibold text-slate-900">
+        <h2 className="mt-4 font-display text-3xl font-semibold tracking-[-0.03em] text-[var(--serene-on-surface)]">
           {pickLocalized(locale, "Gecerli tarih secimi ile panelde islenebilir talep olustur", "Create a panel-ready inquiry with valid dates")}
         </h2>
-        <p className="mt-4 text-sm leading-8 text-slate-600">
+        <p className="mt-4 text-sm leading-8 text-[var(--serene-on-surface-variant)]">
           {pickLocalized(
             locale,
             "Form tamamlandiginda kayit dogrudan paneldeki Talepler ekranina duser. Kupon kullanirsan toplam tutar burada ve panel kaydinda ayni sekilde gorunur.",
@@ -245,7 +245,7 @@ export function RequestForm({
 
         <div className="mt-8 grid gap-5 md:grid-cols-2">
           <div>
-            <label htmlFor="fullName" className="text-sm font-medium text-slate-700">
+            <label htmlFor="fullName" className="text-sm font-medium text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "Ad soyad", "Full name")}
             </label>
             <input
@@ -253,12 +253,12 @@ export function RequestForm({
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               placeholder={pickLocalized(locale, "Ornek: Ayse Yilmaz", "Example: Emily Johnson")}
-              className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
+              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
             />
           </div>
 
           <div>
-            <label htmlFor="guestCount" className="text-sm font-medium text-slate-700">
+            <label htmlFor="guestCount" className="text-sm font-medium text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "Misafir sayisi", "Guest count")}
             </label>
             <input
@@ -268,12 +268,12 @@ export function RequestForm({
               max={villa.capacity}
               value={guestCount}
               onChange={(event) => setGuestCount(Number(event.target.value))}
-              className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
+              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
             />
           </div>
 
           <div>
-            <label htmlFor="phone" className="text-sm font-medium text-slate-700">
+            <label htmlFor="phone" className="text-sm font-medium text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "Telefon", "Phone")}
             </label>
             <input
@@ -281,12 +281,12 @@ export function RequestForm({
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
               placeholder="+90 5xx xxx xx xx"
-              className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
+              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="text-sm font-medium text-slate-700">
+            <label htmlFor="email" className="text-sm font-medium text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "E-posta", "Email")}
             </label>
             <input
@@ -295,12 +295,12 @@ export function RequestForm({
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="ornek@mail.com"
-              className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
+              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
             />
           </div>
 
           <div className="md:col-span-2">
-            <label htmlFor="message" className="text-sm font-medium text-slate-700">
+            <label htmlFor="message" className="text-sm font-medium text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "Ek not", "Additional note")}
             </label>
             <textarea
@@ -313,15 +313,15 @@ export function RequestForm({
                 "Transfer, cocuk yatagi, erken giris gibi taleplerini yazabilirsin.",
                 "You can add notes such as transfer, baby cot or early check-in.",
               )}
-              className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900 focus:bg-white"
+              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
             />
           </div>
         </div>
 
-        <div className="mt-8 rounded-[1.6rem] border border-black/6 bg-[var(--color-slate-soft)] p-5">
+        <div className="mt-8 rounded-[16px] border border-[var(--color-border-soft)] bg-[var(--serene-surface-low)] p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-end">
             <div className="flex-1">
-              <label htmlFor="couponCode" className="text-sm font-medium text-slate-700">
+              <label htmlFor="couponCode" className="text-sm font-medium text-[var(--serene-on-surface)]">
                 {pickLocalized(locale, "Kupon kodu", "Coupon code")}
               </label>
               <input
@@ -334,14 +334,14 @@ export function RequestForm({
                   }
                 }}
                 placeholder={pickLocalized(locale, "Ornek: YAZBASLIYOR10", "Example: SUMMERSTART10")}
-                className="mt-2 w-full rounded-[1.4rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-900"
+                className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-white px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)]"
               />
             </div>
             <button
               type="button"
               onClick={handleApplyCoupon}
               disabled={isApplyingCoupon}
-              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="serene-button-primary inline-flex items-center justify-center px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isApplyingCoupon
                 ? pickLocalized(locale, "Kontrol ediliyor...", "Checking...")
@@ -376,7 +376,7 @@ export function RequestForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex rounded-full bg-[var(--color-coral)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="serene-button-primary inline-flex px-6 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting
               ? pickLocalized(locale, "Kaydediliyor...", "Saving...")
@@ -384,7 +384,7 @@ export function RequestForm({
           </button>
           <Link
             href={`/villalar/${villa.slug}`}
-            className="inline-flex rounded-full border border-black/8 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+            className="serene-button-secondary inline-flex px-6 py-3 text-sm font-semibold"
           >
             {pickLocalized(locale, "Villa Detayina Don", "Back to Villa Details")}
           </Link>
@@ -392,8 +392,8 @@ export function RequestForm({
       </form>
 
       <aside className="space-y-6">
-        <div className="rounded-[2rem] bg-slate-900 p-8 text-white shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-200">
+        <div className="rounded-[16px] bg-ocean-panel p-8 text-white shadow-[0_20px_50px_rgba(26,54,93,0.18)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-tertiary-soft)]">
             {pickLocalized(locale, "Secim Ozeti", "Selection Summary")}
           </p>
           <h3 className="mt-4 text-3xl font-semibold leading-tight">{localizedVilla.title}</h3>
@@ -419,8 +419,8 @@ export function RequestForm({
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+        <div className="serene-card p-8">
+          <p className="serene-eyebrow">
             {pickLocalized(locale, "Fiyat Ozeti", "Price Summary")}
           </p>
           <div className="mt-6 space-y-4">
@@ -449,11 +449,11 @@ export function RequestForm({
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+        <div className="serene-card p-8">
+          <p className="serene-eyebrow">
             {pickLocalized(locale, "Panel Etkisi", "Panel Effect")}
           </p>
-          <p className="mt-4 text-sm leading-8 text-slate-600">
+          <p className="mt-4 text-sm leading-8 text-[var(--serene-on-surface-variant)]">
             {pickLocalized(
               locale,
               "Bu kayit admin panelindeki ",

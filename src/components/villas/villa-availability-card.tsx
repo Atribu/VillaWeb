@@ -231,9 +231,9 @@ export function VillaAvailabilityCard({
   const statusClasses =
     availability.status === "available"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : availability.status === "blocked" || availability.status === "invalid"
-        ? "border-rose-200 bg-rose-50 text-rose-700"
-        : "border-slate-200 bg-white text-slate-600";
+    : availability.status === "blocked" || availability.status === "invalid"
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : "border-[var(--serene-outline-variant)] bg-white text-[var(--serene-on-surface-variant)]";
 
   const requestHref =
     availability.status === "available"
@@ -245,18 +245,18 @@ export function VillaAvailabilityCard({
 
   return (
     <>
-      <div className="rounded-[14px] border border-black/6 bg-white p-5 text-[var(--color-ink)] shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+      <div className="serene-card p-5 text-[var(--color-ink)]">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+            <p className="serene-eyebrow">
               {pickLocalized(locale, "Rezervasyon Takvimi", "Reservation Calendar")}
             </p>
-            <p className="mt-2 font-display text-[1.85rem] font-semibold tracking-[-0.04em] text-slate-950">
+            <p className="mt-2 font-display text-[1.85rem] font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
               {pickLocalized(locale, "Tarih secerek devam et", "Continue by selecting dates")}
             </p>
           </div>
           {availability.nightCount > 0 ? (
-            <span className="rounded-[8px] bg-[var(--color-coral-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--color-coral)]">
+            <span className="rounded-[8px] bg-[var(--serene-tertiary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--serene-tertiary-deep)]">
               {availability.nightCount} {pickLocalized(locale, "gece", "nights")}
             </span>
           ) : null}
@@ -266,14 +266,14 @@ export function VillaAvailabilityCard({
           <button
             type="button"
             onClick={() => setIsCalendarOpen(true)}
-            className={`rounded-[1rem] border px-4 py-3 text-left transition ${
-              checkIn ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
+            className={`rounded-[8px] border px-4 py-3 text-left transition ${
+              checkIn ? "border-[var(--serene-primary)] bg-[var(--serene-primary-soft)]" : "border-[var(--serene-outline-variant)] bg-white"
             }`}
           >
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
               {pickLocalized(locale, "Giris", "Check-in")}
             </span>
-            <span className="mt-2 block text-base font-semibold text-slate-900">
+            <span className="mt-2 block text-base font-semibold text-[var(--serene-on-surface)]">
               {checkIn
                 ? formatShortDate(checkIn, locale)
                 : pickLocalized(locale, "Tarih sec", "Select date")}
@@ -283,14 +283,14 @@ export function VillaAvailabilityCard({
           <button
             type="button"
             onClick={() => setIsCalendarOpen(true)}
-            className={`rounded-[1rem] border px-4 py-3 text-left transition ${
-              checkOut ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
+            className={`rounded-[8px] border px-4 py-3 text-left transition ${
+              checkOut ? "border-[var(--serene-primary)] bg-[var(--serene-primary-soft)]" : "border-[var(--serene-outline-variant)] bg-white"
             }`}
           >
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
               {pickLocalized(locale, "Cikis", "Check-out")}
             </span>
-            <span className="mt-2 block text-base font-semibold text-slate-900">
+            <span className="mt-2 block text-base font-semibold text-[var(--serene-on-surface)]">
               {checkOut
                 ? formatShortDate(checkOut, locale)
                 : pickLocalized(locale, "Tarih sec", "Select date")}
@@ -302,11 +302,11 @@ export function VillaAvailabilityCard({
           <button
             type="button"
             onClick={() => setIsCalendarOpen(true)}
-            className="inline-flex rounded-[10px] border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+            className="serene-button-secondary inline-flex px-4 py-2.5 text-sm font-semibold"
           >
             {pickLocalized(locale, "Takvimi Ac", "Open Calendar")}
           </button>
-          <span className="rounded-[8px] bg-[var(--color-slate-soft)] px-3 py-1.5 text-xs font-semibold text-slate-600">
+          <span className="rounded-[8px] bg-[var(--serene-surface-low)] px-3 py-1.5 text-xs font-semibold text-[var(--serene-primary)]">
             {selectionStep}
           </span>
           {(checkIn || checkOut) && (
@@ -325,19 +325,19 @@ export function VillaAvailabilityCard({
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[1.2rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm text-slate-600">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+          <div className="rounded-[8px] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface-variant)]">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
               {pickLocalized(locale, "Minimum gece", "Minimum nights")}
             </span>
-            <span className="mt-2 block font-semibold text-slate-900">
+            <span className="mt-2 block font-semibold text-[var(--serene-on-surface)]">
               {localizedVilla.minNightCount ?? 1} {pickLocalized(locale, "gece", "nights")}
             </span>
           </div>
-          <div className="rounded-[1.2rem] bg-[var(--color-slate-soft)] px-4 py-3 text-sm text-slate-600">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+          <div className="rounded-[8px] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface-variant)]">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
               {pickLocalized(locale, "Temizlik", "Cleaning")}
             </span>
-            <span className="mt-2 block font-semibold text-slate-900">
+            <span className="mt-2 block font-semibold text-[var(--serene-on-surface)]">
               {formatCurrency(localizedVilla.cleaningFee ?? 0, locale)}
             </span>
           </div>
@@ -347,12 +347,12 @@ export function VillaAvailabilityCard({
           {requestHref ? (
             <Link
               href={requestHref}
-              className="rounded-[10px] bg-slate-950 px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[var(--color-teal)]"
+              className="serene-button-primary rounded-[8px] px-5 py-3 text-center text-sm font-semibold"
             >
               {pickLocalized(locale, "Bu Tarihler Icin Talep Gonder", "Send Inquiry for These Dates")}
             </Link>
           ) : (
-            <span className="rounded-[10px] bg-slate-200 px-5 py-3 text-center text-sm font-semibold text-slate-600">
+            <span className="rounded-[8px] bg-[var(--serene-surface-container)] px-5 py-3 text-center text-sm font-semibold text-[var(--serene-on-surface-variant)]">
               {pickLocalized(
                 locale,
                 "Uygun Giris ve Cikis Tarihi Sec",
@@ -362,7 +362,7 @@ export function VillaAvailabilityCard({
           )}
           <Link
             href="/iletisim"
-            className="rounded-[10px] border border-slate-300 px-5 py-3 text-center text-sm font-semibold text-slate-700 transition hover:border-slate-900 hover:text-slate-900"
+            className="serene-button-secondary rounded-[8px] px-5 py-3 text-center text-sm font-semibold"
           >
             {pickLocalized(locale, "Destek Al", "Get Support")}
           </Link>
@@ -371,17 +371,17 @@ export function VillaAvailabilityCard({
 
       {isCalendarOpen ? (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/55 p-4 backdrop-blur-[3px] sm:p-6"
+          className="fixed inset-0 z-50 bg-[#001b3c]/60 p-4 backdrop-blur-[3px] sm:p-6"
           onClick={() => setIsCalendarOpen(false)}
         >
           <div className="flex min-h-full items-center justify-center">
             <div
-              className="w-full max-w-5xl rounded-[14px] border border-black/6 bg-white p-5 shadow-2xl shadow-slate-950/25 sm:p-6"
+              className="w-full max-w-5xl rounded-[16px] border border-[var(--color-border-soft)] bg-white p-5 shadow-2xl shadow-[rgba(0,27,60,0.24)] sm:p-6"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="font-display text-4xl font-semibold tracking-[-0.04em] text-slate-950">
+                  <p className="font-display text-4xl font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
                     {modalHeading}
                   </p>
                   <p className="mt-2 text-sm text-slate-500">
@@ -456,14 +456,14 @@ export function VillaAvailabilityCard({
                   type="button"
                   disabled={visibleMonth <= currentMonth}
                   onClick={() => setVisibleMonth((current) => addMonths(current, -1))}
-                  className="rounded-[10px] border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-900 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300"
+                    className="serene-button-secondary rounded-[8px] px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {pickLocalized(locale, "Geri", "Back")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setVisibleMonth((current) => addMonths(current, 1))}
-                  className="rounded-[10px] border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-900 hover:text-slate-900"
+                  className="serene-button-secondary rounded-[8px] px-4 py-2 text-sm font-semibold"
                 >
                   {pickLocalized(locale, "Ileri", "Next")}
                 </button>
@@ -514,14 +514,14 @@ export function VillaAvailabilityCard({
 
                         const dayClasses =
                           isSelectedStart || isSelectedEnd
-                            ? "border-slate-900 bg-slate-900 text-white"
+                            ? "border-[var(--serene-primary)] bg-[var(--serene-primary)] text-white"
                             : isInRange
-                              ? "border-slate-100 bg-slate-100 text-slate-900"
+                              ? "border-[var(--serene-primary-soft)] bg-[var(--serene-primary-soft)] text-[var(--serene-primary)]"
                               : isVisuallyBlocked
                                 ? "border-transparent bg-white text-slate-300 line-through"
                                 : isDisabled
                                   ? "border-transparent bg-white text-slate-300"
-                                  : "border-transparent bg-white text-slate-900 hover:bg-slate-100";
+                                  : "border-transparent bg-white text-[var(--serene-on-surface)] hover:bg-[var(--serene-surface-low)]";
 
                         const title = isSelectedStart
                           ? pickLocalized(locale, "Secilen giris tarihi", "Selected check-in date")
@@ -558,11 +558,11 @@ export function VillaAvailabilityCard({
               <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-500">
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-[3px] bg-slate-900" />
+                    <span className="h-3 w-3 rounded-[3px] bg-[var(--serene-primary)]" />
                     {pickLocalized(locale, "Secilen gun", "Selected day")}
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-[3px] bg-slate-100" />
+                    <span className="h-3 w-3 rounded-[3px] bg-[var(--serene-primary-soft)]" />
                     {pickLocalized(locale, "Secilen aralik", "Selected range")}
                   </span>
                   <span className="inline-flex items-center gap-2">
@@ -582,7 +582,7 @@ export function VillaAvailabilityCard({
                   <button
                     type="button"
                     onClick={() => setIsCalendarOpen(false)}
-                    className="rounded-[10px] bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    className="serene-button-primary rounded-[8px] px-5 py-3 text-sm font-semibold"
                   >
                     {pickLocalized(locale, "Kapat", "Close")}
                   </button>

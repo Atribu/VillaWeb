@@ -20,11 +20,16 @@ export function PublicVillaCard({
   const href = `/villalar/${localizedVilla.slug}`;
   const specs = `${localizedVilla.bedroomCount} ${pickLocalized(locale, "Oda", "Bedrooms")}, ${localizedVilla.bathroomCount} ${pickLocalized(locale, "Banyo", "Bathrooms")}, ${localizedVilla.poolType}`;
   const displayImage = getVillaPresentationImage(localizedVilla);
+  const amenityChips = [
+    `${localizedVilla.bedroomCount} ${pickLocalized(locale, "Oda", "Bedrooms")}`,
+    localizedVilla.poolType,
+    localizedVilla.city,
+  ].slice(0, compact ? 2 : 3);
 
   return (
-    <article className="group overflow-hidden rounded-[14px] border border-[#dfe5ea] bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(15,23,42,0.1)]">
+    <article className="serene-card group overflow-hidden transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(26,54,93,0.12)]">
       <Link href={href} className="block">
-        <div className={`relative overflow-hidden bg-slate-100 ${compact ? "aspect-[1.14/1]" : "aspect-[1.08/1]"}`}>
+        <div className={`relative overflow-hidden bg-[var(--serene-surface-low)] ${compact ? "aspect-[1.32/1]" : "aspect-[1.18/1]"}`}>
           {displayImage ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -37,38 +42,66 @@ export function PublicVillaCard({
             <div className={`h-full w-full bg-gradient-to-br ${localizedVilla.coverGradient}`} />
           )}
 
+          {typeof localizedVilla.rating === "number" ? (
+            <div className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-[var(--serene-on-surface)] shadow-sm backdrop-blur">
+              <span className="text-[var(--serene-tertiary)]">★</span>
+              {localizedVilla.rating.toFixed(2)}
+            </div>
+          ) : null}
+
+          <div className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/86 text-[var(--serene-primary)] shadow-sm backdrop-blur transition group-hover:bg-[var(--serene-primary)] group-hover:text-white">
+            <span aria-hidden="true" className="text-xl leading-none">♡</span>
+          </div>
+
           {localizedVilla.featured ? (
-            <div className="absolute right-3 top-3 rounded-[8px] bg-white/92 px-3 py-1 text-[11px] font-semibold text-slate-800 shadow-sm">
+            <div className="absolute bottom-4 left-4 rounded-[8px] bg-[var(--serene-tertiary-soft)] px-3 py-1 text-[11px] font-semibold text-[var(--serene-tertiary-deep)] shadow-sm">
               {pickLocalized(locale, "One Cikan", "Featured")}
             </div>
           ) : null}
         </div>
 
-        <div className="p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#2f6eb1]">
-            {localizedVilla.locationLabel}
-          </p>
-          <h3 className="mt-2 text-[1.08rem] font-bold text-slate-900">{localizedVilla.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">{specs}</p>
-
-          {!compact ? (
-            <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500">
-              {localizedVilla.shortDescription}
-            </p>
-          ) : null}
-
-          <div className="mt-4 flex items-end justify-between gap-4">
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[1.45rem] font-bold tracking-tight text-slate-900">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--serene-primary-container)]">
+                {localizedVilla.locationLabel}
+              </p>
+              <h3 className="mt-2 font-display text-[1.45rem] font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
+                {localizedVilla.title}
+              </h3>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-display text-[1.55rem] font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
                 {formatCurrency(
                   localizedVilla.discountedNightlyPrice ?? localizedVilla.nightlyPrice,
                   locale,
                 )}
               </p>
-              <p className="text-xs text-slate-500">{pickLocalized(locale, "/ gecelik", "/ nightly")}</p>
+              <p className="text-xs text-[var(--serene-outline)]">{pickLocalized(locale, "/ gece", "/ night")}</p>
             </div>
+          </div>
 
-            <span className="inline-flex items-center justify-center rounded-[9px] border border-[#c9d5e2] px-4 py-2 text-sm font-semibold text-[#26486b] transition group-hover:border-[#8eb2d4] group-hover:text-[#1f3f61]">
+          <p className="mt-3 text-sm leading-6 text-[var(--serene-on-surface-variant)]">{specs}</p>
+
+          {!compact ? (
+            <p className="mt-3 line-clamp-2 text-sm leading-6 text-[var(--serene-on-surface-variant)]">
+              {localizedVilla.shortDescription}
+            </p>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {amenityChips.map((chip) => (
+              <span
+                key={chip}
+                className="rounded-full bg-[var(--serene-primary-soft)] px-3 py-1 text-xs font-medium text-[var(--serene-primary)]"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-6">
+            <span className="inline-flex w-full items-center justify-center rounded-[8px] bg-[var(--serene-primary)] px-4 py-3 text-sm font-semibold text-white transition group-hover:bg-[var(--serene-primary-container)]">
               {pickLocalized(locale, "Detaylari Gor", "View Details")}
             </span>
           </div>

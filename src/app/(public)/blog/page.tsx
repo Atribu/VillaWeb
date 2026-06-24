@@ -55,13 +55,13 @@ export default async function BlogPage() {
         {blogPreview.map((post) => (
           <article
             key={post.title}
-            className="rounded-[16px] border border-black/6 bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+            className="serene-card p-6"
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-coral)]">
+            <p className="serene-eyebrow">
               {post.category}
             </p>
-            <h2 className="mt-4 text-2xl font-semibold leading-tight text-slate-900">{post.title}</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-600">
+            <h2 className="mt-4 font-display text-2xl font-semibold leading-tight text-[var(--serene-on-surface)]">{post.title}</h2>
+            <p className="mt-4 text-sm leading-7 text-[var(--serene-on-surface-variant)]">
               {pickLocalized(
                 locale,
                 "Arama motorlarindan trafik cekecek, detay sayfalarina ic link verecek ve kullaniciyi karar asamasina tasiyacak uzun formlu rehber icerik iskeleti.",
@@ -72,7 +72,7 @@ export default async function BlogPage() {
         ))}
       </div>
 
-      <div className="mt-10 rounded-[16px] border border-black/6 bg-white p-8 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+      <div className="serene-card mt-10 p-8">
         <SectionHeading
           eyebrow={pickLocalized(locale, "Editoryal Omurga", "Editorial Structure")}
           title={pickLocalized(
@@ -93,7 +93,7 @@ export default async function BlogPage() {
             pickLocalized(locale, "Villa secim kilavuzlari", "Villa selection guides"),
             pickLocalized(locale, "Mevsimsel tatil icerikleri", "Seasonal travel content"),
           ].map((item) => (
-            <div key={item} className="rounded-[1.3rem] bg-[var(--color-slate-soft)] px-5 py-5 text-sm font-semibold text-slate-700">
+            <div key={item} className="rounded-[16px] border border-[var(--serene-outline-variant)]/60 bg-[var(--serene-surface-low)] px-5 py-5 text-sm font-semibold text-[var(--serene-on-surface)]">
               {item}
             </div>
           ))}

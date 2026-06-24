@@ -17,14 +17,16 @@ export function SectionHeading({
   return (
     <div className={alignment}>
       {eyebrow ? (
-        <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.32em] text-[var(--color-coral)]">
+        <p className="serene-eyebrow mb-4">
           {eyebrow}
         </p>
       ) : null}
-      <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] text-slate-950 sm:text-4xl lg:text-[3rem]">
+      <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] text-[var(--serene-on-surface)] sm:text-4xl lg:text-[3rem]">
         {title}
       </h2>
-      <p className="mt-5 text-base leading-8 text-slate-600 sm:text-lg">{description}</p>
+      <p className="mt-5 text-base leading-8 text-[var(--serene-on-surface-variant)] sm:text-lg">
+        {description}
+      </p>
     </div>
   );
 }

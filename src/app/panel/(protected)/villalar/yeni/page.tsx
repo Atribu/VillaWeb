@@ -1,6 +1,11 @@
 import { VillaForm } from "@/components/panel/villa-form";
+import { getDemoRegionAirportRecords } from "@/lib/server/demo-definitions-store";
 
-export default function PanelNewVillaPage() {
+export const dynamic = "force-dynamic";
+
+export default async function PanelNewVillaPage() {
+  const regions = await getDemoRegionAirportRecords();
+
   return (
     <div className="space-y-6">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm shadow-slate-200/60">
@@ -16,7 +21,7 @@ export default function PanelNewVillaPage() {
         </p>
       </div>
 
-      <VillaForm />
+      <VillaForm regions={regions} />
     </div>
   );
 }

@@ -80,6 +80,8 @@ export type CatalogVilla = {
   seoDescriptionEn?: string;
   focusKeyword: string;
   focusKeywordEn?: string;
+  tourismLicenseNumber?: string;
+  tourismLicensePdfUrl?: string;
   coverAlt: string;
   coverAltEn?: string;
   viewCount: number;

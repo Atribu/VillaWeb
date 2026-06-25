@@ -16,8 +16,8 @@ export default async function PanelRegionAirportsPage() {
           Villa bölgelerini transfer baglanti noktalarina gore standardize et
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Her bolge kaydi ilgili havaalani ve transfer suresiyle birlikte tutulur; bagli villa sayisi
-          da otomatik sayilir.
+          Lokasyon ust kirilimdir; bolgeler secili lokasyonun altinda tutulur. Villa eklerken once
+          lokasyon, sonra bu lokasyona bagli bolge secilir.
         </p>
       </div>
 

@@ -150,6 +150,28 @@ function validateImageFiles(files: File[], options: { requireAtLeastOne?: boolea
   }
 }
 
+function getPdfFile(formData: FormData) {
+  const file = formData.get("tourismLicensePdf");
+
+  if (file instanceof File && file.size > 0) {
+    return file;
+  }
+
+  return null;
+}
+
+function validatePdfFile(file: File | null) {
+  if (!file) {
+    return;
+  }
+
+  const lowerCaseName = file.name.toLowerCase();
+
+  if (file.type !== "application/pdf" && !lowerCaseName.endsWith(".pdf")) {
+    throw new DemoVillaStoreError("Turizm isletme belgesi PDF formatinda olmalidir.");
+  }
+}
+
 async function convertImageToWebpBuffer(file: File) {
   const sourceBuffer = Buffer.from(await file.arrayBuffer());
 
@@ -226,6 +248,40 @@ async function writeVillaImages(slug: string, files: File[], startIndex = 0) {
   }
 
   return imageUrls;
+}
+
+async function writeVillaPdfDocument(slug: string, file: File | null) {
+  if (!file) {
+    return undefined;
+  }
+
+  const documentUploadDirectory = path.join(demoUploadDirectory, slug, "documents");
+  const fileBaseName = sanitizeFileName(file.name) || "turizm-isletme-belgesi";
+  const fileName = `${fileBaseName}.pdf`;
+  const targetPath = path.join(documentUploadDirectory, fileName);
+
+  try {
+    await mkdir(documentUploadDirectory, { recursive: true });
+    await writeFile(targetPath, Buffer.from(await file.arrayBuffer()));
+
+    return `/uploads/villas/${slug}/documents/${fileName}`;
+  } catch (error) {
+    const code = getFileSystemErrorCode(error);
+
+    console.error("Villa PDF upload failed", {
+      code,
+      uploadDirectory: documentUploadDirectory,
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    if (code === "EACCES" || code === "EPERM" || code === "EROFS") {
+      throw new DemoVillaStoreError(
+        "PDF dosyasi sunucudaki upload klasorune yazilamadi. public/uploads/villas icin yazma izni veya kalici storage ayari gerekiyor.",
+      );
+    }
+
+    throw new DemoVillaStoreError("PDF dosyasi sunucuda kaydedilirken hata olustu.");
+  }
 }
 
 async function resolveExistingSessionUserId() {
@@ -373,6 +429,8 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
           seoDescriptionEn: villa.seoDescriptionEn ?? undefined,
           focusKeyword: villa.focusKeyword ?? villa.slug,
           focusKeywordEn: villa.focusKeywordEn ?? undefined,
+          tourismLicenseNumber: villa.tourismLicenseNumber ?? undefined,
+          tourismLicensePdfUrl: villa.tourismLicensePdfUrl ?? undefined,
           coverAlt: villa.coverAlt ?? villa.title,
           coverAltEn: villa.coverAltEn ?? undefined,
           viewCount: villa.dailyMetrics.reduce((sum, metric) => sum + metric.viewCount, 0),
@@ -483,8 +541,8 @@ export async function createDemoVillaFromFormData(
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
   const slugInput = getTextField(formData, "slug") || title;
   const slug = normalizeVillaSlug(slugInput);
-  const city = validateRequiredText(getTextField(formData, "city"), "Sehir");
-  const district = validateRequiredText(getTextField(formData, "district"), "Ilce");
+  const city = validateRequiredText(getTextField(formData, "city"), "Lokasyon");
+  const district = validateRequiredText(getTextField(formData, "district"), "Bolge");
   const badge = validateRequiredText(getTextField(formData, "badge"), "Vitrin etiketi");
   const badgeEn = validateRequiredText(getTextField(formData, "badgeEn"), "Vitrin etiketi (EN)");
   const category = validateRequiredText(getTextField(formData, "category"), "Kategori");
@@ -523,6 +581,7 @@ export async function createDemoVillaFromFormData(
     getTextField(formData, "focusKeywordEn"),
     "Odak anahtar kelime (EN)",
   );
+  const tourismLicenseNumber = getTextField(formData, "tourismLicenseNumber") || undefined;
   const coverAlt = validateRequiredText(
     getTextField(formData, "coverAlt"),
     "Kapak gorseli alt metni",
@@ -556,8 +615,10 @@ export async function createDemoVillaFromFormData(
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File && value.size > 0);
+  const tourismLicensePdf = getPdfFile(formData);
 
   validateImageFiles(files);
+  validatePdfFile(tourismLicensePdf);
 
   async function createFallbackVilla() {
     const fallbackVillas = await runVillaCreateStep("VILLA_FALLBACK_LIST", async () =>
@@ -571,6 +632,9 @@ export async function createDemoVillaFromFormData(
 
     const imageUrls = await runVillaCreateStep("VILLA_IMAGE_WRITE", async () =>
       writeVillaImages(slug, files),
+    );
+    const tourismLicensePdfUrl = await runVillaCreateStep("VILLA_PDF_WRITE", async () =>
+      writeVillaPdfDocument(slug, tourismLicensePdf),
     );
     const fallbackVilla = await runVillaCreateStep("VILLA_FALLBACK_SAVE", async () =>
       saveFallbackVilla({
@@ -612,6 +676,8 @@ export async function createDemoVillaFromFormData(
         seoDescriptionEn,
         focusKeyword,
         focusKeywordEn,
+        tourismLicenseNumber,
+        tourismLicensePdfUrl,
         coverAlt,
         coverAltEn,
         viewCount: 0,
@@ -653,6 +719,9 @@ export async function createDemoVillaFromFormData(
 
   const imageUrls = await runVillaCreateStep("VILLA_IMAGE_WRITE", async () =>
     writeVillaImages(slug, files),
+  );
+  const tourismLicensePdfUrl = await runVillaCreateStep("VILLA_PDF_WRITE", async () =>
+    writeVillaPdfDocument(slug, tourismLicensePdf),
   );
   const createdByUserId = await runVillaCreateStep("VILLA_SESSION_USER_LOOKUP", async () =>
     resolveExistingSessionUserId(),
@@ -718,6 +787,8 @@ export async function createDemoVillaFromFormData(
           seoDescriptionEn,
           focusKeyword,
           focusKeywordEn,
+          tourismLicenseNumber,
+          tourismLicensePdfUrl,
           images: {
             create: imageUrls.map((url, index) => ({
               url,
@@ -768,6 +839,8 @@ export async function createDemoVillaFromFormData(
     seoDescriptionEn: villa.seoDescriptionEn ?? seoDescriptionEn,
     focusKeyword: villa.focusKeyword ?? focusKeyword,
     focusKeywordEn: villa.focusKeywordEn ?? focusKeywordEn,
+    tourismLicenseNumber: villa.tourismLicenseNumber ?? tourismLicenseNumber,
+    tourismLicensePdfUrl: villa.tourismLicensePdfUrl ?? tourismLicensePdfUrl,
     coverAlt: villa.coverAlt ?? coverAlt,
     coverAltEn: villa.coverAltEn ?? coverAltEn,
     viewCount: 0,
@@ -824,8 +897,8 @@ export async function updateDemoVillaFromFormData(
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
   const slugInput = getTextField(formData, "slug") || title;
   const nextSlug = normalizeVillaSlug(slugInput);
-  const city = validateRequiredText(getTextField(formData, "city"), "Sehir");
-  const district = validateRequiredText(getTextField(formData, "district"), "Ilce");
+  const city = validateRequiredText(getTextField(formData, "city"), "Lokasyon");
+  const district = validateRequiredText(getTextField(formData, "district"), "Bolge");
   const badge = validateRequiredText(getTextField(formData, "badge"), "Vitrin etiketi");
   const badgeEn = validateRequiredText(getTextField(formData, "badgeEn"), "Vitrin etiketi (EN)");
   const category = validateRequiredText(getTextField(formData, "category"), "Kategori");
@@ -864,6 +937,7 @@ export async function updateDemoVillaFromFormData(
     getTextField(formData, "focusKeywordEn"),
     "Odak anahtar kelime (EN)",
   );
+  const tourismLicenseNumber = getTextField(formData, "tourismLicenseNumber") || undefined;
   const coverAlt = validateRequiredText(
     getTextField(formData, "coverAlt"),
     "Kapak gorseli alt metni",
@@ -897,8 +971,10 @@ export async function updateDemoVillaFromFormData(
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File && value.size > 0);
+  const tourismLicensePdf = getPdfFile(formData);
 
   validateImageFiles(files, { requireAtLeastOne: false });
+  validatePdfFile(tourismLicensePdf);
 
   async function updateFallbackVillaRecord() {
     const current = await getFallbackVillaForMutation(slug, input);
@@ -915,6 +991,7 @@ export async function updateDemoVillaFromFormData(
       files.length > 0
         ? await writeVillaImages(nextSlug, files, current.imageUrls.length)
         : [];
+    const newTourismLicensePdfUrl = await writeVillaPdfDocument(nextSlug, tourismLicensePdf);
     const imageUrls = [...current.imageUrls, ...newImageUrls];
     const updatedVilla = {
       ...current,
@@ -950,6 +1027,8 @@ export async function updateDemoVillaFromFormData(
       seoDescriptionEn,
       focusKeyword,
       focusKeywordEn,
+      tourismLicenseNumber,
+      tourismLicensePdfUrl: newTourismLicensePdfUrl ?? current.tourismLicensePdfUrl,
       coverAlt,
       coverAltEn,
     } satisfies CatalogVilla;
@@ -1002,7 +1081,18 @@ export async function updateDemoVillaFromFormData(
 
     const newImageUrls =
       files.length > 0 ? await writeVillaImages(nextSlug, files, current.images.length) : [];
+    const newTourismLicensePdfUrl = await writeVillaPdfDocument(nextSlug, tourismLicensePdf);
     const coverImageUrl = current.coverImageUrl ?? current.images[0]?.url ?? newImageUrls[0];
+    const region = await db.region.findFirst({
+      where: {
+        companyId: current.companyId,
+        OR: [
+          { name: { equals: district, mode: "insensitive" } },
+          { name: { equals: city, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true },
+    });
 
     await db.villa.update({
       where: { id: current.id },
@@ -1018,6 +1108,7 @@ export async function updateDemoVillaFromFormData(
         shortDescriptionEn,
         description,
         descriptionEn,
+        regionId: region?.id ?? null,
         city,
         district,
         address: `${district}, ${city}`,
@@ -1038,6 +1129,8 @@ export async function updateDemoVillaFromFormData(
         seoDescriptionEn,
         focusKeyword,
         focusKeywordEn,
+        tourismLicenseNumber,
+        ...(newTourismLicensePdfUrl ? { tourismLicensePdfUrl: newTourismLicensePdfUrl } : {}),
         ...(newImageUrls.length > 0
           ? {
               images: {

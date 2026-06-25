@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { VillaForm } from "@/components/panel/villa-form";
+import { getDemoRegionAirportRecords } from "@/lib/server/demo-definitions-store";
 import { getDemoVillaBySlug } from "@/lib/server/demo-villa-store";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,10 @@ type PanelEditVillaPageProps = {
 
 export default async function PanelEditVillaPage({ params }: PanelEditVillaPageProps) {
   const { slug } = await params;
-  const villa = await getDemoVillaBySlug(slug, { includeMetrics: false });
+  const [villa, regions] = await Promise.all([
+    getDemoVillaBySlug(slug, { includeMetrics: false }),
+    getDemoRegionAirportRecords(),
+  ]);
 
   if (!villa) {
     notFound();
@@ -45,7 +49,7 @@ export default async function PanelEditVillaPage({ params }: PanelEditVillaPageP
         </div>
       </div>
 
-      <VillaForm mode="edit" initialVilla={villa} />
+      <VillaForm mode="edit" initialVilla={villa} regions={regions} />
     </div>
   );
 }

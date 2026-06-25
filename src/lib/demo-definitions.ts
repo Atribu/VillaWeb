@@ -53,7 +53,7 @@ export const seedDemoRegionAirportRecords: DemoRegionAirportRecord[] = [
     id: "region-bodrum-yalikavak",
     regionLabel: "Bodrum & Yalikavak",
     city: "Mugla",
-    districtScope: ["Bodrum"],
+    districtScope: ["Bodrum", "Yalikavak"],
     airportCode: "BJV",
     airportName: "Milas Bodrum Havalimani",
     driveMinutes: 48,

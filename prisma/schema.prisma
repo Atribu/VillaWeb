@@ -573,6 +573,8 @@ model Villa {
   seoDescriptionEn   String?
   focusKeyword       String?
   focusKeywordEn     String?
+  tourismLicenseNumber String?
+  tourismLicensePdfUrl String?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)

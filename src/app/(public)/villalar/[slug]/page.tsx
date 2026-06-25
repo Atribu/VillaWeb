@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui/container";
@@ -8,6 +7,7 @@ import { getCurrentLocale } from "@/lib/server/app-locale";
 import { getLocalizedReviewLabel, getLocalizedVilla } from "@/lib/villa-content-i18n";
 import { formatCurrency } from "@/lib/villa-catalog";
 import { VillaAvailabilityCard } from "@/components/villas/villa-availability-card";
+import { VillaGallery } from "@/components/villas/villa-gallery";
 import { PublicVillaCard } from "@/components/villas/public-villa-card";
 import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 import { getDemoVillaBySlug, getDemoVillas } from "@/lib/server/demo-villa-store";
@@ -79,7 +79,6 @@ export default async function VillaDetailPage({ params }: PageProps) {
 
   const galleryImages =
     villa.imageUrls.length > 0 ? villa.imageUrls : villa.coverImageUrl ? [villa.coverImageUrl] : [];
-  const galleryTiles = Array.from({ length: 5 }, (_, index) => galleryImages[index] ?? galleryImages[0] ?? "");
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -176,48 +175,40 @@ export default async function VillaDetailPage({ params }: PageProps) {
             </div>
           </div>
 
-          <div className="mt-8 grid min-h-[420px] gap-2 overflow-hidden rounded-[16px] lg:grid-cols-[1.04fr_1fr]">
-            {galleryTiles[0] ? (
-              <div className="relative min-h-[320px] overflow-hidden bg-[var(--serene-surface-low)]">
-                <Image
-                  src={galleryTiles[0]}
-                  alt={villa.coverAlt}
-                  width={1700}
-                  height={1100}
-                  className="h-full w-full object-cover transition duration-700 hover:scale-[1.02]"
-                  priority
-                />
-              </div>
-            ) : (
-              <div className={`min-h-[320px] bg-gradient-to-br ${villa.coverGradient}`} />
-            )}
+          <VillaGallery
+            images={galleryImages}
+            alt={villa.coverAlt}
+            coverGradient={villa.coverGradient}
+            locale={locale}
+          />
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              {galleryTiles.slice(1, 5).map((imageUrl, index) => (
-                <div key={`${imageUrl || "gallery-placeholder"}-${index}`} className="relative min-h-[205px] overflow-hidden bg-[var(--serene-surface-low)]">
-                  {imageUrl ? (
-                    <Image
-                      src={imageUrl}
-                      alt={pickLocalized(
-                        locale,
-                        `${villa.coverAlt} galeri gorseli ${index + 2}`,
-                        `${villa.coverAlt} gallery image ${index + 2}`,
-                      )}
-                      width={1000}
-                      height={720}
-                      className="h-full w-full object-cover transition duration-700 hover:scale-[1.03]"
-                    />
-                  ) : (
-                    <div className={`h-full w-full bg-gradient-to-br ${villa.coverGradient}`} />
-                  )}
-                  {index === galleryTiles.slice(1, 5).length - 1 ? (
-                    <span className="absolute bottom-4 right-4 rounded-[8px] bg-white px-4 py-2 text-sm font-semibold text-[var(--serene-on-surface)] shadow-sm">
-                      {pickLocalized(locale, "Tum fotograflari goster", "Show all photos")}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
+          <div className="mt-5 grid gap-4 rounded-[12px] border border-[var(--serene-outline-variant)]/70 bg-white px-5 py-4 text-sm shadow-sm sm:grid-cols-[1fr_auto] sm:items-center">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
+                {pickLocalized(locale, "Yasal belge", "Legal document")}
+              </p>
+              <p className="mt-2 font-semibold text-[var(--serene-on-surface)]">
+                {pickLocalized(
+                  locale,
+                  "Turizm İşletme Belge No",
+                  "Tourism Operation License No",
+                )}
+                : <span>{villa.tourismLicenseNumber || "-"}</span>
+              </p>
             </div>
+            {villa.tourismLicensePdfUrl ? (
+              <Link
+                href={villa.tourismLicensePdfUrl}
+                target="_blank"
+                className="inline-flex w-fit rounded-[8px] border border-[var(--serene-primary)] px-4 py-2 text-sm font-semibold text-[var(--serene-primary)] transition hover:bg-[var(--serene-primary-soft)]"
+              >
+                {pickLocalized(locale, "Belge PDF'ini ac", "Open license PDF")}
+              </Link>
+            ) : (
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--serene-outline)]">
+                {pickLocalized(locale, "PDF eklenmedi", "No PDF attached")}
+              </span>
+            )}
           </div>
         </section>
 
@@ -266,7 +257,7 @@ export default async function VillaDetailPage({ params }: PageProps) {
                     pickLocalized(locale, "Min. konaklama", "Minimum stay"),
                     pickLocalized(locale, `${villa.minNightCount ?? 1} gece`, `${villa.minNightCount ?? 1} nights`),
                   ],
-                ].map(([label, value]) => (
+                  ].map(([label, value]) => (
                   <div
                     key={label}
                     className="rounded-[8px] bg-[var(--serene-surface-low)] px-5 py-5"
@@ -371,6 +362,7 @@ export default async function VillaDetailPage({ params }: PageProps) {
                     </div>
                   ))}
                 </div>
+
               </div>
             </div>
           </div>

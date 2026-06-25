@@ -1,8 +1,9 @@
 "use client";
 
 import type { ChangeEvent, FormEvent } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { DemoRegionAirportRecord } from "@/lib/demo-definitions";
 import { VILLA_IMAGE_RULES, type CatalogVilla } from "@/lib/villa-catalog";
 
 const baseFields = [
@@ -13,8 +14,6 @@ const baseFields = [
     placeholder: "kalkan-deniz-manzarali-luks-villa-soleia-lagoon",
     required: true,
   },
-  { name: "city", label: "Sehir", placeholder: "Antalya", required: true },
-  { name: "district", label: "Ilce", placeholder: "Kalkan", required: true },
   { name: "badge", label: "Vitrin etiketi", placeholder: "Deniz manzarali", required: true },
   { name: "category", label: "Kategori", placeholder: "Luks Manzarali", required: true },
   { name: "capacity", label: "Kapasite", placeholder: "8", required: true },
@@ -101,6 +100,14 @@ type VillaApiPayload = {
 type VillaFormProps = {
   mode?: "create" | "edit";
   initialVilla?: CatalogVilla;
+  regions?: DemoRegionAirportRecord[];
+};
+
+type LocationOption = {
+  location: string;
+  regions: string[];
+  airportName: string;
+  airportCode: string;
 };
 
 async function readVillaApiPayload(response: Response): Promise<VillaApiPayload & { raw?: string }> {
@@ -166,6 +173,8 @@ function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string
     seoDescriptionEn: villa.seoDescriptionEn,
     focusKeyword: villa.focusKeyword,
     focusKeywordEn: villa.focusKeywordEn,
+    tourismLicenseNumber: villa.tourismLicenseNumber,
+    tourismLicensePdfUrl: villa.tourismLicensePdfUrl,
     coverAlt: villa.coverAlt,
     coverAltEn: villa.coverAltEn,
   };
@@ -173,10 +182,91 @@ function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string
   return values[fieldName] ?? "";
 }
 
-export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
+function deriveLocationName(record: DemoRegionAirportRecord) {
+  if (record.regionLabel.includes("&") && record.districtScope[0]) {
+    return record.districtScope[0];
+  }
+
+  return record.regionLabel;
+}
+
+function buildLocationOptions(records: DemoRegionAirportRecord[]) {
+  const grouped = new Map<string, LocationOption>();
+
+  records
+    .filter((record) => record.status !== "PASSIVE")
+    .forEach((record) => {
+      const location = deriveLocationName(record);
+      const current = grouped.get(location) ?? {
+        location,
+        regions: [],
+        airportName: record.airportName,
+        airportCode: record.airportCode,
+      };
+      const regionNames = record.districtScope.length > 0 ? record.districtScope : [location];
+
+      regionNames.forEach((regionName) => {
+        if (regionName && !current.regions.includes(regionName)) {
+          current.regions.push(regionName);
+        }
+      });
+
+      grouped.set(location, current);
+    });
+
+  return Array.from(grouped.values()).sort((first, second) =>
+    first.location.localeCompare(second.location, "tr"),
+  );
+}
+
+function getInitialLocation(
+  initialVilla: CatalogVilla | undefined,
+  locationOptions: LocationOption[],
+) {
+  if (!initialVilla) {
+    return locationOptions[0]?.location ?? "";
+  }
+
+  const matchingLocation = locationOptions.find(
+    (option) =>
+      option.location.toLocaleLowerCase("tr-TR") === initialVilla.city.toLocaleLowerCase("tr-TR") ||
+      option.regions.some(
+        (region) =>
+          region.toLocaleLowerCase("tr-TR") === initialVilla.district.toLocaleLowerCase("tr-TR"),
+      ),
+  );
+
+  return matchingLocation?.location ?? initialVilla.city;
+}
+
+function getInitialDistrict(
+  initialVilla: CatalogVilla | undefined,
+  location: string,
+  locationOptions: LocationOption[],
+) {
+  const option = locationOptions.find((item) => item.location === location);
+
+  if (!initialVilla) {
+    return option?.regions[0] ?? "";
+  }
+
+  if (option?.regions.includes(initialVilla.district)) {
+    return initialVilla.district;
+  }
+
+  return option?.regions[0] ?? initialVilla.district;
+}
+
+export function VillaForm({ mode = "create", initialVilla, regions = [] }: VillaFormProps) {
   const router = useRouter();
   const isEditMode = mode === "edit";
+  const locationOptions = useMemo(() => buildLocationOptions(regions), [regions]);
+  const initialLocation = getInitialLocation(initialVilla, locationOptions);
+  const initialDistrict = getInitialDistrict(initialVilla, initialLocation, locationOptions);
+  const [selectedLocation, setSelectedLocation] = useState(initialLocation);
+  const [selectedDistrict, setSelectedDistrict] = useState(initialDistrict);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [submitMessage, setSubmitMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -187,6 +277,10 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
     seoDescription: initialVilla?.seoDescription ?? "",
     focusKeyword: initialVilla?.focusKeyword ?? "",
   });
+  const selectedLocationOption = locationOptions.find(
+    (option) => option.location === selectedLocation,
+  );
+  const selectedRegionOptions = selectedLocationOption?.regions ?? [];
 
   function handleImageSelection(event: ChangeEvent<HTMLInputElement>) {
     const incomingFiles = Array.from(event.target.files ?? []);
@@ -242,6 +336,30 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
     setSubmitMessage("");
   }
 
+  function handlePdfSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      setSelectedPdf(null);
+      event.target.value = "";
+      return;
+    }
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+      setUploadErrors([`${file.name}: Turizm isletme belgesi PDF formatinda olmali.`]);
+      setSelectedPdf(null);
+      event.target.value = "";
+      return;
+    }
+
+    setSelectedPdf(file);
+    setUploadErrors([]);
+    setSubmitMessage("");
+    event.target.value = "";
+  }
+
   function handleSeoFieldChange(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const { name, value } = event.target;
 
@@ -274,7 +392,11 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
       const formElement = event.currentTarget;
       const formData = new FormData(formElement);
       formData.delete("images");
+      formData.delete("tourismLicensePdf");
       selectedFiles.forEach((file) => formData.append("images", file));
+      if (selectedPdf) {
+        formData.append("tourismLicensePdf", selectedPdf);
+      }
 
       const endpoint =
         isEditMode && initialVilla
@@ -305,6 +427,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
 
       formElement.reset();
       setSelectedFiles([]);
+      setSelectedPdf(null);
       setUploadErrors([]);
       setSeoPreview({
         title: payload.villa?.title ?? "",
@@ -348,6 +471,95 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         </div>
 
         <div className="mt-8 grid gap-5 md:grid-cols-2">
+          {locationOptions.length > 0 ? (
+            <>
+              <div>
+                <label htmlFor="city" className="text-sm font-medium text-slate-700">
+                  Lokasyon
+                </label>
+                <select
+                  id="city"
+                  name="city"
+                  required
+                  value={selectedLocation}
+                  onChange={(event) => {
+                    const nextLocation = event.target.value;
+                    const nextOption = locationOptions.find(
+                      (option) => option.location === nextLocation,
+                    );
+
+                    setSelectedLocation(nextLocation);
+                    setSelectedDistrict(nextOption?.regions[0] ?? "");
+                  }}
+                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                >
+                  {locationOptions.map((option) => (
+                    <option key={option.location} value={option.location}>
+                      {option.location}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs leading-6 text-slate-500">
+                  Once ana lokasyonu sec; bolge listesi buna gore daralir.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="district" className="text-sm font-medium text-slate-700">
+                  Bolge
+                </label>
+                <select
+                  id="district"
+                  name="district"
+                  required
+                  value={selectedDistrict}
+                  onChange={(event) => setSelectedDistrict(event.target.value)}
+                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                >
+                  {selectedRegionOptions.map((regionName) => (
+                    <option key={regionName} value={regionName}>
+                      {regionName}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs leading-6 text-slate-500">
+                  {selectedLocationOption
+                    ? `${selectedLocationOption.airportName} (${selectedLocationOption.airportCode}) baglantili.`
+                    : "Secili lokasyona bagli bolgeler burada gorunur."}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label htmlFor="city" className="text-sm font-medium text-slate-700">
+                  Lokasyon
+                </label>
+                <input
+                  id="city"
+                  name="city"
+                  required
+                  defaultValue={getInitialFieldValue(initialVilla, "city")}
+                  placeholder="Bodrum"
+                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="district" className="text-sm font-medium text-slate-700">
+                  Bolge
+                </label>
+                <input
+                  id="district"
+                  name="district"
+                  required
+                  defaultValue={getInitialFieldValue(initialVilla, "district")}
+                  placeholder="Yalikavak"
+                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+            </>
+          )}
+
           {baseFields.map((field) => (
             <div key={field.name}>
               <label htmlFor={field.name} className="text-sm font-medium text-slate-700">
@@ -391,6 +603,78 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             />
             One cikan villa olarak vitrinde goster
           </label>
+
+          <div className="md:col-span-2 rounded-[1.5rem] border border-slate-200 bg-[var(--color-soft-white)] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Yasal Belge Bilgileri
+            </p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="tourismLicenseNumber"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Turizm İşletme Belge No
+                </label>
+                <input
+                  id="tourismLicenseNumber"
+                  name="tourismLicenseNumber"
+                  defaultValue={getInitialFieldValue(initialVilla, "tourismLicenseNumber")}
+                  placeholder="Örn: 48-12345"
+                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+                <p className="mt-2 text-xs leading-6 text-slate-500">
+                  Public villa detayında yasal bilgi olarak gösterilir.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="tourism-license-pdf" className="text-sm font-medium text-slate-700">
+                  Belge PDF&apos;i
+                </label>
+                <label
+                  htmlFor="tourism-license-pdf"
+                  className="mt-2 flex cursor-pointer flex-col rounded-[1.5rem] border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-600 transition hover:border-[var(--color-aqua)]"
+                >
+                  <span className="font-semibold text-[var(--color-ink)]">
+                    {selectedPdf ? selectedPdf.name : "PDF dosyası seç"}
+                  </span>
+                  <span className="mt-1 text-xs text-slate-500">
+                    Sadece PDF kabul edilir. Yeni PDF seçmezsen mevcut belge korunur.
+                  </span>
+                </label>
+                <input
+                  id="tourism-license-pdf"
+                  name="tourismLicensePdf"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={handlePdfSelection}
+                  className="sr-only"
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedPdf ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPdf(null)}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 transition hover:border-rose-300 hover:text-rose-600"
+                    >
+                      PDF&apos;i kaldır
+                    </button>
+                  ) : null}
+                  {initialVilla?.tourismLicensePdfUrl ? (
+                    <a
+                      href={initialVilla.tourismLicensePdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-[var(--color-aqua)] hover:text-[var(--color-teal)]"
+                    >
+                      Mevcut PDF&apos;i aç
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="md:col-span-2">
             <label htmlFor="shortDescription" className="text-sm font-medium text-slate-700">

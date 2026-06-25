@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent, FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DemoRegionAirportRecord } from "@/lib/demo-definitions";
 import { VILLA_IMAGE_RULES, type CatalogVilla } from "@/lib/villa-catalog";
@@ -103,13 +103,6 @@ type VillaFormProps = {
   regions?: DemoRegionAirportRecord[];
 };
 
-type LocationOption = {
-  location: string;
-  regions: string[];
-  airportName: string;
-  airportCode: string;
-};
-
 async function readVillaApiPayload(response: Response): Promise<VillaApiPayload & { raw?: string }> {
   const body = await response.text();
 
@@ -182,89 +175,9 @@ function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string
   return values[fieldName] ?? "";
 }
 
-function deriveLocationName(record: DemoRegionAirportRecord) {
-  if (record.regionLabel.includes("&") && record.districtScope[0]) {
-    return record.districtScope[0];
-  }
-
-  return record.regionLabel;
-}
-
-function buildLocationOptions(records: DemoRegionAirportRecord[]) {
-  const grouped = new Map<string, LocationOption>();
-
-  records
-    .filter((record) => record.status !== "PASSIVE")
-    .forEach((record) => {
-      const location = deriveLocationName(record);
-      const current = grouped.get(location) ?? {
-        location,
-        regions: [],
-        airportName: record.airportName,
-        airportCode: record.airportCode,
-      };
-      const regionNames = record.districtScope.length > 0 ? record.districtScope : [location];
-
-      regionNames.forEach((regionName) => {
-        if (regionName && !current.regions.includes(regionName)) {
-          current.regions.push(regionName);
-        }
-      });
-
-      grouped.set(location, current);
-    });
-
-  return Array.from(grouped.values()).sort((first, second) =>
-    first.location.localeCompare(second.location, "tr"),
-  );
-}
-
-function getInitialLocation(
-  initialVilla: CatalogVilla | undefined,
-  locationOptions: LocationOption[],
-) {
-  if (!initialVilla) {
-    return locationOptions[0]?.location ?? "";
-  }
-
-  const matchingLocation = locationOptions.find(
-    (option) =>
-      option.location.toLocaleLowerCase("tr-TR") === initialVilla.city.toLocaleLowerCase("tr-TR") ||
-      option.regions.some(
-        (region) =>
-          region.toLocaleLowerCase("tr-TR") === initialVilla.district.toLocaleLowerCase("tr-TR"),
-      ),
-  );
-
-  return matchingLocation?.location ?? initialVilla.city;
-}
-
-function getInitialDistrict(
-  initialVilla: CatalogVilla | undefined,
-  location: string,
-  locationOptions: LocationOption[],
-) {
-  const option = locationOptions.find((item) => item.location === location);
-
-  if (!initialVilla) {
-    return option?.regions[0] ?? "";
-  }
-
-  if (option?.regions.includes(initialVilla.district)) {
-    return initialVilla.district;
-  }
-
-  return option?.regions[0] ?? initialVilla.district;
-}
-
-export function VillaForm({ mode = "create", initialVilla, regions = [] }: VillaFormProps) {
+export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
   const router = useRouter();
   const isEditMode = mode === "edit";
-  const locationOptions = useMemo(() => buildLocationOptions(regions), [regions]);
-  const initialLocation = getInitialLocation(initialVilla, locationOptions);
-  const initialDistrict = getInitialDistrict(initialVilla, initialLocation, locationOptions);
-  const [selectedLocation, setSelectedLocation] = useState(initialLocation);
-  const [selectedDistrict, setSelectedDistrict] = useState(initialDistrict);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -277,11 +190,6 @@ export function VillaForm({ mode = "create", initialVilla, regions = [] }: Villa
     seoDescription: initialVilla?.seoDescription ?? "",
     focusKeyword: initialVilla?.focusKeyword ?? "",
   });
-  const selectedLocationOption = locationOptions.find(
-    (option) => option.location === selectedLocation,
-  );
-  const selectedRegionOptions = selectedLocationOption?.regions ?? [];
-
   function handleImageSelection(event: ChangeEvent<HTMLInputElement>) {
     const incomingFiles = Array.from(event.target.files ?? []);
     const nextFiles = [...selectedFiles];
@@ -471,94 +379,38 @@ export function VillaForm({ mode = "create", initialVilla, regions = [] }: Villa
         </div>
 
         <div className="mt-8 grid gap-5 md:grid-cols-2">
-          {locationOptions.length > 0 ? (
-            <>
-              <div>
-                <label htmlFor="city" className="text-sm font-medium text-slate-700">
-                  Lokasyon
-                </label>
-                <select
-                  id="city"
-                  name="city"
-                  required
-                  value={selectedLocation}
-                  onChange={(event) => {
-                    const nextLocation = event.target.value;
-                    const nextOption = locationOptions.find(
-                      (option) => option.location === nextLocation,
-                    );
-
-                    setSelectedLocation(nextLocation);
-                    setSelectedDistrict(nextOption?.regions[0] ?? "");
-                  }}
-                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
-                >
-                  {locationOptions.map((option) => (
-                    <option key={option.location} value={option.location}>
-                      {option.location}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs leading-6 text-slate-500">
-                  Once ana lokasyonu sec; bolge listesi buna gore daralir.
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="district" className="text-sm font-medium text-slate-700">
-                  Bolge
-                </label>
-                <select
-                  id="district"
-                  name="district"
-                  required
-                  value={selectedDistrict}
-                  onChange={(event) => setSelectedDistrict(event.target.value)}
-                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
-                >
-                  {selectedRegionOptions.map((regionName) => (
-                    <option key={regionName} value={regionName}>
-                      {regionName}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs leading-6 text-slate-500">
-                  {selectedLocationOption
-                    ? `${selectedLocationOption.airportName} (${selectedLocationOption.airportCode}) baglantili.`
-                    : "Secili lokasyona bagli bolgeler burada gorunur."}
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label htmlFor="city" className="text-sm font-medium text-slate-700">
-                  Lokasyon
-                </label>
-                <input
-                  id="city"
-                  name="city"
-                  required
-                  defaultValue={getInitialFieldValue(initialVilla, "city")}
-                  placeholder="Bodrum"
-                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
-                />
-              </div>
-              <div>
-                <label htmlFor="district" className="text-sm font-medium text-slate-700">
-                  Bolge
-                </label>
-                <input
-                  id="district"
-                  name="district"
-                  required
-                  defaultValue={getInitialFieldValue(initialVilla, "district")}
-                  placeholder="Yalikavak"
-                  className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
-                />
-              </div>
-            </>
-          )}
+          <div>
+            <label htmlFor="city" className="text-sm font-medium text-slate-700">
+              Lokasyon
+            </label>
+            <input
+              id="city"
+              name="city"
+              required
+              defaultValue={getInitialFieldValue(initialVilla, "city")}
+              placeholder="Bodrum"
+              className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+            />
+            <p className="mt-2 text-xs leading-6 text-slate-500">
+              Yeni lokasyon yazarsan sistem kayit sirasinda otomatik tanimlar.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="district" className="text-sm font-medium text-slate-700">
+              Bolge
+            </label>
+            <input
+              id="district"
+              name="district"
+              required
+              defaultValue={getInitialFieldValue(initialVilla, "district")}
+              placeholder="Yalikavak"
+              className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+            />
+            <p className="mt-2 text-xs leading-6 text-slate-500">
+              Bu bolge secili lokasyonun altina otomatik eklenir.
+            </p>
+          </div>
 
           {baseFields.map((field) => (
             <div key={field.name}>

@@ -28,6 +28,7 @@ import {
 } from "@/lib/server/prisma-demo-shared";
 import {
   deleteFallbackVilla,
+  ensureFallbackRegionForVillaLocation,
   getFallbackVillas,
   saveFallbackVilla,
   updateFallbackVillaStatus,
@@ -115,6 +116,29 @@ function validateRequiredText(value: string, fieldLabel: string) {
   }
 
   return value;
+}
+
+function normalizeLocationField(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function sameLocationText(left: string | null | undefined, right: string | null | undefined) {
+  return normalizeLocationField(left ?? "").toLocaleLowerCase("tr-TR") ===
+    normalizeLocationField(right ?? "").toLocaleLowerCase("tr-TR");
+}
+
+function appendUniqueDistrictScope(scope: string[], district: string) {
+  const normalizedDistrict = normalizeLocationField(district);
+
+  if (!normalizedDistrict) {
+    return scope;
+  }
+
+  if (scope.some((item) => sameLocationText(item, normalizedDistrict))) {
+    return scope;
+  }
+
+  return [...scope, normalizedDistrict];
 }
 
 function parseVillaStatus(value: string, fallback: CatalogVilla["status"] = "ACTIVE") {
@@ -248,6 +272,77 @@ async function writeVillaImages(slug: string, files: File[], startIndex = 0) {
   }
 
   return imageUrls;
+}
+
+async function ensureVillaRegion(companyId: string, city: string, district: string) {
+  const region = await db.region.findFirst({
+    where: {
+      companyId,
+      OR: [
+        { city: { equals: city, mode: "insensitive" } },
+        { name: { equals: city, mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      city: true,
+      districtScope: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (region) {
+    const nextDistrictScope = appendUniqueDistrictScope(region.districtScope, district);
+    const shouldUpdate =
+      nextDistrictScope.length !== region.districtScope.length ||
+      !sameLocationText(region.name, city) ||
+      !sameLocationText(region.city, city);
+
+    if (shouldUpdate) {
+      await db.region.update({
+        where: { id: region.id },
+        data: {
+          name: sameLocationText(region.name, city) ? region.name : city,
+          city: sameLocationText(region.city, city) ? region.city : city,
+          districtScope: nextDistrictScope,
+        },
+      });
+    }
+
+    return region.id;
+  }
+
+  try {
+    const created = await db.region.create({
+      data: {
+        companyId,
+        name: city,
+        city,
+        districtScope: district ? [district] : [],
+      },
+      select: { id: true },
+    });
+
+    return created.id;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await db.region.findFirst({
+        where: {
+          companyId,
+          name: city,
+          city,
+        },
+        select: { id: true },
+      });
+
+      if (existing) {
+        return existing.id;
+      }
+    }
+
+    throw error;
+  }
 }
 
 async function writeVillaPdfDocument(slug: string, file: File | null) {
@@ -541,8 +636,8 @@ export async function createDemoVillaFromFormData(
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
   const slugInput = getTextField(formData, "slug") || title;
   const slug = normalizeVillaSlug(slugInput);
-  const city = validateRequiredText(getTextField(formData, "city"), "Lokasyon");
-  const district = validateRequiredText(getTextField(formData, "district"), "Bolge");
+  const city = validateRequiredText(normalizeLocationField(getTextField(formData, "city")), "Lokasyon");
+  const district = validateRequiredText(normalizeLocationField(getTextField(formData, "district")), "Bolge");
   const badge = validateRequiredText(getTextField(formData, "badge"), "Vitrin etiketi");
   const badgeEn = validateRequiredText(getTextField(formData, "badgeEn"), "Vitrin etiketi (EN)");
   const category = validateRequiredText(getTextField(formData, "category"), "Kategori");
@@ -635,6 +730,9 @@ export async function createDemoVillaFromFormData(
     );
     const tourismLicensePdfUrl = await runVillaCreateStep("VILLA_PDF_WRITE", async () =>
       writeVillaPdfDocument(slug, tourismLicensePdf),
+    );
+    await runVillaCreateStep("VILLA_FALLBACK_REGION_SYNC", async () =>
+      ensureFallbackRegionForVillaLocation(companyId, city, district),
     );
     const fallbackVilla = await runVillaCreateStep("VILLA_FALLBACK_SAVE", async () =>
       saveFallbackVilla({
@@ -729,17 +827,8 @@ export async function createDemoVillaFromFormData(
   const websiteId = await runVillaCreateStep("VILLA_WEBSITE_LOOKUP", async () =>
     getPrimaryWebsiteIdForCompany(companyId),
   );
-  const region = await runVillaCreateStep("VILLA_REGION_LOOKUP", async () =>
-    db.region.findFirst({
-      where: {
-        companyId,
-        OR: [
-          { name: { equals: district, mode: "insensitive" } },
-          { name: { equals: city, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true },
-    }),
+  const regionId = await runVillaCreateStep("VILLA_REGION_SYNC", async () =>
+    ensureVillaRegion(companyId, city, district),
   );
 
   const villa = await runVillaCreateStep("VILLA_DB_CREATE", async () =>
@@ -748,7 +837,7 @@ export async function createDemoVillaFromFormData(
         data: {
           companyId,
           websiteId,
-          regionId: region?.id,
+          regionId,
           createdByUserId,
           title,
           titleEn,
@@ -897,8 +986,8 @@ export async function updateDemoVillaFromFormData(
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
   const slugInput = getTextField(formData, "slug") || title;
   const nextSlug = normalizeVillaSlug(slugInput);
-  const city = validateRequiredText(getTextField(formData, "city"), "Lokasyon");
-  const district = validateRequiredText(getTextField(formData, "district"), "Bolge");
+  const city = validateRequiredText(normalizeLocationField(getTextField(formData, "city")), "Lokasyon");
+  const district = validateRequiredText(normalizeLocationField(getTextField(formData, "district")), "Bolge");
   const badge = validateRequiredText(getTextField(formData, "badge"), "Vitrin etiketi");
   const badgeEn = validateRequiredText(getTextField(formData, "badgeEn"), "Vitrin etiketi (EN)");
   const category = validateRequiredText(getTextField(formData, "category"), "Kategori");
@@ -993,6 +1082,7 @@ export async function updateDemoVillaFromFormData(
         : [];
     const newTourismLicensePdfUrl = await writeVillaPdfDocument(nextSlug, tourismLicensePdf);
     const imageUrls = [...current.imageUrls, ...newImageUrls];
+    await ensureFallbackRegionForVillaLocation(current.companyId, city, district);
     const updatedVilla = {
       ...current,
       title,
@@ -1083,16 +1173,7 @@ export async function updateDemoVillaFromFormData(
       files.length > 0 ? await writeVillaImages(nextSlug, files, current.images.length) : [];
     const newTourismLicensePdfUrl = await writeVillaPdfDocument(nextSlug, tourismLicensePdf);
     const coverImageUrl = current.coverImageUrl ?? current.images[0]?.url ?? newImageUrls[0];
-    const region = await db.region.findFirst({
-      where: {
-        companyId: current.companyId,
-        OR: [
-          { name: { equals: district, mode: "insensitive" } },
-          { name: { equals: city, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true },
-    });
+    const regionId = await ensureVillaRegion(current.companyId, city, district);
 
     await db.villa.update({
       where: { id: current.id },
@@ -1108,7 +1189,7 @@ export async function updateDemoVillaFromFormData(
         shortDescriptionEn,
         description,
         descriptionEn,
-        regionId: region?.id ?? null,
+        regionId,
         city,
         district,
         address: `${district}, ${city}`,

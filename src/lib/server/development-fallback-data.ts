@@ -106,6 +106,7 @@ function clone<T>(value: T) {
 }
 
 type PaymentMethodWithCompany = DemoPaymentMethodRecord & { companyId?: string };
+type RegionAirportRecordWithCompany = DemoRegionAirportRecord & { companyId?: string };
 
 function inferCompanyIdFromText(...parts: Array<string | null | undefined>) {
   const text = parts
@@ -135,6 +136,29 @@ function inferCompanyIdFromText(...parts: Array<string | null | undefined>) {
   }
 
   return defaultCompany.id;
+}
+
+function normalizeDefinitionText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function sameDefinitionText(left: string | null | undefined, right: string | null | undefined) {
+  return normalizeDefinitionText(left ?? "").toLocaleLowerCase("tr-TR") ===
+    normalizeDefinitionText(right ?? "").toLocaleLowerCase("tr-TR");
+}
+
+function appendUniqueDefinitionScope(scope: string[], value: string) {
+  const normalizedValue = normalizeDefinitionText(value);
+
+  if (!normalizedValue) {
+    return scope;
+  }
+
+  if (scope.some((item) => sameDefinitionText(item, normalizedValue))) {
+    return scope;
+  }
+
+  return [...scope, normalizedValue];
 }
 
 function normalizeVillaRecord(record: CatalogVilla) {
@@ -620,12 +644,72 @@ export async function getFallbackRegionAirportRecords(companyId?: string | null)
     "demo-region-airports.json",
     seedDemoRegionAirportRecords,
   );
-  const normalized = (fileData as DemoRegionAirportRecord[]).map((record) => ({
+  const normalized = (fileData as RegionAirportRecordWithCompany[]).map((record) => ({
     ...record,
-    companyId: inferCompanyIdFromText(record.regionLabel, record.city, record.airportCode),
+    companyId:
+      record.companyId ?? inferCompanyIdFromText(record.regionLabel, record.city, record.airportCode),
   }));
 
   return filterDevelopmentRecordsByCompany(normalized, companyId, (record) => record.companyId);
+}
+
+export async function ensureFallbackRegionForVillaLocation(
+  companyId: string,
+  city: string,
+  district: string,
+) {
+  const fileData = await readDevelopmentDataFile(
+    "demo-region-airports.json",
+    seedDemoRegionAirportRecords,
+  );
+  const normalizedCompanyId = normalizeDevelopmentCompanyId(companyId, city);
+  const normalizedCity = normalizeDefinitionText(city);
+  const normalizedDistrict = normalizeDefinitionText(district);
+  let regionMatched = false;
+
+  const nextRecords = (fileData as RegionAirportRecordWithCompany[]).map((record) => {
+    const recordCompanyId = normalizeDevelopmentCompanyId(
+      record.companyId ?? inferCompanyIdFromText(record.regionLabel, record.city, record.airportCode),
+      record.regionLabel,
+    );
+    const matchesLocation =
+      recordCompanyId === normalizedCompanyId &&
+      (sameDefinitionText(record.city, normalizedCity) ||
+        sameDefinitionText(record.regionLabel, normalizedCity));
+
+    if (!matchesLocation) {
+      return record;
+    }
+
+    regionMatched = true;
+
+    return {
+      ...record,
+      companyId: recordCompanyId,
+      regionLabel: normalizeDefinitionText(record.regionLabel || normalizedCity),
+      city: normalizeDefinitionText(record.city || normalizedCity),
+      districtScope: appendUniqueDefinitionScope(record.districtScope, normalizedDistrict),
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  if (!regionMatched) {
+    nextRecords.push({
+      id: `region-${randomUUID().slice(0, 8)}`,
+      companyId: normalizedCompanyId,
+      regionLabel: normalizedCity,
+      city: normalizedCity,
+      districtScope: normalizedDistrict ? [normalizedDistrict] : [],
+      airportCode: "-",
+      airportName: "Bagli havalimani yok",
+      driveMinutes: 0,
+      status: "ACTIVE",
+      villaCount: 0,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  await writeDevelopmentDataFile("demo-region-airports.json", nextRecords);
 }
 
 export async function getFallbackParameterGroups(companyId?: string | null) {

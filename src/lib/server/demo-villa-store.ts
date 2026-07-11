@@ -122,6 +122,10 @@ function normalizeLocationField(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeShortCode(value: string) {
+  return value.replace(/\s+/g, "").trim().toUpperCase();
+}
+
 function sameLocationText(left: string | null | undefined, right: string | null | undefined) {
   return normalizeLocationField(left ?? "").toLocaleLowerCase("tr-TR") ===
     normalizeLocationField(right ?? "").toLocaleLowerCase("tr-TR");
@@ -397,6 +401,12 @@ async function resolveExistingSessionUserId() {
 function mapPrismaVillaCreateError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target : [];
+
+      if (target.includes("shortCode")) {
+        throw new DemoVillaStoreError("Bu kisa kod zaten kullaniliyor. Lutfen farkli bir kod gir.");
+      }
+
       throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
     }
 
@@ -488,6 +498,7 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
           companyId: villa.companyId,
           title: villa.title,
           titleEn: villa.titleEn ?? undefined,
+          shortCode: villa.shortCode ?? undefined,
           slug: villa.slug,
           locationLabel: villa.district ? `${villa.district}, ${villa.city}` : villa.city,
           city: villa.city,
@@ -634,6 +645,7 @@ export async function createDemoVillaFromFormData(
 
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
+  const shortCode = validateRequiredText(normalizeShortCode(getTextField(formData, "shortCode")), "Kisa kod");
   const slugInput = getTextField(formData, "slug") || title;
   const slug = normalizeVillaSlug(slugInput);
   const city = validateRequiredText(normalizeLocationField(getTextField(formData, "city")), "Lokasyon");
@@ -725,6 +737,12 @@ export async function createDemoVillaFromFormData(
       throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
     }
 
+    const existingFallbackCode = fallbackVillas.find((villa) => villa.shortCode === shortCode);
+
+    if (existingFallbackCode) {
+      throw new DemoVillaStoreError("Bu kisa kod zaten kullaniliyor. Lutfen farkli bir kod gir.");
+    }
+
     const imageUrls = await runVillaCreateStep("VILLA_IMAGE_WRITE", async () =>
       writeVillaImages(slug, files),
     );
@@ -740,6 +758,7 @@ export async function createDemoVillaFromFormData(
         companyId,
         title,
         titleEn,
+        shortCode,
         slug,
         locationLabel: `${district}, ${city}`,
         city,
@@ -793,15 +812,15 @@ export async function createDemoVillaFromFormData(
     return await createFallbackVilla();
   }
 
-  let existing: { id: string } | null;
+  let existing: { id: string; slug: string; shortCode: string | null } | null;
 
   try {
     existing = await db.villa.findFirst({
       where: {
         companyId,
-        slug,
+        OR: [{ slug }, { shortCode }],
       },
-      select: { id: true },
+      select: { id: true, slug: true, shortCode: true },
     });
   } catch (error) {
     if (isPrismaConnectionError(error)) {
@@ -812,6 +831,10 @@ export async function createDemoVillaFromFormData(
   }
 
   if (existing) {
+    if (existing.shortCode === shortCode) {
+      throw new DemoVillaStoreError("Bu kisa kod zaten kullaniliyor. Lutfen farkli bir kod gir.");
+    }
+
     throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
   }
 
@@ -841,6 +864,7 @@ export async function createDemoVillaFromFormData(
           createdByUserId,
           title,
           titleEn,
+          shortCode,
           slug,
           badge,
           badgeEn,
@@ -897,6 +921,7 @@ export async function createDemoVillaFromFormData(
     companyId: villa.companyId,
     title: villa.title,
     titleEn: villa.titleEn ?? titleEn,
+    shortCode: villa.shortCode ?? shortCode,
     slug: villa.slug,
     locationLabel: `${district}, ${city}`,
     city: villa.city,
@@ -984,6 +1009,7 @@ export async function updateDemoVillaFromFormData(
 ) {
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
+  const shortCode = validateRequiredText(normalizeShortCode(getTextField(formData, "shortCode")), "Kisa kod");
   const slugInput = getTextField(formData, "slug") || title;
   const nextSlug = normalizeVillaSlug(slugInput);
   const city = validateRequiredText(normalizeLocationField(getTextField(formData, "city")), "Lokasyon");
@@ -1069,10 +1095,16 @@ export async function updateDemoVillaFromFormData(
     const current = await getFallbackVillaForMutation(slug, input);
     const fallbackVillas = await getFallbackVillas(current.companyId);
     const duplicate = fallbackVillas.find(
-      (villa) => villa.slug === nextSlug && villa.slug !== current.slug,
+      (villa) =>
+        villa.slug !== current.slug &&
+        (villa.slug === nextSlug || villa.shortCode === shortCode),
     );
 
     if (duplicate) {
+      if (duplicate.shortCode === shortCode) {
+        throw new DemoVillaStoreError("Bu kisa kod zaten kullaniliyor. Lutfen farkli bir kod gir.");
+      }
+
       throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
     }
 
@@ -1087,6 +1119,7 @@ export async function updateDemoVillaFromFormData(
       ...current,
       title,
       titleEn,
+      shortCode,
       slug: nextSlug,
       locationLabel: `${district}, ${city}`,
       city,
@@ -1154,17 +1187,21 @@ export async function updateDemoVillaFromFormData(
 
     await assertPanelCompanyAccess(current.companyId);
 
-    if (nextSlug !== current.slug) {
+    if (nextSlug !== current.slug || shortCode !== current.shortCode) {
       const duplicate = await db.villa.findFirst({
         where: {
           companyId: current.companyId,
-          slug: nextSlug,
+          OR: [{ slug: nextSlug }, { shortCode }],
           NOT: { id: current.id },
         },
-        select: { id: true },
+        select: { id: true, slug: true, shortCode: true },
       });
 
       if (duplicate) {
+        if (duplicate.shortCode === shortCode) {
+          throw new DemoVillaStoreError("Bu kisa kod zaten kullaniliyor. Lutfen farkli bir kod gir.");
+        }
+
         throw new DemoVillaStoreError("Bu slug zaten kullaniliyor. Lutfen farkli bir slug gir.");
       }
     }
@@ -1180,6 +1217,7 @@ export async function updateDemoVillaFromFormData(
       data: {
         title,
         titleEn,
+        shortCode,
         slug: nextSlug,
         badge,
         badgeEn,

@@ -536,6 +536,7 @@ model Villa {
   createdByUserId    String?
   title              String
   titleEn            String?
+  shortCode          String?
   slug               String
   badge              String?
   badgeEn            String?
@@ -598,6 +599,7 @@ model Villa {
   syncLogs           CalendarSyncLog[]
 
   @@unique([companyId, slug])
+  @@unique([companyId, shortCode])
   @@index([companyId, status, featured])
 }
 

@@ -46,6 +46,7 @@ export type CatalogVilla = {
   companyId: string;
   title: string;
   titleEn?: string;
+  shortCode?: string;
   slug: string;
   locationLabel: string;
   city: string;

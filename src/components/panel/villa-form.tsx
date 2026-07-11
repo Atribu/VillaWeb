@@ -8,6 +8,7 @@ import { VILLA_IMAGE_RULES, type CatalogVilla } from "@/lib/villa-catalog";
 
 const baseFields = [
   { name: "title", label: "Villa basligi", placeholder: "Villa Soleia Lagoon", required: true },
+  { name: "shortCode", label: "Kisa kod", placeholder: "VL-001", required: true },
   {
     name: "slug",
     label: "SEO uyumlu slug",
@@ -141,6 +142,7 @@ function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string
 
   const values: Record<string, string | number | undefined> = {
     title: villa.title,
+    shortCode: villa.shortCode,
     slug: villa.slug,
     city: villa.city,
     district: villa.district,

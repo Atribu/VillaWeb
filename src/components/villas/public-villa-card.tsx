@@ -20,11 +20,17 @@ export function PublicVillaCard({
   const href = `/villalar/${localizedVilla.slug}`;
   const specs = `${localizedVilla.bedroomCount} ${pickLocalized(locale, "Oda", "Bedrooms")}, ${localizedVilla.bathroomCount} ${pickLocalized(locale, "Banyo", "Bathrooms")}, ${localizedVilla.poolType}`;
   const displayImage = getVillaPresentationImage(localizedVilla);
-  const amenityChips = [
-    `${localizedVilla.bedroomCount} ${pickLocalized(locale, "Oda", "Bedrooms")}`,
-    localizedVilla.poolType,
-    localizedVilla.city,
-  ].slice(0, compact ? 2 : 3);
+  const amenityChips = Array.from(
+    new Set(
+      [
+        `${localizedVilla.bedroomCount} ${pickLocalized(locale, "Oda", "Bedrooms")}`,
+        localizedVilla.poolType,
+        localizedVilla.city,
+      ]
+        .map((chip) => chip.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, compact ? 2 : 3);
 
   return (
     <article className="serene-card group overflow-hidden transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(26,54,93,0.12)]">

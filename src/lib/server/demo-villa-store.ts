@@ -45,6 +45,14 @@ import {
 } from "@/lib/server/demo-operations-store";
 
 const demoUploadDirectory = path.join(process.cwd(), "public", "uploads", "villas");
+const villaWatermarkText = "BookToVilla";
+const villaWatermarkXmp = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about="" xmlns:btv="https://booktovilla.com/ns/1.0/" btv:WatermarkVersion="1" btv:WatermarkText="BookToVilla" />
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
 
 export class DemoVillaStoreError extends Error {}
 
@@ -84,6 +92,70 @@ function sortAvailabilityRanges(ranges: AvailabilityRange[]) {
 
 function sanitizeFileName(value: string) {
   return normalizeVillaSlug(path.parse(value).name) || "villa-gorsel";
+}
+
+function escapeSvgText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function normalizeWatermarkText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function createVillaWatermarkOverlay(imageWidth: number, imageHeight: number, value: string) {
+  const margin = Math.max(12, Math.round(Math.min(imageWidth, imageHeight) * 0.025));
+  const fontSize = Math.min(
+    52,
+    Math.max(18, Math.round(Math.min(imageWidth, imageHeight) * 0.04)),
+  );
+  const horizontalPadding = Math.round(fontSize * 0.75);
+  const verticalPadding = Math.round(fontSize * 0.45);
+  const maxTextCharacters = Math.max(
+    8,
+    Math.floor((imageWidth * 0.42 - horizontalPadding * 2) / (fontSize * 0.62)),
+  );
+  const normalizedText = normalizeWatermarkText(value);
+  const displayText =
+    normalizedText.length > maxTextCharacters
+      ? `${normalizedText.slice(0, Math.max(1, maxTextCharacters - 1)).trimEnd()}...`
+      : normalizedText;
+  const estimatedTextWidth = Math.ceil(displayText.length * fontSize * 0.62);
+  const overlayWidth = Math.min(
+    imageWidth - margin * 2,
+    Math.max(fontSize * 4, estimatedTextWidth + horizontalPadding * 2),
+  );
+  const overlayHeight = fontSize + verticalPadding * 2;
+  const textWidth = Math.max(fontSize * 2, overlayWidth - horizontalPadding * 2);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${overlayWidth}" height="${overlayHeight}" viewBox="0 0 ${overlayWidth} ${overlayHeight}">
+      <rect width="${overlayWidth}" height="${overlayHeight}" rx="6" fill="#111827" fill-opacity="0.48" />
+      <text
+        x="${overlayWidth / 2}"
+        y="${overlayHeight / 2}"
+        dy="0.36em"
+        text-anchor="middle"
+        textLength="${textWidth}"
+        lengthAdjust="spacingAndGlyphs"
+        fill="#ffffff"
+        fill-opacity="0.92"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="${fontSize}"
+        font-weight="700"
+        letter-spacing="0.4"
+      >${escapeSvgText(displayText)}</text>
+    </svg>
+  `;
+
+  return {
+    input: Buffer.from(svg),
+    left: Math.round((imageWidth - overlayWidth) / 2),
+    top: Math.round((imageHeight - overlayHeight) / 2),
+  };
 }
 
 function getTextField(formData: FormData, key: string) {
@@ -200,11 +272,11 @@ function validatePdfFile(file: File | null) {
   }
 }
 
-async function convertImageToWebpBuffer(file: File) {
+async function convertImageToWebpBuffer(file: File, watermarkText: string) {
   const sourceBuffer = Buffer.from(await file.arrayBuffer());
 
   try {
-    return await sharp(sourceBuffer, {
+    const { data, info } = await sharp(sourceBuffer, {
       failOn: "error",
       limitInputPixels: 100_000_000,
     })
@@ -215,10 +287,24 @@ async function convertImageToWebpBuffer(file: File) {
         fit: "inside",
         withoutEnlargement: true,
       })
+      .toColourspace("srgb")
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    return await sharp(data, {
+      raw: {
+        width: info.width,
+        height: info.height,
+        channels: info.channels,
+      },
+    })
+      .composite([createVillaWatermarkOverlay(info.width, info.height, watermarkText)])
       .webp({
         quality: 82,
         effort: 4,
       })
+      .withXmp(villaWatermarkXmp)
       .toBuffer();
   } catch (error) {
     console.error("Villa image conversion failed", {
@@ -241,15 +327,20 @@ function getFileSystemErrorCode(error: unknown) {
   return "";
 }
 
-async function writeVillaImages(slug: string, files: File[], startIndex = 0) {
+async function writeVillaImages(
+  slug: string,
+  files: File[],
+  options: { watermarkText: string; startIndex?: number },
+) {
   const villaUploadDirectory = path.join(demoUploadDirectory, slug);
   const imageUrls: string[] = [];
+  const startIndex = options.startIndex ?? 0;
 
   try {
     await mkdir(villaUploadDirectory, { recursive: true });
 
     for (const [index, file] of files.entries()) {
-      const buffer = await convertImageToWebpBuffer(file);
+      const buffer = await convertImageToWebpBuffer(file, options.watermarkText);
       const imageIndex = startIndex + index + 1;
       const fileBaseName = sanitizeFileName(file.name) || `villa-gorsel-${imageIndex}`;
       const fileName = `${String(imageIndex).padStart(2, "0")}-${fileBaseName}.webp`;
@@ -642,6 +733,7 @@ export async function createDemoVillaFromFormData(
   const companyId = resolvedCompanyId;
 
   await runVillaCreateStep("VILLA_COMPANY_ACCESS", async () => assertPanelCompanyAccess(companyId));
+  const watermarkText = villaWatermarkText;
 
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
   const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
@@ -744,7 +836,7 @@ export async function createDemoVillaFromFormData(
     }
 
     const imageUrls = await runVillaCreateStep("VILLA_IMAGE_WRITE", async () =>
-      writeVillaImages(slug, files),
+      writeVillaImages(slug, files, { watermarkText }),
     );
     const tourismLicensePdfUrl = await runVillaCreateStep("VILLA_PDF_WRITE", async () =>
       writeVillaPdfDocument(slug, tourismLicensePdf),
@@ -839,7 +931,7 @@ export async function createDemoVillaFromFormData(
   }
 
   const imageUrls = await runVillaCreateStep("VILLA_IMAGE_WRITE", async () =>
-    writeVillaImages(slug, files),
+    writeVillaImages(slug, files, { watermarkText }),
   );
   const tourismLicensePdfUrl = await runVillaCreateStep("VILLA_PDF_WRITE", async () =>
     writeVillaPdfDocument(slug, tourismLicensePdf),
@@ -1110,7 +1202,10 @@ export async function updateDemoVillaFromFormData(
 
     const newImageUrls =
       files.length > 0
-        ? await writeVillaImages(nextSlug, files, current.imageUrls.length)
+        ? await writeVillaImages(nextSlug, files, {
+            watermarkText: villaWatermarkText,
+            startIndex: current.imageUrls.length,
+          })
         : [];
     const newTourismLicensePdfUrl = await writeVillaPdfDocument(nextSlug, tourismLicensePdf);
     const imageUrls = [...current.imageUrls, ...newImageUrls];
@@ -1186,6 +1281,7 @@ export async function updateDemoVillaFromFormData(
     }
 
     await assertPanelCompanyAccess(current.companyId);
+    const watermarkText = villaWatermarkText;
 
     if (nextSlug !== current.slug || shortCode !== current.shortCode) {
       const duplicate = await db.villa.findFirst({
@@ -1207,7 +1303,12 @@ export async function updateDemoVillaFromFormData(
     }
 
     const newImageUrls =
-      files.length > 0 ? await writeVillaImages(nextSlug, files, current.images.length) : [];
+      files.length > 0
+        ? await writeVillaImages(nextSlug, files, {
+            watermarkText,
+            startIndex: current.images.length,
+          })
+        : [];
     const newTourismLicensePdfUrl = await writeVillaPdfDocument(nextSlug, tourismLicensePdf);
     const coverImageUrl = current.coverImageUrl ?? current.images[0]?.url ?? newImageUrls[0];
     const regionId = await ensureVillaRegion(current.companyId, city, district);

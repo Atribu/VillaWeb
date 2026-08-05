@@ -630,8 +630,8 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
           {isEditMode
-            ? "Duzenleme sirasinda gorsel secmezsen mevcut villa gorselleri korunur. Yeni secilen resimler WEBP'e cevrilip galerinin sonuna eklenir."
-            : "JPG, PNG, WEBP ve diger desteklenen resim dosyalari sunucuda WEBP'e cevrilip kaydedilir."}
+            ? "Duzenleme sirasinda gorsel secmezsen mevcut villa gorselleri korunur. Yeni secilen resimler WEBP'e cevrilir, BookToVilla filigrani eklenir ve galerinin sonuna kaydedilir."
+            : "JPG, PNG, WEBP ve diger desteklenen resim dosyalari sunucuda WEBP'e cevrilir ve BookToVilla filigrani eklenerek kaydedilir."}
         </p>
 
         {isEditMode && initialVilla?.imageUrls.length ? (

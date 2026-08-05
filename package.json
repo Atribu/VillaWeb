@@ -13,7 +13,8 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "watermark:existing": "node scripts/watermark-existing-villas.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.cjs"

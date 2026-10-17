@@ -6,13 +6,21 @@ import path from "node:path";
 import { Prisma } from "@prisma/client";
 import sharp from "sharp";
 import { db } from "@/lib/db";
+import { isDateKey, shiftDateKey } from "@/lib/booking-dates";
+import { toPublicVilla } from "@/lib/public-villa";
+import { validatePricingPeriod, type PricingPeriodInput } from "@/lib/villa-pricing-periods";
 import {
+  VILLA_AMENITY_OPTIONS,
+  VILLA_HOUSE_RULE_OPTIONS,
   VILLA_IMAGE_RULES,
+  VILLA_SUITABILITY_OPTIONS,
   type AvailabilityRange,
   chooseCoverGradient,
   formatCurrency,
   normalizeVillaSlug,
   type CatalogVilla,
+  type VillaAmenityItem,
+  type VillaPricingPeriod,
 } from "@/lib/villa-catalog";
 import { getResolvedVillaPricing } from "@/lib/demo-operations";
 import { getUserSession } from "@/lib/auth/server-session";
@@ -86,6 +94,12 @@ async function runVillaCreateStep<T>(stage: string, action: () => Promise<T>) {
 
 function sortAvailabilityRanges(ranges: AvailabilityRange[]) {
   return [...ranges].sort(
+    (left, right) => new Date(left.startDate).getTime() - new Date(right.startDate).getTime(),
+  );
+}
+
+function sortPricingPeriods(periods: VillaPricingPeriod[]) {
+  return [...periods].sort(
     (left, right) => new Date(left.startDate).getTime() - new Date(right.startDate).getTime(),
   );
 }
@@ -173,13 +187,171 @@ function parseIntegerField(value: string, fieldLabel: string) {
 }
 
 function parsePriceField(value: string, fieldLabel: string) {
-  const parsed = Number.parseFloat(value.replace(",", "."));
+  const parsed = Number(value.replace(",", "."));
 
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new DemoVillaStoreError(`${fieldLabel} alani gecerli bir fiyat olmalidir.`);
   }
 
   return parsed;
+}
+
+function parseNonNegativeNumberField(value: string, fieldLabel: string, fallback = 0) {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number.parseFloat(value.replace(",", "."));
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new DemoVillaStoreError(`${fieldLabel} alani sifir veya daha buyuk olmalidir.`);
+  }
+
+  return parsed;
+}
+
+function parseOptionalNumberField(
+  value: string,
+  fieldLabel: string,
+  options?: { integer?: boolean; min?: number; max?: number },
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalizedValue = value.replace(",", ".");
+  const parsed = Number(normalizedValue);
+  const min = options?.min ?? 0;
+
+  if (
+    !Number.isFinite(parsed) ||
+    (options?.integer && !Number.isInteger(parsed)) ||
+    parsed < min ||
+    (typeof options?.max === "number" && parsed > options.max)
+  ) {
+    throw new DemoVillaStoreError(`${fieldLabel} alani gecerli bir sayi olmalidir.`);
+  }
+
+  return parsed;
+}
+
+function parseOptionalTimeField(value: string, fieldLabel: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    throw new DemoVillaStoreError(`${fieldLabel} HH:MM formatinda olmalidir.`);
+  }
+
+  return value;
+}
+
+function parseLineList(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function getSelectedValues(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(key)
+        .map((value) => String(value).trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function getVillaOperationalInput(formData: FormData) {
+  const amenityKeys = getSelectedValues(formData, "amenities");
+  const knownAmenities = new Map(VILLA_AMENITY_OPTIONS.map((item) => [item.key, item]));
+  const amenities = amenityKeys.map((key) => knownAmenities.get(key)).filter(Boolean) as VillaAmenityItem[];
+
+  if (amenities.length !== amenityKeys.length) {
+    throw new DemoVillaStoreError("Secilen villa olanaklarindan biri gecersiz.");
+  }
+
+  const suitabilityTags = getSelectedValues(formData, "suitabilityTags");
+  const knownSuitabilityTags = new Set<string>(VILLA_SUITABILITY_OPTIONS.map((item) => item.key));
+
+  if (suitabilityTags.some((key) => !knownSuitabilityTags.has(key))) {
+    throw new DemoVillaStoreError("Secilen uygunluk etiketlerinden biri gecersiz.");
+  }
+
+  const selectedRules = getSelectedValues(formData, "houseRulePresets");
+  const presetRules = VILLA_HOUSE_RULE_OPTIONS.filter((rule) => selectedRules.includes(rule.key));
+  if (suitabilityTags.includes("pet-friendly") && selectedRules.includes("no-pets")) {
+    throw new DemoVillaStoreError("Evcil hayvan kabul edilir ve evcil hayvan yasagi birlikte secilemez.");
+  }
+  if (Boolean(getTextField(formData, "latitude")) !== Boolean(getTextField(formData, "longitude"))) {
+    throw new DemoVillaStoreError("Harita icin enlem ve boylami birlikte girin.");
+  }
+
+  return {
+    address: getTextField(formData, "address") || undefined,
+    ownerVillaName: getTextField(formData, "ownerVillaName") || undefined,
+    supplierName: getTextField(formData, "supplierName") || undefined,
+    supplierPhone: getTextField(formData, "supplierPhone") || undefined,
+    supplierEmail: getTextField(formData, "supplierEmail") || undefined,
+    supplierNotes: getTextField(formData, "supplierNotes") || undefined,
+    latitude: parseOptionalNumberField(getTextField(formData, "latitude"), "Enlem", {
+      min: -90,
+      max: 90,
+    }),
+    longitude: parseOptionalNumberField(getTextField(formData, "longitude"), "Boylam", {
+      min: -180,
+      max: 180,
+    }),
+    marketDistanceMeters: parseOptionalNumberField(
+      getTextField(formData, "marketDistanceMeters"),
+      "Market mesafesi",
+      { integer: true },
+    ),
+    beachDistanceMeters: parseOptionalNumberField(
+      getTextField(formData, "beachDistanceMeters"),
+      "Deniz mesafesi",
+      { integer: true },
+    ),
+    centerDistanceMeters: parseOptionalNumberField(
+      getTextField(formData, "centerDistanceMeters"),
+      "Merkez mesafesi",
+      { integer: true },
+    ),
+    airportDistanceKm: parseOptionalNumberField(
+      getTextField(formData, "airportDistanceKm"),
+      "Havalimani mesafesi",
+    ),
+    checkInTime: parseOptionalTimeField(getTextField(formData, "checkInTime"), "Giris saati"),
+    checkOutTime: parseOptionalTimeField(getTextField(formData, "checkOutTime"), "Cikis saati"),
+    suitabilityTags,
+    amenities,
+    houseRules: [...new Set([...presetRules.map((rule) => rule.label), ...parseLineList(getTextField(formData, "houseRules"))])],
+    houseRulesEn: [...new Set([...presetRules.map((rule) => rule.labelEn), ...parseLineList(getTextField(formData, "houseRulesEn"))])],
+    cleaningFee: parseNonNegativeNumberField(getTextField(formData, "cleaningFee"), "Temizlik ucreti"),
+    electricityFee: parseNonNegativeNumberField(
+      getTextField(formData, "electricityFee"),
+      "Elektrik ucreti",
+    ),
+    waterFee: parseNonNegativeNumberField(getTextField(formData, "waterFee"), "Su ucreti"),
+    extraGuestFee: parseNonNegativeNumberField(
+      getTextField(formData, "extraGuestFee"),
+      "Ek misafir ucreti",
+    ),
+    damageDeposit: parseNonNegativeNumberField(
+      getTextField(formData, "damageDeposit"),
+      "Hasar depozitosu",
+    ),
+    extraFeeNotes: getTextField(formData, "extraFeeNotes") || undefined,
+    extraFeeNotesEn: getTextField(formData, "extraFeeNotesEn") || undefined,
+    minNightCount: parseIntegerField(getTextField(formData, "minNightCount") || "1", "Minimum gece"),
+  };
 }
 
 function validateRequiredText(value: string, fieldLabel: string) {
@@ -524,10 +696,46 @@ function mapAvailabilityRange(
   return {
     id: range.id,
     startDate: dateKey(range.startsAt),
-    endDate: dateKey(range.endsAt),
+    endDate: range.endsAt.getUTCHours() === 23 ? shiftDateKey(dateKey(range.endsAt), 1) : dateKey(range.endsAt),
     label: range.note ?? "Manuel blok",
     status: range.blockType === "OWNER_STAY" ? "UNAVAILABLE" : range.blockType,
     sourceRequestId: range.sourceRequestId ?? undefined,
+  };
+}
+
+function mapVillaAmenity(item: {
+  amenity: { key: string; label: string; category: string | null };
+}): VillaAmenityItem {
+  const option = VILLA_AMENITY_OPTIONS.find((candidate) => candidate.key === item.amenity.key);
+
+  return {
+    key: item.amenity.key,
+    label: item.amenity.label,
+    labelEn: option?.labelEn ?? item.amenity.label,
+    category: item.amenity.category ?? option?.category ?? "Genel",
+    categoryEn: option?.categoryEn ?? item.amenity.category ?? "General",
+  };
+}
+
+function mapVillaPricingPeriod(rule: {
+  id: string;
+  title: string;
+  startsAt: Date;
+  endsAt: Date;
+  nightlyPrice: Prisma.Decimal;
+  cleaningFee: Prisma.Decimal | null;
+  minNightCount: number | null;
+  isActive: boolean;
+}): VillaPricingPeriod {
+  return {
+    id: rule.id,
+    title: rule.title,
+    startDate: dateKey(rule.startsAt),
+    endDate: dateKey(rule.endsAt),
+    nightlyPrice: decimalToNumber(rule.nightlyPrice),
+    cleaningFee: rule.cleaningFee === null ? undefined : decimalToNumber(rule.cleaningFee),
+    minNightCount: rule.minNightCount ?? undefined,
+    active: rule.isActive,
   };
 }
 
@@ -554,6 +762,14 @@ async function queryVillas(input?: DemoVillaQueryInput) {
       availabilityBlocks: {
         orderBy: { startsAt: "asc" },
       },
+      amenities: {
+        include: { amenity: true },
+        orderBy: { amenity: { label: "asc" } },
+      },
+      pricingRules: {
+        where: { ruleType: "SEASONAL" },
+        orderBy: { startsAt: "asc" },
+      },
       dailyMetrics: true,
     },
     orderBy: { createdAt: "desc" },
@@ -571,7 +787,7 @@ function filterVisibleVillas(villas: CatalogVilla[], input?: DemoVillaQueryInput
 export async function getDemoVillas(input?: DemoVillaQueryInput) {
   const includeMetrics = input?.includeMetrics ?? true;
 
-  return withDevelopmentFallback(
+  const results = await withDevelopmentFallback(
     async () => {
       const [villas, pricingRecords, discountCampaigns, requests] = await Promise.all([
         queryVillas(input),
@@ -594,6 +810,18 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
           locationLabel: villa.district ? `${villa.district}, ${villa.city}` : villa.city,
           city: villa.city,
           district: villa.district ?? villa.city,
+          address: villa.address ?? undefined,
+          ownerVillaName: villa.ownerVillaName ?? undefined,
+          supplierName: villa.supplierName ?? undefined,
+          supplierPhone: villa.supplierPhone ?? undefined,
+          supplierEmail: villa.supplierEmail ?? undefined,
+          supplierNotes: villa.supplierNotes ?? undefined,
+          latitude: villa.latitude === null ? undefined : decimalToNumber(villa.latitude),
+          longitude: villa.longitude === null ? undefined : decimalToNumber(villa.longitude),
+          marketDistanceMeters: villa.marketDistanceMeters ?? undefined,
+          beachDistanceMeters: villa.beachDistanceMeters ?? undefined,
+          centerDistanceMeters: villa.centerDistanceMeters ?? undefined,
+          airportDistanceKm: villa.airportDistanceKm ?? undefined,
           badge: villa.badge ?? "Secili Villa",
           badgeEn: villa.badgeEn ?? undefined,
           category: villa.category ?? "Villa",
@@ -613,6 +841,12 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
           bathroomCount: villa.bathroomCount,
           poolType: villa.poolType ?? "Ozel havuz",
           poolTypeEn: villa.poolTypeEn ?? undefined,
+          checkInTime: villa.checkInTime ?? undefined,
+          checkOutTime: villa.checkOutTime ?? undefined,
+          suitabilityTags: villa.suitabilityTags,
+          amenities: villa.amenities.map(mapVillaAmenity),
+          houseRules: villa.houseRules,
+          houseRulesEn: villa.houseRulesEn,
           imageCount: villa.images.length,
           imageUrls: villa.images.map((image) => image.url),
           coverImageUrl:
@@ -639,6 +873,15 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
                   .reduce((sum, request) => sum + request.pricing.grandTotal, 0),
               )
             : formatCurrency(0),
+          cleaningFee: decimalToNumber(villa.cleaningFee),
+          electricityFee: decimalToNumber(villa.electricityFee),
+          waterFee: decimalToNumber(villa.waterFee),
+          extraGuestFee: decimalToNumber(villa.extraGuestFee),
+          damageDeposit: decimalToNumber(villa.damageDeposit),
+          extraFeeNotes: villa.extraFeeNotes ?? undefined,
+          extraFeeNotesEn: villa.extraFeeNotesEn ?? undefined,
+          minNightCount: villa.minNightCount,
+          pricingPeriods: villa.pricingRules.map(mapVillaPricingPeriod),
           createdAt: villa.createdAt.toISOString(),
           availabilityRanges: sortAvailabilityRanges(
             villa.availabilityBlocks.map((range) =>
@@ -701,6 +944,7 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
       });
     },
   );
+  return input?.includeInactive === false ? results.map(toPublicVilla) : results;
 }
 
 export async function getDemoVillaBySlug(
@@ -789,6 +1033,7 @@ export async function createDemoVillaFromFormData(
     getTextField(formData, "coverAltEn"),
     "Kapak gorseli alt metni (EN)",
   );
+  const operational = getVillaOperationalInput(formData);
 
   if (!slug) {
     throw new DemoVillaStoreError("SEO uyumlu bir slug olusturulamadi.");
@@ -855,6 +1100,18 @@ export async function createDemoVillaFromFormData(
         locationLabel: `${district}, ${city}`,
         city,
         district,
+        address: operational.address ?? `${district}, ${city}`,
+        ownerVillaName: operational.ownerVillaName,
+        supplierName: operational.supplierName,
+        supplierPhone: operational.supplierPhone,
+        supplierEmail: operational.supplierEmail,
+        supplierNotes: operational.supplierNotes,
+        latitude: operational.latitude,
+        longitude: operational.longitude,
+        marketDistanceMeters: operational.marketDistanceMeters,
+        beachDistanceMeters: operational.beachDistanceMeters,
+        centerDistanceMeters: operational.centerDistanceMeters,
+        airportDistanceKm: operational.airportDistanceKm,
         badge,
         badgeEn,
         category,
@@ -868,13 +1125,25 @@ export async function createDemoVillaFromFormData(
         descriptionEn,
         nightlyPrice,
         discountedNightlyPrice,
-        cleaningFee: 0,
-        minNightCount: 1,
+        cleaningFee: operational.cleaningFee,
+        electricityFee: operational.electricityFee,
+        waterFee: operational.waterFee,
+        extraGuestFee: operational.extraGuestFee,
+        damageDeposit: operational.damageDeposit,
+        extraFeeNotes: operational.extraFeeNotes,
+        extraFeeNotesEn: operational.extraFeeNotesEn,
+        minNightCount: operational.minNightCount,
         capacity,
         bedroomCount,
         bathroomCount,
         poolType,
         poolTypeEn,
+        checkInTime: operational.checkInTime,
+        checkOutTime: operational.checkOutTime,
+        suitabilityTags: operational.suitabilityTags,
+        amenities: operational.amenities,
+        houseRules: operational.houseRules,
+        houseRulesEn: operational.houseRulesEn,
         imageCount: imageUrls.length,
         imageUrls,
         coverImageUrl: imageUrls[0],
@@ -894,6 +1163,7 @@ export async function createDemoVillaFromFormData(
         revenueLabel: formatCurrency(0),
         createdAt: new Date().toISOString(),
         availabilityRanges: [],
+        pricingPeriods: [],
       } satisfies CatalogVilla),
     );
 
@@ -968,15 +1238,37 @@ export async function createDemoVillaFromFormData(
           descriptionEn,
           city,
           district,
-          address: `${district}, ${city}`,
+          address: operational.address ?? `${district}, ${city}`,
+          ownerVillaName: operational.ownerVillaName,
+          supplierName: operational.supplierName,
+          supplierPhone: operational.supplierPhone,
+          supplierEmail: operational.supplierEmail,
+          supplierNotes: operational.supplierNotes,
+          latitude: operational.latitude,
+          longitude: operational.longitude,
+          marketDistanceMeters: operational.marketDistanceMeters,
+          beachDistanceMeters: operational.beachDistanceMeters,
+          centerDistanceMeters: operational.centerDistanceMeters,
+          airportDistanceKm: operational.airportDistanceKm,
           capacity,
           bedroomCount,
           bathroomCount,
           poolType,
           poolTypeEn,
+          checkInTime: operational.checkInTime,
+          checkOutTime: operational.checkOutTime,
+          suitabilityTags: operational.suitabilityTags,
+          houseRules: operational.houseRules,
+          houseRulesEn: operational.houseRulesEn,
           nightlyBasePrice: nightlyPrice,
-          cleaningFee: 0,
-          minNightCount: 1,
+          cleaningFee: operational.cleaningFee,
+          electricityFee: operational.electricityFee,
+          waterFee: operational.waterFee,
+          extraGuestFee: operational.extraGuestFee,
+          damageDeposit: operational.damageDeposit,
+          extraFeeNotes: operational.extraFeeNotes,
+          extraFeeNotesEn: operational.extraFeeNotesEn,
+          minNightCount: operational.minNightCount,
           currency: "TRY",
           status,
           featured,
@@ -994,6 +1286,20 @@ export async function createDemoVillaFromFormData(
           focusKeywordEn,
           tourismLicenseNumber,
           tourismLicensePdfUrl,
+          amenities: {
+            create: operational.amenities.map((item) => ({
+              amenity: {
+                connectOrCreate: {
+                  where: { key: item.key },
+                  create: {
+                    key: item.key,
+                    label: item.label,
+                    category: item.category,
+                  },
+                },
+              },
+            })),
+          },
           images: {
             create: imageUrls.map((url, index) => ({
               url,
@@ -1018,6 +1324,18 @@ export async function createDemoVillaFromFormData(
     locationLabel: `${district}, ${city}`,
     city: villa.city,
     district: villa.district ?? city,
+    address: villa.address ?? undefined,
+    ownerVillaName: villa.ownerVillaName ?? undefined,
+    supplierName: villa.supplierName ?? undefined,
+    supplierPhone: villa.supplierPhone ?? undefined,
+    supplierEmail: villa.supplierEmail ?? undefined,
+    supplierNotes: villa.supplierNotes ?? undefined,
+    latitude: villa.latitude === null ? undefined : decimalToNumber(villa.latitude),
+    longitude: villa.longitude === null ? undefined : decimalToNumber(villa.longitude),
+    marketDistanceMeters: villa.marketDistanceMeters ?? undefined,
+    beachDistanceMeters: villa.beachDistanceMeters ?? undefined,
+    centerDistanceMeters: villa.centerDistanceMeters ?? undefined,
+    airportDistanceKm: villa.airportDistanceKm ?? undefined,
     badge: villa.badge ?? badge,
     badgeEn: villa.badgeEn ?? badgeEn,
     category: villa.category ?? category,
@@ -1035,6 +1353,12 @@ export async function createDemoVillaFromFormData(
     bathroomCount: villa.bathroomCount,
     poolType: villa.poolType ?? poolType,
     poolTypeEn: villa.poolTypeEn ?? poolTypeEn,
+    checkInTime: villa.checkInTime ?? undefined,
+    checkOutTime: villa.checkOutTime ?? undefined,
+    suitabilityTags: villa.suitabilityTags,
+    amenities: operational.amenities,
+    houseRules: villa.houseRules,
+    houseRulesEn: villa.houseRulesEn,
     imageCount: imageUrls.length,
     imageUrls,
     coverImageUrl: imageUrls[0],
@@ -1052,6 +1376,15 @@ export async function createDemoVillaFromFormData(
     viewCount: 0,
     requestCount: 0,
     revenueLabel: formatCurrency(0),
+    cleaningFee: decimalToNumber(villa.cleaningFee),
+    electricityFee: decimalToNumber(villa.electricityFee),
+    waterFee: decimalToNumber(villa.waterFee),
+    extraGuestFee: decimalToNumber(villa.extraGuestFee),
+    damageDeposit: decimalToNumber(villa.damageDeposit),
+    extraFeeNotes: villa.extraFeeNotes ?? undefined,
+    extraFeeNotesEn: villa.extraFeeNotesEn ?? undefined,
+    minNightCount: villa.minNightCount,
+    pricingPeriods: [],
     createdAt: villa.createdAt.toISOString(),
     availabilityRanges: [],
   } satisfies CatalogVilla;
@@ -1153,6 +1486,7 @@ export async function updateDemoVillaFromFormData(
     getTextField(formData, "coverAltEn"),
     "Kapak gorseli alt metni (EN)",
   );
+  const operational = getVillaOperationalInput(formData);
 
   if (!nextSlug) {
     throw new DemoVillaStoreError("SEO uyumlu bir slug olusturulamadi.");
@@ -1219,6 +1553,18 @@ export async function updateDemoVillaFromFormData(
       locationLabel: `${district}, ${city}`,
       city,
       district,
+      address: operational.address ?? `${district}, ${city}`,
+      ownerVillaName: operational.ownerVillaName,
+      supplierName: operational.supplierName,
+      supplierPhone: operational.supplierPhone,
+      supplierEmail: operational.supplierEmail,
+      supplierNotes: operational.supplierNotes,
+      latitude: operational.latitude,
+      longitude: operational.longitude,
+      marketDistanceMeters: operational.marketDistanceMeters,
+      beachDistanceMeters: operational.beachDistanceMeters,
+      centerDistanceMeters: operational.centerDistanceMeters,
+      airportDistanceKm: operational.airportDistanceKm,
       badge,
       badgeEn,
       category,
@@ -1236,6 +1582,20 @@ export async function updateDemoVillaFromFormData(
       bathroomCount,
       poolType,
       poolTypeEn,
+      checkInTime: operational.checkInTime,
+      checkOutTime: operational.checkOutTime,
+      suitabilityTags: operational.suitabilityTags,
+      amenities: operational.amenities,
+      houseRules: operational.houseRules,
+      houseRulesEn: operational.houseRulesEn,
+      cleaningFee: operational.cleaningFee,
+      electricityFee: operational.electricityFee,
+      waterFee: operational.waterFee,
+      extraGuestFee: operational.extraGuestFee,
+      damageDeposit: operational.damageDeposit,
+      extraFeeNotes: operational.extraFeeNotes,
+      extraFeeNotesEn: operational.extraFeeNotesEn,
+      minNightCount: operational.minNightCount,
       imageCount: imageUrls.length,
       imageUrls,
       coverImageUrl: current.coverImageUrl ?? imageUrls[0],
@@ -1331,13 +1691,37 @@ export async function updateDemoVillaFromFormData(
         regionId,
         city,
         district,
-        address: `${district}, ${city}`,
+        address: operational.address ?? `${district}, ${city}`,
+        ownerVillaName: operational.ownerVillaName ?? null,
+        supplierName: operational.supplierName ?? null,
+        supplierPhone: operational.supplierPhone ?? null,
+        supplierEmail: operational.supplierEmail ?? null,
+        supplierNotes: operational.supplierNotes ?? null,
+        latitude: operational.latitude ?? null,
+        longitude: operational.longitude ?? null,
+        marketDistanceMeters: operational.marketDistanceMeters ?? null,
+        beachDistanceMeters: operational.beachDistanceMeters ?? null,
+        centerDistanceMeters: operational.centerDistanceMeters ?? null,
+        airportDistanceKm: operational.airportDistanceKm ?? null,
         capacity,
         bedroomCount,
         bathroomCount,
         poolType,
         poolTypeEn,
+        checkInTime: operational.checkInTime ?? null,
+        checkOutTime: operational.checkOutTime ?? null,
+        suitabilityTags: operational.suitabilityTags,
+        houseRules: operational.houseRules,
+        houseRulesEn: operational.houseRulesEn,
         nightlyBasePrice: nightlyPrice,
+        cleaningFee: operational.cleaningFee,
+        electricityFee: operational.electricityFee,
+        waterFee: operational.waterFee,
+        extraGuestFee: operational.extraGuestFee,
+        damageDeposit: operational.damageDeposit,
+        extraFeeNotes: operational.extraFeeNotes ?? null,
+        extraFeeNotesEn: operational.extraFeeNotesEn ?? null,
+        minNightCount: operational.minNightCount,
         status,
         featured,
         coverImageUrl,
@@ -1351,6 +1735,21 @@ export async function updateDemoVillaFromFormData(
         focusKeywordEn,
         tourismLicenseNumber,
         ...(newTourismLicensePdfUrl ? { tourismLicensePdfUrl: newTourismLicensePdfUrl } : {}),
+        amenities: {
+          deleteMany: {},
+          create: operational.amenities.map((item) => ({
+            amenity: {
+              connectOrCreate: {
+                where: { key: item.key },
+                create: {
+                  key: item.key,
+                  label: item.label,
+                  category: item.category,
+                },
+              },
+            },
+          })),
+        },
         ...(newImageUrls.length > 0
           ? {
               images: {
@@ -1563,6 +1962,135 @@ export async function deleteDemoVilla(slug: string, input?: { companyId?: string
   }
 }
 
+export async function addDemoVillaPricingPeriod(input: PricingPeriodInput & { slug: string }) {
+  function validate(periods: VillaPricingPeriod[]) {
+    try {
+      validatePricingPeriod(input, periods);
+    } catch (error) {
+      throw new DemoVillaStoreError(error instanceof Error ? error.message : "Gecersiz fiyat donemi.");
+    }
+  }
+
+  return withDevelopmentFallback(
+    async () => {
+      const companyId = await resolvePanelCompanyId();
+      const villa = await db.villa.findFirst({
+        where: { slug: input.slug, ...(companyId ? { companyId } : {}) },
+        select: { id: true, companyId: true },
+      });
+      if (!villa) throw new DemoVillaStoreError("Villa bulunamadi.");
+      await assertPanelCompanyAccess(villa.companyId);
+      await db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${villa.id} FOR UPDATE`;
+        const periods = await tx.villaPricingRule.findMany({
+          where: { villaId: villa.id, ruleType: "SEASONAL" },
+        });
+        validate(periods.map(mapVillaPricingPeriod));
+        const data = {
+          title: input.title.trim(),
+          startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
+          endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
+          nightlyPrice: input.nightlyPrice,
+          cleaningFee: input.cleaningFee ?? null,
+          minNightCount: input.minNightCount ?? null,
+          isActive: input.active !== false,
+        };
+        if (input.id) {
+          await tx.villaPricingRule.update({ where: { id: input.id }, data });
+        } else {
+          await tx.villaPricingRule.create({ data: { ...data, villaId: villa.id, ruleType: "SEASONAL" } });
+        }
+      });
+      const updated = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId, includeMetrics: false });
+      if (!updated) throw new DemoVillaStoreError("Villa tekrar okunamadi.");
+      return updated;
+    },
+    async () => {
+      const villa = await getFallbackVillaForMutation(input.slug);
+      const periods = villa.pricingPeriods ?? [];
+      validate(periods);
+      return saveFallbackVilla({
+        ...villa,
+        pricingPeriods: sortPricingPeriods([
+          ...periods.filter((period) => period.id !== input.id),
+          {
+            id: input.id ?? `pricing-${randomUUID()}`,
+            title: input.title.trim(),
+            startDate: input.startDate,
+            endDate: input.endDate,
+            nightlyPrice: input.nightlyPrice,
+            cleaningFee: input.cleaningFee,
+            minNightCount: input.minNightCount,
+            active: input.active !== false,
+          },
+        ]),
+      });
+    },
+  );
+}
+
+export async function deleteDemoVillaPricingPeriod(input: {
+  slug: string;
+  pricingPeriodId: string;
+}) {
+  async function deleteFallbackPricingPeriod() {
+    const villa = await getFallbackVillaForMutation(input.slug);
+    const periods = villa.pricingPeriods ?? [];
+
+    if (!periods.some((period) => period.id === input.pricingPeriodId)) {
+      throw new DemoVillaStoreError("Silinecek fiyat donemi bulunamadi.");
+    }
+
+    return saveFallbackVilla({
+      ...villa,
+      pricingPeriods: periods.filter((period) => period.id !== input.pricingPeriodId),
+    });
+  }
+
+  if (isDevelopmentFallbackForced()) {
+    return deleteFallbackPricingPeriod();
+  }
+
+  try {
+    const period = await db.villaPricingRule.findFirst({
+      where: {
+        id: input.pricingPeriodId,
+        ruleType: "SEASONAL",
+        villa: { slug: input.slug },
+      },
+      include: { villa: { select: { companyId: true } } },
+    });
+
+    if (!period) {
+      throw new DemoVillaStoreError("Silinecek fiyat donemi bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(period.villa.companyId);
+    await db.villaPricingRule.delete({ where: { id: period.id } });
+
+    const updatedVilla = await getDemoVillaBySlug(input.slug, {
+      companyId: period.villa.companyId,
+      includeMetrics: false,
+    });
+
+    if (!updatedVilla) {
+      throw new DemoVillaStoreError("Fiyat donemi silindi ancak villa tekrar okunamadi.");
+    }
+
+    return updatedVilla;
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      throw error;
+    }
+
+    if (isPrismaConnectionError(error)) {
+      return deleteFallbackPricingPeriod();
+    }
+
+    throw error;
+  }
+}
+
 export async function addDemoVillaAvailability(input: {
   slug: string;
   startDate: string;
@@ -1571,25 +2099,13 @@ export async function addDemoVillaAvailability(input: {
   status: AvailabilityRange["status"];
   sourceRequestId?: string;
 }) {
-  const villa = await db.villa.findFirst({
-    where: { slug: input.slug },
-    include: {
-      availabilityBlocks: true,
-    },
-  });
-
-  if (!villa) {
-    throw new DemoVillaStoreError("Villa bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(villa.companyId);
-
-  if (!input.startDate || !input.endDate) {
+  if (!isDateKey(input.startDate) || !isDateKey(input.endDate)) {
     throw new DemoVillaStoreError("Baslangic ve bitis tarihi zorunludur.");
   }
 
-  const startDate = new Date(`${input.startDate}T00:00:00`);
-  const endDate = new Date(`${input.endDate}T23:59:59.999Z`);
+  const startDate = new Date(`${input.startDate}T00:00:00.000Z`);
+  const exclusiveEnd = shiftDateKey(input.endDate, 1);
+  const endDate = new Date(`${exclusiveEnd}T00:00:00.000Z`);
 
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     throw new DemoVillaStoreError("Tarih alani gecerli degil.");
@@ -1599,99 +2115,219 @@ export async function addDemoVillaAvailability(input: {
     throw new DemoVillaStoreError("Bitis tarihi baslangic tarihinden sonra olmalidir.");
   }
 
-  const overlaps = villa.availabilityBlocks.find(
-    (range) => startDate < range.endsAt && endDate > range.startsAt,
-  );
-
-  if (overlaps) {
-    throw new DemoVillaStoreError(
-      `${dateKey(overlaps.startsAt)} - ${dateKey(overlaps.endsAt)} araliginda baska bir blok zaten kayitli.`,
+  async function addFallbackAvailability() {
+    const villa = await getFallbackVillaForMutation(input.slug);
+    const overlap = villa.availabilityRanges.find(
+      (range) => input.startDate < range.endDate && exclusiveEnd > range.startDate,
     );
+
+    if (overlap) {
+      throw new DemoVillaStoreError(
+        `${overlap.startDate} - ${overlap.endDate} araliginda baska bir blok zaten kayitli.`,
+      );
+    }
+
+    return saveFallbackVilla({
+      ...villa,
+      availabilityRanges: sortAvailabilityRanges([
+        ...villa.availabilityRanges,
+        {
+          id: `availability-${randomUUID().slice(0, 8)}`,
+          startDate: input.startDate,
+          endDate: exclusiveEnd,
+          label: input.label.trim() || "Manuel blok",
+          status: input.status,
+          sourceRequestId: input.sourceRequestId,
+        },
+      ]),
+    });
   }
 
-  await db.villaAvailabilityBlock.create({
-    data: {
-      id: `availability-${randomUUID().slice(0, 8)}`,
-      villaId: villa.id,
-      createdByUserId: (await getUserSession().catch(() => null))?.id,
-      startsAt: startDate,
-      endsAt: endDate,
-      blockType: input.status,
-      note: input.label.trim() || "Manuel blok",
-      sourceRequestId: input.sourceRequestId,
-    },
-  });
-
-  const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId });
-
-  if (!updatedVilla) {
-    throw new DemoVillaStoreError("Villa uygunluk kaydi eklendikten sonra okunamadi.");
+  if (isDevelopmentFallbackForced()) {
+    return addFallbackAvailability();
   }
 
-  return updatedVilla;
+  try {
+    const scopedCompanyId = await resolvePanelCompanyId();
+    const villa = await db.villa.findFirst({
+      where: {
+        slug: input.slug,
+        ...(scopedCompanyId ? { companyId: scopedCompanyId } : {}),
+      },
+      include: {
+        availabilityBlocks: true,
+      },
+    });
+
+    if (!villa) {
+      throw new DemoVillaStoreError("Villa bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(villa.companyId);
+
+    const userId = (await getUserSession())?.id;
+    await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${villa.id} FOR UPDATE`;
+      const overlap = await tx.villaAvailabilityBlock.findFirst({ where: {
+        villaId: villa.id, startsAt: { lt: endDate }, endsAt: { gt: startDate },
+      } });
+      if (overlap) throw new DemoVillaStoreError("Secilen tarihlerde baska bir blok zaten kayitli.");
+      await tx.villaAvailabilityBlock.create({
+        data: {
+          id: `availability-${randomUUID()}`, villaId: villa.id, createdByUserId: userId,
+          startsAt: startDate, endsAt: endDate, blockType: input.status,
+          note: input.label.trim() || "Manuel blok", sourceRequestId: input.sourceRequestId,
+        },
+      });
+    });
+
+    const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId });
+
+    if (!updatedVilla) {
+      throw new DemoVillaStoreError("Villa uygunluk kaydi eklendikten sonra okunamadi.");
+    }
+
+    return updatedVilla;
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      throw error;
+    }
+
+    if (isPrismaConnectionError(error)) {
+      return addFallbackAvailability();
+    }
+
+    throw error;
+  }
 }
 
 export async function deleteDemoVillaAvailability(input: { slug: string; rangeId: string }) {
-  const range = await db.villaAvailabilityBlock.findFirst({
-    where: {
-      id: input.rangeId,
-      villa: {
-        slug: input.slug,
-      },
-    },
-    include: {
-      villa: {
-        select: { companyId: true },
-      },
-    },
-  });
+  async function deleteFallbackAvailability() {
+    const villa = await getFallbackVillaForMutation(input.slug);
 
-  if (!range) {
-    throw new DemoVillaStoreError("Silinecek uygunluk kaydi bulunamadi.");
+    if (!villa.availabilityRanges.some((range) => range.id === input.rangeId)) {
+      throw new DemoVillaStoreError("Silinecek uygunluk kaydi bulunamadi.");
+    }
+    if (villa.availabilityRanges.find((range) => range.id === input.rangeId)?.sourceRequestId) {
+      throw new DemoVillaStoreError("Rezervasyona bagli bloklar talepler ekranindan iptal edilmelidir.");
+    }
+
+    return saveFallbackVilla({
+      ...villa,
+      availabilityRanges: villa.availabilityRanges.filter((range) => range.id !== input.rangeId),
+    });
   }
 
-  await assertPanelCompanyAccess(range.villa.companyId);
-  await db.villaAvailabilityBlock.delete({
-    where: { id: range.id },
-  });
-
-  const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: range.villa.companyId });
-
-  if (!updatedVilla) {
-    throw new DemoVillaStoreError("Villa uygunluk kaydi silindikten sonra okunamadi.");
+  if (isDevelopmentFallbackForced()) {
+    return deleteFallbackAvailability();
   }
 
-  return updatedVilla;
+  try {
+    const scopedCompanyId = await resolvePanelCompanyId();
+    const range = await db.villaAvailabilityBlock.findFirst({
+      where: {
+        id: input.rangeId,
+        villa: {
+          slug: input.slug,
+          ...(scopedCompanyId ? { companyId: scopedCompanyId } : {}),
+        },
+      },
+      include: {
+        villa: {
+          select: { companyId: true },
+        },
+      },
+    });
+
+    if (!range) {
+      throw new DemoVillaStoreError("Silinecek uygunluk kaydi bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(range.villa.companyId);
+    if (range.sourceRequestId) throw new DemoVillaStoreError("Rezervasyona bagli bloklar talepler ekranindan iptal edilmelidir.");
+    await db.villaAvailabilityBlock.delete({
+      where: { id: range.id },
+    });
+
+    const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: range.villa.companyId });
+
+    if (!updatedVilla) {
+      throw new DemoVillaStoreError("Villa uygunluk kaydi silindikten sonra okunamadi.");
+    }
+
+    return updatedVilla;
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      throw error;
+    }
+
+    if (isPrismaConnectionError(error)) {
+      return deleteFallbackAvailability();
+    }
+
+    throw error;
+  }
 }
 
 export async function deleteDemoVillaAvailabilityByRequestId(input: {
   slug: string;
   requestId: string;
 }) {
-  const villa = await db.villa.findFirst({
-    where: { slug: input.slug },
-    select: { id: true, companyId: true },
-  });
+  async function deleteFallbackRequestAvailability() {
+    const villa = await getFallbackVillaForMutation(input.slug);
 
-  if (!villa) {
-    throw new DemoVillaStoreError("Villa bulunamadi.");
+    return saveFallbackVilla({
+      ...villa,
+      availabilityRanges: villa.availabilityRanges.filter(
+        (range) => range.sourceRequestId !== input.requestId,
+      ),
+    });
   }
 
-  await assertPanelCompanyAccess(villa.companyId);
-
-  await db.villaAvailabilityBlock.deleteMany({
-    where: {
-      villaId: villa.id,
-      sourceRequestId: input.requestId,
-      blockType: "RESERVED",
-    },
-  });
-
-  const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId });
-
-  if (!updatedVilla) {
-    throw new DemoVillaStoreError("Villa uygunluk kaydi guncellenemedi.");
+  if (isDevelopmentFallbackForced()) {
+    return deleteFallbackRequestAvailability();
   }
 
-  return updatedVilla;
+  try {
+    const scopedCompanyId = await resolvePanelCompanyId();
+    const villa = await db.villa.findFirst({
+      where: {
+        slug: input.slug,
+        ...(scopedCompanyId ? { companyId: scopedCompanyId } : {}),
+      },
+      select: { id: true, companyId: true },
+    });
+
+    if (!villa) {
+      throw new DemoVillaStoreError("Villa bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(villa.companyId);
+
+    await db.villaAvailabilityBlock.deleteMany({
+      where: {
+        villaId: villa.id,
+        sourceRequestId: input.requestId,
+        blockType: "RESERVED",
+      },
+    });
+
+    const updatedVilla = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId });
+
+    if (!updatedVilla) {
+      throw new DemoVillaStoreError("Villa uygunluk kaydi guncellenemedi.");
+    }
+
+    return updatedVilla;
+  } catch (error) {
+    if (error instanceof DemoVillaStoreError) {
+      throw error;
+    }
+
+    if (isPrismaConnectionError(error)) {
+      return deleteFallbackRequestAvailability();
+    }
+
+    throw error;
+  }
 }

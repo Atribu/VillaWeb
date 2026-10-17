@@ -10,6 +10,7 @@ import {
 } from "@/lib/villa-content-i18n";
 import type { CatalogVilla } from "@/lib/villa-catalog";
 import { formatCurrency, formatShortDate } from "@/lib/villa-catalog";
+import { getMinimumNightCountForStay } from "@/lib/demo-operations";
 import {
   findBlockedRange,
   getNightCount,
@@ -195,6 +196,21 @@ export function VillaAvailabilityCard({
       };
     }
 
+    const minimumNightCount = getMinimumNightCountForStay(localizedVilla, checkIn, checkOut);
+
+    if (nightCount < minimumNightCount) {
+      return {
+        status: "invalid" as const,
+        message: pickLocalized(
+          locale,
+          `Secilen fiyat donemi icin minimum ${minimumNightCount} gece secmelisin.`,
+          `You need to choose at least ${minimumNightCount} nights for the selected pricing period.`,
+        ),
+        blockedRange: null,
+        nightCount,
+      };
+    }
+
     const blockedRange = findBlockedRange(checkIn, checkOut, localizedVilla.availabilityRanges);
 
     if (blockedRange) {
@@ -226,7 +242,7 @@ export function VillaAvailabilityCard({
       blockedRange: null,
       nightCount,
     };
-  }, [checkIn, checkOut, locale, localizedVilla.availabilityRanges]);
+  }, [checkIn, checkOut, locale, localizedVilla]);
 
   const statusClasses =
     availability.status === "available"

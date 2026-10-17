@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
-import { getPanelEntryState, type PanelIconName } from "@/lib/auth/panel-access";
+import { useState } from "react";
+import { type PanelIconName } from "@/lib/auth/panel-access";
 import type { AppRole } from "@/lib/auth/users";
 import type { AppLocale } from "@/lib/i18n";
 import { getLocalizedPanelNavigation } from "@/lib/panel-i18n";
@@ -117,133 +117,55 @@ function PanelNavIcon({ name, className }: { name: PanelIconName; className?: st
   return null;
 }
 
-function PanelSidebarRailButton({
-  active,
-  label,
-  icon,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  icon: PanelIconName;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className={cn(
-        "flex h-11 w-11 items-center justify-center rounded-r-xl border-l-4 transition",
-        active
-          ? "border-l-[#2b78ad] bg-[#2b78ad] text-white shadow-[0_8px_20px_rgba(43,120,173,0.24)]"
-          : "border-l-transparent bg-white text-[#2b78ad] hover:bg-[#eef5fa]",
-      )}
-    >
-      <PanelNavIcon name={icon} />
-    </button>
-  );
-}
-
 export function PanelSidebar({ role, locale }: { role: AppRole; locale: AppLocale }) {
   const pathname = usePathname();
   const navigation = getLocalizedPanelNavigation(role, locale);
-
-  const activeGroupId = useMemo(() => {
-    const activeGroup = navigation.find(
-      (entry) => entry.type === "group" && getPanelEntryState(pathname, entry).hasActiveChild,
-    );
-    return activeGroup?.id ?? null;
-  }, [navigation, pathname]);
-
-  const [manualOpenGroupId, setManualOpenGroupId] = useState<string | null>(null);
-
-  const openGroupId = manualOpenGroupId ?? activeGroupId;
-  const openGroup =
-    openGroupId && navigation.find((entry) => entry.type === "group" && entry.id === openGroupId);
-
+  const [manualGroup, setManualGroup] = useState<{ pathname: string; id: string }>();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const links = navigation.flatMap((entry) => entry.type === "link" ? [entry] : entry.items);
+  const activeHref = links.filter((item) => isPathActive(pathname, item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  const activeGroupId = [...navigation].reverse().find((entry) => entry.type === "group"
+    && entry.items.some((item) => item.href === activeHref))?.id;
+  const openGroup = manualGroup?.pathname === pathname ? manualGroup.id : activeGroupId;
   return (
-    <div className="flex h-full">
-      <div className="flex w-[56px] flex-col border-r border-[#d7dde5] bg-[#f4f7fa] py-1">
-        <div className="flex flex-1 flex-col gap-1">
+    <aside className="panel-navigation">
+      <button type="button" onClick={() => setMobileOpen(!mobileOpen)} aria-expanded={mobileOpen} aria-controls="panel-navigation-links"
+        className="flex w-full items-center justify-between text-sm font-semibold text-slate-700 lg:hidden">
+        <span>Panel menusu</span><span aria-hidden="true">{mobileOpen ? "Kapat" : "Ac"}</span>
+      </button>
+      <nav id="panel-navigation-links" aria-label="Panel" className={cn(mobileOpen ? "block" : "hidden", "mt-4 lg:mt-0 lg:block")}>
+        <p className="mb-4 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Calisma alani</p>
+        <div className="space-y-1">
           {navigation.map((entry) => {
-            const state = getPanelEntryState(pathname, entry);
-            const isOpen = openGroupId === entry.id;
-
-            if (entry.type === "link") {
-              return (
-                <Link
-                  key={entry.id}
-                  href={entry.href}
-                  aria-label={entry.label}
-                  title={entry.label}
-                  className={cn(
-                    "mx-0.5 flex h-11 w-[calc(100%-4px)] items-center justify-center rounded-r-xl border-l-4 transition",
-                    state.isActive
-                      ? "border-l-[#2b78ad] bg-[#2b78ad] text-white shadow-[0_8px_20px_rgba(43,120,173,0.24)]"
-                      : "border-l-transparent bg-white text-[#2b78ad] hover:bg-[#eef5fa]",
-                  )}
-                >
-                  <PanelNavIcon name={entry.icon} />
-                </Link>
-              );
-            }
-
+            const active = entry.type === "link" ? activeHref === entry.href : activeGroupId === entry.id;
+            const classes = cn("flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-[13px] font-semibold transition",
+              active ? "bg-[#eaf1f7] text-[#173c64]" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800");
+            if (entry.type === "link") return (
+              <Link key={entry.id} href={entry.href} aria-current={active ? "page" : undefined} className={classes} onClick={() => setMobileOpen(false)}>
+                <PanelNavIcon name={entry.icon} className="shrink-0" /><span>{entry.label}</span>
+              </Link>
+            );
+            const open = openGroup === entry.id;
             return (
-              <PanelSidebarRailButton
-                key={entry.id}
-                active={state.hasActiveChild || isOpen}
-                label={entry.label}
-                icon={entry.icon}
-                onClick={() =>
-                  setManualOpenGroupId((current) => (current === entry.id ? null : entry.id))
-                }
-              />
+              <div key={entry.id}>
+                <button type="button" className={classes} aria-expanded={open} aria-controls={`nav-${entry.id}`} onClick={() => setManualGroup({ pathname, id: open ? "" : entry.id })}>
+                  <PanelNavIcon name={entry.icon} className="shrink-0" /><span className="flex-1">{entry.label}</span>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" className={open ? "rotate-180" : ""} aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg>
+                </button>
+                {open ? <div id={`nav-${entry.id}`} className="my-2 ml-5 space-y-1 border-l border-slate-200 pl-4">
+                  {entry.items.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}
+                    aria-current={activeHref === item.href ? "page" : undefined}
+                    className={cn("block rounded-md px-3 py-2 text-[13px] transition", activeHref === item.href ? "bg-[#f0f5f9] font-semibold text-[#173c64]" : "text-slate-500 hover:text-slate-900")}>
+                    {item.label}
+                  </Link>)}
+                </div> : null}
+              </div>
             );
           })}
         </div>
-      </div>
-
-      {openGroup && openGroup.type === "group" ? (
-        <div className="hidden w-[250px] border-r border-[#d7dde5] bg-white lg:block">
-          <div className="border-b border-[#d7dde5] bg-[#2b78ad] px-4 py-4 text-white">
-            <div className="flex items-center gap-3">
-              <PanelNavIcon name={openGroup.icon} className="h-5 w-5" />
-              <p className="text-sm font-semibold uppercase tracking-[0.08em]">{openGroup.label}</p>
-            </div>
-          </div>
-
-          <div className="px-4 py-4">
-            <div className="border-l border-[#c7d1dc] pl-5">
-              {openGroup.items.map((item) => {
-                const active = isPathActive(pathname, item.href);
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "relative block py-2.5 text-[15px] transition",
-                      active
-                        ? "font-medium text-[#f16824]"
-                        : "text-[#5f6f83] hover:text-[#2b78ad]",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "absolute -left-[1.45rem] top-[1.05rem] h-2.5 w-2.5 rounded-full border bg-white",
-                        active ? "border-[#2b78ad] ring-2 ring-[#e8f2f8]" : "border-[#a8b4c3]",
-                      )}
-                    />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+        <div className="mt-8 border-t border-slate-100 px-3 pt-5"><p className="text-xs font-semibold text-slate-600">BookToVilla</p><p className="mt-1 text-[11px] text-slate-400">Villa ve rezervasyon yonetimi</p></div>
+      </nav>
+    </aside>
   );
 }

@@ -5,7 +5,7 @@ import { RequestForm } from "@/components/public/request-form";
 import { RequestDateSelector } from "@/components/public/request-date-selector";
 import { Container } from "@/components/ui/container";
 import { getDemoCompanySiteHref } from "@/lib/demo-companies";
-import { getResolvedStayPricing } from "@/lib/demo-operations";
+import { getMinimumNightCountForStay, getResolvedStayPricing } from "@/lib/demo-operations";
 import { pickLocalized } from "@/lib/i18n";
 import { getLocalizedAvailabilityLabel, getLocalizedVilla } from "@/lib/villa-content-i18n";
 import { getCompanyHeroImage } from "@/lib/public-gallery";
@@ -60,7 +60,10 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
       ? findBlockedRange(checkIn, checkOut, villa.availabilityRanges)
       : null;
   const nightCount = checkIn && checkOut ? getNightCount(checkIn, checkOut) : 0;
-  const belowMinimumStay = Boolean(villa && nightCount > 0 && nightCount < (villa.minNightCount ?? 1));
+  const minimumNightCount = villa
+    ? getMinimumNightCountForStay(villa, checkIn, checkOut)
+    : 1;
+  const belowMinimumStay = Boolean(villa && nightCount > 0 && nightCount < minimumNightCount);
   const isValidSelection = Boolean(
     villa && checkIn && checkOut && nightCount > 0 && !blockedRange && !belowMinimumStay,
   );
@@ -96,8 +99,8 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
         : belowMinimumStay
           ? pickLocalized(
               locale,
-              `Bu villa icin minimum ${villa.minNightCount ?? 1} gece secmen gerekiyor.`,
-              `You need to select at least ${villa.minNightCount ?? 1} nights for this villa.`,
+              `Secilen fiyat donemi icin minimum ${minimumNightCount} gece secmen gerekiyor.`,
+              `You need to select at least ${minimumNightCount} nights for the selected pricing period.`,
             )
           : blockedRange
           ? pickLocalized(

@@ -1,0 +1,10 @@
+@media print {
+  body:has(.booking-document) :is(header, footer, .booking-document-actions) { display: none !important; }
+  body:has(.booking-document), body:has(.booking-document) .bg-shell { background: #fff !important; }
+  .booking-document { width: 100%; max-width: none; padding: 0 !important; }
+  .booking-document section { break-inside: avoid; border: 1px solid #d4dce3; box-shadow: none; margin-bottom: 16px; }
+  .booking-document section > div:first-child { background: #fff !important; color: #172a3a !important; padding: 20px; }
+  .booking-document section > div:first-child p { color: #435466 !important; }
+  .booking-document h1 { font-size: 26px; }
+  .booking-document h2 { font-size: 20px; }
+}

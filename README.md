@@ -43,10 +43,20 @@ npm run prisma:seed
 Prod benzeri deploy akisi icin:
 
 ```bash
-npm run prisma:generate
-npm run prisma:migrate:deploy
-npm run prisma:seed
+npm ci
+npm run prisma:db:push
+npm run build
+npm run start
 ```
+
+`npm run build` komutu Prisma Client'i otomatik olarak yeniden uretir. Projede henuz
+surumlenmis migration zinciri bulunmadigi icin mevcut sunucuda sema degisiklikleri
+`prisma:db:push` ile uygulanir; bu komut uygulama dosyalarini guncellemez, PostgreSQL
+semasini `prisma/schema.prisma` ile esler.
+
+Mevcut canli veritabaninda rutin guncelleme sirasinda `prisma:seed` calistirilmaz.
+Seed yalnizca yeni ve bos bir kurulum icin kullanilir. Bu surumun rapor maddeleri ve
+kontrol adimlari [rapor uygulama listesinde](docs/rapor-uygulama-durumu.md) yer alir.
 
 ## Seed Ile Gelen Baslangic Verisi
 
@@ -73,6 +83,8 @@ npm run prisma:seed
 npm run dev
 npm run build
 npm run lint
+npm test
+npm run test:smoke
 npm run prisma:validate
 npm run prisma:generate
 npm run prisma:db:push
@@ -93,8 +105,12 @@ Bu kullanicilar `prisma seed` ile veritabanina yazilir.
 
 ## Onemli Notlar
 
+- `test:smoke`, gecici `DEV_DATA_DIRECTORY` ile izole fallback verisi kullanir.
+  Bu degisken sadece gelistirmede gecerlidir; canli PostgreSQL verisini tasimaz.
+
 - Build su anda veritabanina bagimli static prerender zorunlulugu tasimaz; public layout dinamik calisir.
-- Gercek yayinda `DATABASE_URL` ve `SESSION_SECRET` ortama tanimlanmalidir.
+- Gercek yayinda `DATABASE_URL`, `SESSION_SECRET` ve iCal baglantilarini imzalamak icin
+  `ICAL_SIGNING_SECRET` ortama tanimlanmalidir.
 - Localde `prisma:seed` komutunun basarili olmasi icin PostgreSQL servisinin calisiyor olmasi gerekir.
 
 Detayli gecis plani:

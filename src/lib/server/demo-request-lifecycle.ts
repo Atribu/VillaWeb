@@ -1,88 +1,36 @@
 import type { RequestStatus } from "@/lib/demo-operations";
-import {
-  DemoOperationsStoreError,
-  deleteOperationTasksByRequestId,
-  getDemoRequestById,
-  syncOperationTasksForApprovedRequest,
-  updateDemoRequestStatus,
-} from "@/lib/server/demo-operations-store";
-import {
-  DemoVillaStoreError,
-  addDemoVillaAvailability,
-  deleteDemoVillaAvailabilityByRequestId,
-} from "@/lib/server/demo-villa-store";
+import { db } from "@/lib/db";
+import { DemoOperationsStoreError, getDemoRequestById } from "@/lib/server/demo-operations-store";
+import { DemoVillaStoreError } from "@/lib/server/demo-villa-store";
+import { assertPanelCompanyAccess } from "@/lib/server/demo-company-context";
+import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import { applyBookingStatus, BookingWorkflowError, syncInvoiceConfirmation } from "@/lib/server/booking-workflow";
+import { transitionFallbackBooking, withFallbackBookingMutation } from "@/lib/server/fallback-booking-workflow";
 
 export async function transitionDemoRequestStatus(input: {
   requestId: string;
   status: RequestStatus;
   villaSlug?: string;
 }) {
-  const existingRequest = await getDemoRequestById(input.requestId);
-
-  if (!existingRequest) {
-    throw new DemoOperationsStoreError("Talep bulunamadi.");
-  }
-
-  const oldStatus = existingRequest.status;
-  const nextStatus = input.status;
-  const villaSlug = input.villaSlug ?? existingRequest.villaSlug;
-
-  if (oldStatus === nextStatus) {
-    return existingRequest;
-  }
-
-  let reservationBlocksCreated = false;
-  let approvedAssetsRemoved = false;
-
-  if (nextStatus === "APPROVED" && oldStatus !== "APPROVED") {
-    await addDemoVillaAvailability({
-      slug: existingRequest.villaSlug,
-      startDate: existingRequest.checkIn,
-      endDate: existingRequest.checkOut,
-      label: `Rezervasyon: ${existingRequest.fullName}`,
-      status: "RESERVED",
-      sourceRequestId: existingRequest.id,
-    });
-    await syncOperationTasksForApprovedRequest({
-      ...existingRequest,
-      status: nextStatus,
-    });
-    reservationBlocksCreated = true;
-  }
-
-  if (oldStatus === "APPROVED" && nextStatus !== "APPROVED") {
-    await deleteDemoVillaAvailabilityByRequestId({
-      slug: existingRequest.villaSlug,
-      requestId: existingRequest.id,
-    });
-    await deleteOperationTasksByRequestId(existingRequest.id);
-    approvedAssetsRemoved = true;
-  }
-
+  const request = await getDemoRequestById(input.requestId);
+  if (!request) throw new DemoOperationsStoreError("Talep bulunamadi.");
+  await assertPanelCompanyAccess(request.companyId);
   try {
-    const updatedRequest = await updateDemoRequestStatus(existingRequest.id, nextStatus);
-    return updatedRequest;
+    return await withDevelopmentFallback(
+      async () => {
+        await db.$transaction(async (tx) => {
+          await applyBookingStatus(tx, request, input.status);
+          const invoice = await tx.invoice.findUnique({ where: { bookingRequestId: request.id } });
+          if (invoice) await syncInvoiceConfirmation(tx, invoice.id);
+        });
+        const updated = await getDemoRequestById(request.id);
+        if (!updated) throw new DemoOperationsStoreError("Guncel talep okunamadi.");
+        return updated;
+      },
+      () => withFallbackBookingMutation(() => transitionFallbackBooking(request, input.status)),
+    );
   } catch (error) {
-    if (reservationBlocksCreated) {
-      await deleteDemoVillaAvailabilityByRequestId({
-        slug: villaSlug,
-        requestId: existingRequest.id,
-      }).catch(() => {});
-      await deleteOperationTasksByRequestId(existingRequest.id).catch(() => {});
-    }
-
-    if (approvedAssetsRemoved) {
-      await addDemoVillaAvailability({
-        slug: existingRequest.villaSlug,
-        startDate: existingRequest.checkIn,
-        endDate: existingRequest.checkOut,
-        label: `Rezervasyon: ${existingRequest.fullName}`,
-        status: "RESERVED",
-        sourceRequestId: existingRequest.id,
-      }).catch(() => {});
-      await syncOperationTasksForApprovedRequest(existingRequest).catch(() => {});
-    }
-
+    if (error instanceof BookingWorkflowError) throw new DemoOperationsStoreError(error.message);
     throw error;
   }
 }

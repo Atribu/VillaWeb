@@ -165,6 +165,18 @@ function normalizeVillaRecord(record: CatalogVilla) {
   return {
     ...record,
     companyId: normalizeDevelopmentCompanyId(record.companyId, record.slug),
+    address: record.address ?? record.locationLabel,
+    checkInTime: record.checkInTime ?? "16:00",
+    checkOutTime: record.checkOutTime ?? "10:00",
+    suitabilityTags: record.suitabilityTags ?? [],
+    amenities: record.amenities ?? [],
+    houseRules: record.houseRules ?? [],
+    houseRulesEn: record.houseRulesEn ?? [],
+    electricityFee: record.electricityFee ?? 0,
+    waterFee: record.waterFee ?? 0,
+    extraGuestFee: record.extraGuestFee ?? 0,
+    damageDeposit: record.damageDeposit ?? 0,
+    pricingPeriods: record.pricingPeriods ?? [],
   } satisfies CatalogVilla;
 }
 
@@ -271,6 +283,19 @@ export async function saveFallbackVilla(record: CatalogVilla) {
   ];
 
   await writeDevelopmentDataFile("demo-villas.json", nextRecords);
+
+  const prices = await getFallbackPricingRecords();
+  await writeDevelopmentDataFile("demo-pricing.json", [
+    ...prices.filter((item) => !(item.companyId === normalizedRecord.companyId && item.villaSlug === normalizedRecord.slug)),
+    {
+      companyId: normalizedRecord.companyId,
+      villaSlug: normalizedRecord.slug,
+      baseNightlyPrice: normalizedRecord.nightlyPrice,
+      cleaningFee: normalizedRecord.cleaningFee ?? 0,
+      minNightCount: normalizedRecord.minNightCount ?? 1,
+      updatedAt: new Date().toISOString(),
+    },
+  ]);
 
   return normalizedRecord;
 }
@@ -380,6 +405,18 @@ export async function getFallbackRequests(companyId?: string | null) {
   return filterDevelopmentRecordsByCompany(normalized, companyId, (record) => record.companyId).sort(
     (left, right) => right.createdAt.localeCompare(left.createdAt),
   );
+}
+
+export async function saveFallbackRequest(record: DemoRequest) {
+  const records = await getFallbackRequests();
+  const normalizedRecord = normalizeRequestRecord(record);
+  const nextRecords = [
+    normalizedRecord,
+    ...records.filter((item) => item.id !== normalizedRecord.id),
+  ];
+
+  await writeDevelopmentDataFile("demo-requests.json", nextRecords);
+  return normalizedRecord;
 }
 
 export async function getFallbackRequestEvents(companyId?: string | null) {

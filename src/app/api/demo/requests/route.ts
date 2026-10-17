@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
-import { REQUEST_STATUS_OPTIONS, type RequestStatus } from "@/lib/demo-operations";
+import { isDateKey } from "@/lib/booking-dates";
+import { BOOKING_TERMS_VERSION } from "@/lib/booking-terms";
+import { getUserSession } from "@/lib/auth/server-session";
+import { canAccessPanelPath } from "@/lib/auth/panel-access";
+import {
+  getMinimumNightCountForStay,
+  REQUEST_STATUS_OPTIONS,
+  type RequestStatus,
+} from "@/lib/demo-operations";
 import { findBlockedRange, getNightCount } from "@/lib/villa-availability";
 import { getDemoVillaBySlug } from "@/lib/server/demo-villa-store";
 import {
@@ -22,6 +30,8 @@ type RequestPayload = {
   email?: string;
   message?: string;
   couponCode?: string;
+  termsAccepted?: boolean;
+  termsVersion?: string;
   initialStatus?: RequestStatus;
   origin?: "PUBLIC_FORM" | "MANUAL_PANEL";
 };
@@ -38,15 +48,21 @@ export async function POST(request: Request) {
     const email = String(payload.email ?? "").trim();
     const message = String(payload.message ?? "").trim();
     const couponCode = String(payload.couponCode ?? "").trim();
-    const initialStatus = payload.initialStatus ?? "NEW";
-    const origin = payload.origin ?? "PUBLIC_FORM";
+    const termsAccepted = payload.termsAccepted === true;
+    const termsVersion = BOOKING_TERMS_VERSION;
+    const session = await getUserSession().catch(() => null);
+    const origin = payload.origin === "MANUAL_PANEL" && session ? "MANUAL_PANEL" : "PUBLIC_FORM";
+    if (origin === "MANUAL_PANEL" && session && !canAccessPanelPath(session.role, "/panel/rezervasyonlar/yeni-rezervasyon")) {
+      return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
+    }
+    const initialStatus = origin === "MANUAL_PANEL" ? payload.initialStatus ?? "NEW" : "NEW";
     const company = origin === "MANUAL_PANEL" ? null : await getCurrentPublicCompany();
 
     if (!REQUEST_STATUS_OPTIONS.some((option) => option.value === initialStatus)) {
       throw new DemoOperationsStoreError("Gecersiz rezervasyon durumu secildi.");
     }
 
-    if (!villaSlug || !checkIn || !checkOut) {
+    if (!villaSlug || !isDateKey(checkIn) || !isDateKey(checkOut)) {
       throw new DemoOperationsStoreError("Villa ve tarih secimi olmadan talep kaydi acilamaz.");
     }
 
@@ -54,17 +70,26 @@ export async function POST(request: Request) {
       throw new DemoOperationsStoreError("Ad soyad, telefon ve e-posta alanlari zorunludur.");
     }
 
+    if (origin === "PUBLIC_FORM" && !termsAccepted) {
+      throw new DemoOperationsStoreError(
+        "Talep olusturmak icin kullanim kosullari ve KVKK metnini onaylamalisiniz.",
+      );
+    }
+    if (origin === "PUBLIC_FORM" && payload.termsVersion !== termsVersion) {
+      throw new DemoOperationsStoreError("Rezervasyon kosullari guncellendi. Sayfayi yenileyip guncel metni onaylayin.");
+    }
+
     if (!email.includes("@")) {
       throw new DemoOperationsStoreError("Gecerli bir e-posta adresi girilmelidir.");
     }
 
-    if (!Number.isFinite(guestCount) || guestCount <= 0) {
+    if (!Number.isInteger(guestCount) || guestCount <= 0) {
       throw new DemoOperationsStoreError("Misafir sayisi en az 1 olmalidir.");
     }
 
     const villa = await getDemoVillaBySlug(
       villaSlug,
-      company ? { companyId: company.id } : undefined,
+      company ? { companyId: company.id, includeInactive: false, includeMetrics: false } : undefined,
     );
 
     if (!villa) {
@@ -79,13 +104,15 @@ export async function POST(request: Request) {
 
     const nightCount = getNightCount(checkIn, checkOut);
 
-    if (nightCount <= 0) {
+    if (!Number.isFinite(nightCount) || nightCount <= 0) {
       throw new DemoOperationsStoreError("Cikis tarihi giris tarihinden sonra olmalidir.");
     }
 
-    if (nightCount < (villa.minNightCount ?? 1)) {
+    const minimumNightCount = getMinimumNightCountForStay(villa, checkIn, checkOut);
+
+    if (nightCount < minimumNightCount) {
       throw new DemoOperationsStoreError(
-        `Bu villa icin minimum ${villa.minNightCount ?? 1} gece secilmelidir.`,
+        `Secilen fiyat donemi icin minimum ${minimumNightCount} gece secilmelidir.`,
       );
     }
 
@@ -107,6 +134,8 @@ export async function POST(request: Request) {
       email,
       message,
       couponCode,
+      termsAccepted,
+      termsVersion,
       origin,
       actorLabel: origin === "MANUAL_PANEL" ? "Panel kullanicisi" : "Public form",
     });

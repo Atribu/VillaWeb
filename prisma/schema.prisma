@@ -549,15 +549,35 @@ model Villa {
   city               String
   district           String?
   address            String?
+  ownerVillaName     String?
+  supplierName       String?
+  supplierPhone      String?
+  supplierEmail      String?
+  supplierNotes      String?
   latitude           Decimal?                @db.Decimal(10, 7)
   longitude          Decimal?                @db.Decimal(10, 7)
+  marketDistanceMeters Int?
+  beachDistanceMeters Int?
+  centerDistanceMeters Int?
+  airportDistanceKm  Float?
   capacity           Int
   bedroomCount       Int
   bathroomCount      Int
   poolType           String?
   poolTypeEn         String?
+  checkInTime        String?
+  checkOutTime       String?
+  suitabilityTags    String[]                @default([])
+  houseRules         String[]                @default([])
+  houseRulesEn       String[]                @default([])
   nightlyBasePrice   Decimal                 @db.Decimal(12, 2)
   cleaningFee        Decimal                 @default(0) @db.Decimal(12, 2)
+  electricityFee     Decimal                 @default(0) @db.Decimal(12, 2)
+  waterFee           Decimal                 @default(0) @db.Decimal(12, 2)
+  extraGuestFee      Decimal                 @default(0) @db.Decimal(12, 2)
+  damageDeposit      Decimal                 @default(0) @db.Decimal(12, 2)
+  extraFeeNotes      String?
+  extraFeeNotesEn    String?
   minNightCount      Int                     @default(1)
   currency           String                  @default("TRY")
   status             VillaStatus             @default(DRAFT)
@@ -761,6 +781,11 @@ model BookingRequest {
   quotedDiscountAmount  Decimal?                    @db.Decimal(12, 2)
   quotedCleaningFee     Decimal?                    @db.Decimal(12, 2)
   quotedTotalAmount     Decimal?                    @db.Decimal(12, 2)
+  termsAcceptedAt       DateTime?
+  termsVersion          String?
+  confirmationToken     String?                     @unique
+  pricingSnapshot       Json?
+  confirmedAt           DateTime?
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
   company               Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)

@@ -4,7 +4,13 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DemoRegionAirportRecord } from "@/lib/demo-definitions";
-import { VILLA_IMAGE_RULES, type CatalogVilla } from "@/lib/villa-catalog";
+import {
+  VILLA_AMENITY_OPTIONS,
+  VILLA_HOUSE_RULE_OPTIONS,
+  VILLA_IMAGE_RULES,
+  VILLA_SUITABILITY_OPTIONS,
+  type CatalogVilla,
+} from "@/lib/villa-catalog";
 
 const baseFields = [
   { name: "title", label: "Villa basligi", placeholder: "Villa Soleia Lagoon", required: true },
@@ -91,6 +97,21 @@ const englishSeoFields = [
   },
 ];
 
+const distanceFields = [
+  { name: "marketDistanceMeters", label: "Markete mesafe (metre)", placeholder: "350" },
+  { name: "beachDistanceMeters", label: "Denize mesafe (metre)", placeholder: "800" },
+  { name: "centerDistanceMeters", label: "Merkeze mesafe (metre)", placeholder: "2500" },
+  { name: "airportDistanceKm", label: "Havalimanina mesafe (km)", placeholder: "55" },
+];
+
+const feeFields = [
+  { name: "cleaningFee", label: "Temizlik ucreti", placeholder: "0" },
+  { name: "electricityFee", label: "Elektrik ucreti", placeholder: "0" },
+  { name: "waterFee", label: "Su ucreti", placeholder: "0" },
+  { name: "extraGuestFee", label: "Ek misafir ucreti", placeholder: "0" },
+  { name: "damageDeposit", label: "Hasar depozitosu", placeholder: "0" },
+];
+
 type VillaApiPayload = {
   error?: string;
   errorId?: string;
@@ -146,6 +167,18 @@ function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string
     slug: villa.slug,
     city: villa.city,
     district: villa.district,
+    address: villa.address,
+    ownerVillaName: villa.ownerVillaName,
+    supplierName: villa.supplierName,
+    supplierPhone: villa.supplierPhone,
+    supplierEmail: villa.supplierEmail,
+    supplierNotes: villa.supplierNotes,
+    latitude: villa.latitude,
+    longitude: villa.longitude,
+    marketDistanceMeters: villa.marketDistanceMeters,
+    beachDistanceMeters: villa.beachDistanceMeters,
+    centerDistanceMeters: villa.centerDistanceMeters,
+    airportDistanceKm: villa.airportDistanceKm,
     badge: villa.badge,
     category: villa.category,
     capacity: villa.capacity,
@@ -158,6 +191,18 @@ function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string
     badgeEn: villa.badgeEn,
     categoryEn: villa.categoryEn,
     poolTypeEn: villa.poolTypeEn,
+    checkInTime: villa.checkInTime,
+    checkOutTime: villa.checkOutTime,
+    cleaningFee: villa.cleaningFee,
+    electricityFee: villa.electricityFee,
+    waterFee: villa.waterFee,
+    extraGuestFee: villa.extraGuestFee,
+    damageDeposit: villa.damageDeposit,
+    extraFeeNotes: villa.extraFeeNotes,
+    extraFeeNotesEn: villa.extraFeeNotesEn,
+    minNightCount: villa.minNightCount,
+    houseRules: villa.houseRules?.join("\n"),
+    houseRulesEn: villa.houseRulesEn?.join("\n"),
     shortDescription: villa.shortDescription,
     shortDescriptionEn: villa.shortDescriptionEn,
     description: villa.description,
@@ -362,15 +407,15 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm shadow-slate-200/60">
+    <form onSubmit={handleSubmit} className="space-y-6" id="villa-form">
+      <section id="villa-basics" className="panel-section rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-teal)]">
               Temel Bilgiler
             </p>
             <h2 className="mt-3 text-3xl font-semibold text-[var(--color-ink)]">
-              Villa karti, detay sayfasi ve talep akisini dolduracak alanlar
+              Villa bilgileri ve icerik
             </h2>
           </div>
           <div className="rounded-full bg-[var(--color-soft-white)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -619,7 +664,356 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm shadow-slate-200/60">
+      <section id="villa-operations" className="panel-section rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-teal)]">
+          Operasyon ve Konaklama
+        </p>
+        <h2 className="mt-3 text-3xl font-semibold text-[var(--color-ink)]">
+          Operasyon bilgileri
+        </h2>
+        <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
+          Tedarikci bilgileri sadece panelde kalir. Konum, mesafeler, olanaklar, ek ucretler ve
+          kurallar public villa detayinda misafire gosterilebilir.
+        </p>
+
+        <div className="mt-8 grid gap-6">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Ic Operasyon Bilgileri
+            </p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <div>
+                <label htmlFor="ownerVillaName" className="text-sm font-medium text-slate-700">
+                  Ev sahibinin kullandigi villa adi
+                </label>
+                <input
+                  id="ownerVillaName"
+                  name="ownerVillaName"
+                  defaultValue={getInitialFieldValue(initialVilla, "ownerVillaName")}
+                  placeholder="Orn: Mehmet Bey Evi"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)]"
+                />
+              </div>
+              <div>
+                <label htmlFor="supplierName" className="text-sm font-medium text-slate-700">
+                  Tedarikci / yetkili adi
+                </label>
+                <input
+                  id="supplierName"
+                  name="supplierName"
+                  defaultValue={getInitialFieldValue(initialVilla, "supplierName")}
+                  placeholder="Ad soyad veya firma"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)]"
+                />
+              </div>
+              <div>
+                <label htmlFor="supplierPhone" className="text-sm font-medium text-slate-700">
+                  Tedarikci telefonu
+                </label>
+                <input
+                  id="supplierPhone"
+                  name="supplierPhone"
+                  type="tel"
+                  defaultValue={getInitialFieldValue(initialVilla, "supplierPhone")}
+                  placeholder="+90 5xx xxx xx xx"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)]"
+                />
+              </div>
+              <div>
+                <label htmlFor="supplierEmail" className="text-sm font-medium text-slate-700">
+                  Tedarikci e-postasi
+                </label>
+                <input
+                  id="supplierEmail"
+                  name="supplierEmail"
+                  type="email"
+                  defaultValue={getInitialFieldValue(initialVilla, "supplierEmail")}
+                  placeholder="tedarikci@example.com"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)]"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label htmlFor="supplierNotes" className="text-sm font-medium text-slate-700">
+                  Operasyon notu
+                </label>
+                <textarea
+                  id="supplierNotes"
+                  name="supplierNotes"
+                  rows={3}
+                  defaultValue={getInitialFieldValue(initialVilla, "supplierNotes")}
+                  placeholder="Anahtar teslimi, iletisim tercihi veya ek operasyon notlari"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div id="villa-location" className="panel-section rounded-[1.5rem] border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Konum ve Mesafeler
+            </p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label htmlFor="address" className="text-sm font-medium text-slate-700">
+                  Acik adres / konum aciklamasi
+                </label>
+                <input
+                  id="address"
+                  name="address"
+                  defaultValue={getInitialFieldValue(initialVilla, "address")}
+                  placeholder="Mahalle, cadde ve konum tarifi"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="latitude" className="text-sm font-medium text-slate-700">
+                  Enlem
+                </label>
+                <input
+                  id="latitude"
+                  name="latitude"
+                  type="number"
+                  step="0.0000001"
+                  min="-90"
+                  max="90"
+                  defaultValue={getInitialFieldValue(initialVilla, "latitude")}
+                  placeholder="36.2521000"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="longitude" className="text-sm font-medium text-slate-700">
+                  Boylam
+                </label>
+                <input
+                  id="longitude"
+                  name="longitude"
+                  type="number"
+                  step="0.0000001"
+                  min="-180"
+                  max="180"
+                  defaultValue={getInitialFieldValue(initialVilla, "longitude")}
+                  placeholder="29.4137000"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+              {distanceFields.map((field) => (
+                <div key={field.name}>
+                  <label htmlFor={field.name} className="text-sm font-medium text-slate-700">
+                    {field.label}
+                  </label>
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    type="number"
+                    min="0"
+                    step={field.name === "airportDistanceKm" ? "0.1" : "1"}
+                    defaultValue={getInitialFieldValue(initialVilla, field.name)}
+                    placeholder={field.placeholder}
+                    className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                Giris ve Konaklama
+              </p>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="checkInTime" className="text-sm font-medium text-slate-700">
+                    Giris saati
+                  </label>
+                  <input
+                    id="checkInTime"
+                    name="checkInTime"
+                    type="time"
+                    defaultValue={getInitialFieldValue(initialVilla, "checkInTime") || "16:00"}
+                    className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="checkOutTime" className="text-sm font-medium text-slate-700">
+                    Cikis saati
+                  </label>
+                  <input
+                    id="checkOutTime"
+                    name="checkOutTime"
+                    type="time"
+                    defaultValue={getInitialFieldValue(initialVilla, "checkOutTime") || "10:00"}
+                    className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="minNightCount" className="text-sm font-medium text-slate-700">
+                    Minimum konaklama (gece)
+                  </label>
+                  <input
+                    id="minNightCount"
+                    name="minNightCount"
+                    type="number"
+                    min="1"
+                    required
+                    defaultValue={getInitialFieldValue(initialVilla, "minNightCount") || 1}
+                    className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                Misafir Uygunlugu
+              </p>
+              <div className="mt-5 grid gap-3">
+                {VILLA_SUITABILITY_OPTIONS.map((option) => (
+                  <label
+                    key={option.key}
+                    className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+                  >
+                    <input
+                      type="checkbox"
+                      name="suitabilityTags"
+                      value={option.key}
+                      defaultChecked={initialVilla?.suitabilityTags?.includes(option.key) ?? false}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div id="villa-amenities" className="panel-section rounded-[1.5rem] border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Villa Olanaklari
+            </p>
+            <div className="mt-5 space-y-6">
+              {Array.from(new Set(VILLA_AMENITY_OPTIONS.map((option) => option.category))).map((category) => (
+                <fieldset key={category}>
+                  <legend className="mb-3 text-sm font-semibold text-slate-800">{category}</legend>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {VILLA_AMENITY_OPTIONS.filter((option) => option.category === category).map((option) => (
+                <label
+                  key={option.key}
+                  className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+                >
+                  <input
+                    type="checkbox"
+                    name="amenities"
+                    value={option.key}
+                    defaultChecked={initialVilla?.amenities?.some((item) => item.key === option.key) ?? false}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <span>
+                    <span className="block font-medium">{option.label}</span>
+                  </span>
+                </label>
+              ))}
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+          </div>
+
+          <div id="villa-fees" className="panel-section rounded-[1.5rem] border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Ek Ucretler ve Depozito
+            </p>
+            <p className="mt-3 text-sm leading-6 text-slate-500">Temizlik ucreti konaklama toplamina eklenir. Diger tutarlar misafire bilgi olarak gosterilir; ne zaman ve nasil tahsil edilecegini asagidaki aciklamada belirtin. Hasar depozitosu konaklama bedelinden ayridir.</p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {feeFields.map((field) => (
+                <div key={field.name}>
+                  <label htmlFor={field.name} className="text-sm font-medium text-slate-700">
+                    {field.label}
+                  </label>
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={getInitialFieldValue(initialVilla, field.name) || 0}
+                    placeholder={field.placeholder}
+                    className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                  />
+                </div>
+              ))}
+              <div className="md:col-span-2 xl:col-span-3">
+                <label htmlFor="extraFeeNotes" className="text-sm font-medium text-slate-700">
+                  Ek ucret aciklamasi
+                </label>
+                <textarea
+                  id="extraFeeNotes"
+                  name="extraFeeNotes"
+                  rows={3}
+                  defaultValue={getInitialFieldValue(initialVilla, "extraFeeNotes")}
+                  placeholder="Ucretlerin hangi durumda uygulanacagini acikla"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+              <div className="md:col-span-2 xl:col-span-3">
+                <label htmlFor="extraFeeNotesEn" className="text-sm font-medium text-slate-700">
+                  Ek ucret aciklamasi (EN)
+                </label>
+                <textarea
+                  id="extraFeeNotesEn"
+                  name="extraFeeNotesEn"
+                  rows={3}
+                  defaultValue={getInitialFieldValue(initialVilla, "extraFeeNotesEn")}
+                  placeholder="Explain when the additional fees apply"
+                  className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div id="villa-rules" className="panel-section grid gap-5 md:grid-cols-2">
+            <fieldset className="md:col-span-2">
+              <legend className="mb-3 text-sm font-semibold text-slate-800">Ev kurallari</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {VILLA_HOUSE_RULE_OPTIONS.map((rule) => <label key={rule.key} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <input type="checkbox" name="houseRulePresets" value={rule.key} defaultChecked={initialVilla?.houseRules?.includes(rule.label) ?? false} className="h-4 w-4" />
+                  {rule.label}
+                </label>)}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">Hazir kurallarin Ingilizce karsiligi otomatik eklenir.</p>
+            </fieldset>
+            <div>
+              <label htmlFor="houseRules" className="text-sm font-medium text-slate-700">
+                Ek kurallar (TR)
+              </label>
+              <textarea
+                id="houseRules"
+                name="houseRules"
+                rows={6}
+                defaultValue={(initialVilla?.houseRules ?? []).filter((value) => !VILLA_HOUSE_RULE_OPTIONS.some((rule) => rule.label === value)).join("\n")}
+                placeholder={"Her satira bir kural yazin\nIceride sigara icilmez\nParti duzenlenemez"}
+                className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+              />
+            </div>
+            <div>
+              <label htmlFor="houseRulesEn" className="text-sm font-medium text-slate-700">
+                Ev kurallari (EN)
+              </label>
+              <textarea
+                id="houseRulesEn"
+                name="houseRulesEn"
+                rows={6}
+                defaultValue={(initialVilla?.houseRulesEn ?? []).filter((value) => !VILLA_HOUSE_RULE_OPTIONS.some((rule) => rule.labelEn === value)).join("\n")}
+                placeholder={"Write one rule per line\nNo smoking indoors\nNo parties or events"}
+                className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="villa-images" className="panel-section rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-teal)]">
           Gorsel Yukleme
         </p>
@@ -729,7 +1123,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <section id="villa-seo" className="panel-section grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm shadow-slate-200/60">
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-teal)]">
             SEO Alani
@@ -841,9 +1235,9 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         </div>
       </section>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="panel-savebar flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm leading-7 text-slate-500">
-          Kayitlar PostgreSQL veritabanina, gorseller ise sunucudaki villa upload klasorune yazilir.
+          {submitMessage || "Degisiklikleri tamamladiginizda kaydetmeyi unutmayin."}
         </p>
         <button
           type="submit"

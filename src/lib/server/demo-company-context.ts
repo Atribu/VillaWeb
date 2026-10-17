@@ -69,21 +69,18 @@ export async function resolvePanelCompanyId(input?: {
     return null;
   }
 
-  return scope.companyId;
+  if (scope.companyId) return scope.companyId;
+  return input?.companyId ?? (await getCurrentPublicCompany()).id;
 }
 
 export async function assertPanelCompanyAccess(companyId?: string | null) {
-  if (!companyId) {
-    return;
-  }
-
   const scope = await getPanelCompanyScope();
 
-  if (scope.isSuperAdmin || !scope.companyId) {
+  if (scope.isSuperAdmin) {
     return;
   }
 
-  if (scope.companyId !== companyId) {
+  if (!companyId || !scope.companyId || scope.companyId !== companyId) {
     throw new Error("Bu kayda erisim yetkin bulunmuyor.");
   }
 }

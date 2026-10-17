@@ -5,7 +5,10 @@ import { Container } from "@/components/ui/container";
 import { pickLocalized } from "@/lib/i18n";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { getLocalizedReviewLabel, getLocalizedVilla } from "@/lib/villa-content-i18n";
-import { formatCurrency } from "@/lib/villa-catalog";
+import {
+  formatCurrency,
+  VILLA_SUITABILITY_OPTIONS,
+} from "@/lib/villa-catalog";
 import { VillaAvailabilityCard } from "@/components/villas/villa-availability-card";
 import { VillaGallery } from "@/components/villas/villa-gallery";
 import { PublicVillaCard } from "@/components/villas/public-villa-card";
@@ -17,6 +20,12 @@ type PageProps = {
     slug: string;
   }>;
 };
+
+function formatDistance(value: number, unit: "m" | "km", locale: "tr" | "en") {
+  return `${new Intl.NumberFormat(locale === "en" ? "en-US" : "tr-TR", {
+    maximumFractionDigits: unit === "km" ? 1 : 0,
+  }).format(value)} ${unit}`;
+}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -79,6 +88,41 @@ export default async function VillaDetailPage({ params }: PageProps) {
 
   const galleryImages =
     villa.imageUrls.length > 0 ? villa.imageUrls : villa.coverImageUrl ? [villa.coverImageUrl] : [];
+  const mapSrc =
+    typeof villa.latitude === "number" && typeof villa.longitude === "number"
+      ? `https://www.openstreetmap.org/export/embed.html?bbox=${villa.longitude - 0.02}%2C${villa.latitude - 0.012}%2C${villa.longitude + 0.02}%2C${villa.latitude + 0.012}&layer=mapnik&marker=${villa.latitude}%2C${villa.longitude}`
+      : null;
+  const distanceItems = [
+    villa.marketDistanceMeters !== undefined
+      ? [pickLocalized(locale, "Market", "Market"), formatDistance(villa.marketDistanceMeters, "m", locale)]
+      : null,
+    villa.beachDistanceMeters !== undefined
+      ? [pickLocalized(locale, "Deniz", "Beach"), formatDistance(villa.beachDistanceMeters, "m", locale)]
+      : null,
+    villa.centerDistanceMeters !== undefined
+      ? [pickLocalized(locale, "Merkez", "Town centre"), formatDistance(villa.centerDistanceMeters, "m", locale)]
+      : null,
+    villa.airportDistanceKm !== undefined
+      ? [pickLocalized(locale, "Havalimani", "Airport"), formatDistance(villa.airportDistanceKm, "km", locale)]
+      : null,
+  ].filter((item): item is [string, string] => item !== null);
+  const suitabilityItems = VILLA_SUITABILITY_OPTIONS.filter((item) =>
+    villa.suitabilityTags?.includes(item.key),
+  );
+  const additionalFeeItems = [
+    (villa.electricityFee ?? 0) > 0
+      ? [pickLocalized(locale, "Elektrik ucreti", "Electricity fee"), formatCurrency(villa.electricityFee ?? 0, locale)]
+      : null,
+    (villa.waterFee ?? 0) > 0
+      ? [pickLocalized(locale, "Su ucreti", "Water fee"), formatCurrency(villa.waterFee ?? 0, locale)]
+      : null,
+    (villa.extraGuestFee ?? 0) > 0
+      ? [pickLocalized(locale, "Ek misafir ucreti", "Extra guest fee"), formatCurrency(villa.extraGuestFee ?? 0, locale)]
+      : null,
+    (villa.damageDeposit ?? 0) > 0
+      ? [pickLocalized(locale, "Hasar depozitosu", "Damage deposit"), formatCurrency(villa.damageDeposit ?? 0, locale)]
+      : null,
+  ].filter((item): item is [string, string] => item !== null);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -100,6 +144,11 @@ export default async function VillaDetailPage({ params }: PageProps) {
     amenityFeature: [
       { "@type": "LocationFeatureSpecification", name: villa.poolType, value: true },
       { "@type": "LocationFeatureSpecification", name: `${villa.bathroomCount} banyo`, value: true },
+      ...(villa.amenities ?? []).map((amenity) => ({
+        "@type": "LocationFeatureSpecification",
+        name: amenity.label,
+        value: true,
+      })),
     ],
   };
 
@@ -257,6 +306,14 @@ export default async function VillaDetailPage({ params }: PageProps) {
                     pickLocalized(locale, "Min. konaklama", "Minimum stay"),
                     pickLocalized(locale, `${villa.minNightCount ?? 1} gece`, `${villa.minNightCount ?? 1} nights`),
                   ],
+                  [
+                    pickLocalized(locale, "Giris", "Check-in"),
+                    villa.checkInTime ?? pickLocalized(locale, "Belirtilmedi", "Not specified"),
+                  ],
+                  [
+                    pickLocalized(locale, "Cikis", "Check-out"),
+                    villa.checkOutTime ?? pickLocalized(locale, "Belirtilmedi", "Not specified"),
+                  ],
                   ].map(([label, value]) => (
                   <div
                     key={label}
@@ -270,6 +327,131 @@ export default async function VillaDetailPage({ params }: PageProps) {
                 ))}
               </div>
             </div>
+
+            {(villa.amenities?.length ?? 0) > 0 ? (
+              <div className="serene-card p-8">
+                <p className="serene-eyebrow">
+                  {pickLocalized(locale, "Villa olanaklari", "Villa amenities")}
+                </p>
+                <h2 className="mt-4 font-display text-3xl font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
+                  {pickLocalized(
+                    locale,
+                    "Konaklamaya dahil olan imkanlar",
+                    "What's included in your stay",
+                  )}
+                </h2>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {villa.amenities?.map((amenity) => (
+                    <div
+                      key={amenity.key}
+                      className="rounded-[8px] border border-[var(--serene-outline-variant)]/70 bg-[var(--serene-surface-low)] px-4 py-4"
+                    >
+                      <p className="text-sm font-semibold text-[var(--serene-on-surface)]">
+                        {amenity.label}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--serene-outline)]">{amenity.category}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {mapSrc || distanceItems.length > 0 ? (
+              <div className="serene-card overflow-hidden">
+                <div className="grid lg:grid-cols-[0.95fr_1.05fr]">
+                  <div className="p-8">
+                    <p className="serene-eyebrow">
+                      {pickLocalized(locale, "Konum ve mesafeler", "Location and distances")}
+                    </p>
+                    <h2 className="mt-4 font-display text-3xl font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
+                      {villa.locationLabel}
+                    </h2>
+                    {villa.address ? (
+                      <p className="mt-3 text-sm leading-7 text-[var(--serene-on-surface-variant)]">
+                        {villa.address}
+                      </p>
+                    ) : null}
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                      {distanceItems.map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="flex items-center justify-between rounded-[8px] bg-[var(--serene-surface-low)] px-4 py-3 text-sm"
+                        >
+                          <span className="text-[var(--serene-on-surface-variant)]">{label}</span>
+                          <span className="font-semibold text-[var(--serene-on-surface)]">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {mapSrc ? (
+                    <iframe
+                      title={pickLocalized(locale, `${villa.title} haritasi`, `${villa.title} map`)}
+                      src={mapSrc}
+                      loading="lazy"
+                      className="min-h-[320px] w-full border-0"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  ) : (
+                    <div className="flex min-h-[260px] items-center justify-center bg-[var(--serene-surface-low)] px-8 text-center text-sm text-[var(--serene-outline)]">
+                      {pickLocalized(
+                        locale,
+                        "Haritayi gostermek icin panelden enlem ve boylam bilgisi ekleyin.",
+                        "Add latitude and longitude in the panel to display the map.",
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {suitabilityItems.length > 0 || (villa.houseRules?.length ?? 0) > 0 ? (
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="serene-card p-8">
+                  <p className="serene-eyebrow">
+                    {pickLocalized(locale, "Kimler icin uygun", "Who this villa suits")}
+                  </p>
+                  <div className="mt-6 space-y-3">
+                    {suitabilityItems.length > 0 ? (
+                      suitabilityItems.map((item) => (
+                        <div
+                          key={item.key}
+                          className="rounded-[8px] bg-[var(--serene-surface-low)] px-4 py-4 text-sm font-semibold text-[var(--serene-on-surface)]"
+                        >
+                          {pickLocalized(locale, item.label, item.labelEn)}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-[var(--serene-outline)]">
+                        {pickLocalized(locale, "Uygunluk etiketi eklenmedi.", "No suitability labels added.")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="serene-card p-8">
+                  <p className="serene-eyebrow">
+                    {pickLocalized(locale, "Ev kurallari", "House rules")}
+                  </p>
+                  <div className="mt-6 space-y-3">
+                    {villa.houseRules?.length ? (
+                      villa.houseRules.map((rule, index) => (
+                        <div
+                          key={`${rule}-${index}`}
+                          className="flex gap-3 rounded-[8px] bg-[var(--serene-surface-low)] px-4 py-4 text-sm text-[var(--serene-on-surface-variant)]"
+                        >
+                          <span className="font-semibold text-[var(--serene-primary)]">{index + 1}.</span>
+                          <span>{rule}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-[var(--serene-outline)]">
+                        {pickLocalized(locale, "Ev kurali eklenmedi.", "No house rules added.")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-4 md:grid-cols-3">
               {[
@@ -352,6 +534,7 @@ export default async function VillaDetailPage({ params }: PageProps) {
                     ],
                     [pickLocalized(locale, "Odak kelime", "Focus keyword"), villa.focusKeyword],
                     [pickLocalized(locale, "Temizlik", "Cleaning"), formatCurrency(villa.cleaningFee ?? 0, locale)],
+                    ...additionalFeeItems,
                   ].map(([label, value]) => (
                     <div
                       key={label}
@@ -406,6 +589,21 @@ export default async function VillaDetailPage({ params }: PageProps) {
                   </span>
                 </div>
               </div>
+              {additionalFeeItems.length > 0 ? (
+                <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                  {additionalFeeItems.map(([label, value]) => (
+                    <div key={label} className="flex items-center justify-between text-sm">
+                      <span className="text-[var(--serene-on-surface-variant)]">{label}</span>
+                      <span className="font-semibold text-[var(--serene-on-surface)]">{value}</span>
+                    </div>
+                  ))}
+                  {villa.extraFeeNotes ? (
+                    <p className="pt-2 text-xs leading-6 text-[var(--serene-outline)]">
+                      {villa.extraFeeNotes}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <VillaAvailabilityCard villa={villa} locale={locale} />
@@ -423,6 +621,10 @@ export default async function VillaDetailPage({ params }: PageProps) {
                     pickLocalized(locale, `${villa.minNightCount ?? 1} gece`, `${villa.minNightCount ?? 1} nights`),
                   ],
                   [pickLocalized(locale, "Portfoy notu", "Listing badge"), villa.badge],
+                  [
+                    pickLocalized(locale, "Giris / cikis", "Check-in / out"),
+                    `${villa.checkInTime ?? "-"} / ${villa.checkOutTime ?? "-"}`,
+                  ],
                 ].map(([label, value]) => (
                   <div
                     key={label}

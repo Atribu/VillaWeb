@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { getUserSession } from "@/lib/auth/server-session";
+import { canAccessPanelPath } from "@/lib/auth/panel-access";
+import { revalidateDemoExperience } from "@/lib/server/demo-revalidate";
 import type { DemoPaymentStatus } from "@/lib/demo-finance";
 import {
   DemoFinanceStoreError,
@@ -16,6 +19,9 @@ type RouteContext = {
 const ALLOWED_STATUSES = new Set<DemoPaymentStatus>(["PENDING", "PAID", "CANCELLED"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const session = await getUserSession();
+  if (!session) return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
+  if (!canAccessPanelPath(session.role, "/panel/muhasebe/odeme-takip")) return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -27,6 +33,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const payment = await updateDemoPaymentStatus(id, payload.status);
+    revalidateDemoExperience(payment.villaSlug);
 
     return NextResponse.json({ payment });
   } catch (error) {

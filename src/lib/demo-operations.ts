@@ -78,6 +78,10 @@ export type DemoRequest = {
   email: string;
   message: string;
   couponCode?: string;
+  termsAcceptedAt?: string;
+  termsVersion?: string;
+  confirmationToken?: string;
+  confirmedAt?: string;
   origin?: RequestOrigin;
   status: RequestStatus;
   createdAt: string;
@@ -424,8 +428,8 @@ export function getBasePricingRecord(
       companyId: villa.companyId ?? getFallbackCompanyIdForVillaSlug(villa.slug),
       villaSlug: villa.slug,
       baseNightlyPrice: villa.nightlyPrice,
-      cleaningFee: 0,
-      minNightCount: 1,
+      cleaningFee: villa.cleaningFee ?? 0,
+      minNightCount: villa.minNightCount ?? 1,
       updatedAt: DEMO_REFERENCE_DATE,
     }
   );
@@ -523,6 +527,39 @@ export function getEligibleCoupon(
   );
 }
 
+function getStayNightDateKeys(checkIn: string, checkOut: string) {
+  const start = new Date(`${checkIn}T00:00:00.000Z`);
+  const end = new Date(`${checkOut}T00:00:00.000Z`);
+  const keys: string[] = [];
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return keys;
+  }
+
+  for (const cursor = new Date(start); cursor < end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    keys.push(cursor.toISOString().slice(0, 10));
+  }
+
+  return keys;
+}
+
+function getActivePricingPeriod(villa: CatalogVilla, date: string) {
+  return (villa.pricingPeriods ?? []).find(
+    (period) => period.active && date >= period.startDate && date <= period.endDate,
+  );
+}
+
+export function getMinimumNightCountForStay(
+  villa: CatalogVilla,
+  checkIn: string,
+  checkOut: string,
+) {
+  const periodMinimums = getStayNightDateKeys(checkIn, checkOut)
+    .map((date) => getActivePricingPeriod(villa, date)?.minNightCount ?? villa.minNightCount ?? 1);
+
+  return periodMinimums.length ? Math.max(...periodMinimums) : villa.minNightCount ?? 1;
+}
+
 export function getResolvedStayPricing(input: {
   villa: CatalogVilla;
   pricingRecords: DemoPricingRecord[];
@@ -534,15 +571,25 @@ export function getResolvedStayPricing(input: {
 }) {
   const nightCount = getNightCount(input.checkIn, input.checkOut);
   const basePricing = getBasePricingRecord(input.villa, input.pricingRecords);
+  const stayNightDates = getStayNightDateKeys(input.checkIn, input.checkOut);
+  const nightlyPrices = stayNightDates.map(
+    (date) => getActivePricingPeriod(input.villa, date)?.nightlyPrice ?? basePricing.baseNightlyPrice,
+  );
+  const subtotal = nightlyPrices.reduce((sum, price) => sum + price, 0);
+  const averageNightlyPrice =
+    nightCount > 0 ? Math.round(subtotal / nightCount) : basePricing.baseNightlyPrice;
+  const checkInPeriod = getActivePricingPeriod(input.villa, input.checkIn);
+  const cleaningFee = checkInPeriod?.cleaningFee ?? basePricing.cleaningFee;
   const activeDiscount = getActiveDiscountForVilla(input.villa.slug, input.discounts, {
     checkIn: input.checkIn,
     checkOut: input.checkOut,
   });
   const discountedNightlyPrice = activeDiscount
-    ? Math.round(basePricing.baseNightlyPrice * (1 - activeDiscount.percentOff / 100))
-    : basePricing.baseNightlyPrice;
-  const subtotal = basePricing.baseNightlyPrice * nightCount;
-  const discountedSubtotal = discountedNightlyPrice * nightCount;
+    ? Math.round(averageNightlyPrice * (1 - activeDiscount.percentOff / 100))
+    : averageNightlyPrice;
+  const discountedSubtotal = activeDiscount
+    ? Math.round(subtotal * (1 - activeDiscount.percentOff / 100))
+    : subtotal;
   const activeDiscountTotal = Math.max(subtotal - discountedSubtotal, 0);
   const coupon = input.couponCode
     ? getEligibleCoupon(input.coupons, {
@@ -555,18 +602,18 @@ export function getResolvedStayPricing(input: {
   const couponDiscountTotal = coupon
     ? Math.round(discountedSubtotal * (coupon.percentOff / 100))
     : 0;
-  const grandTotal = discountedSubtotal - couponDiscountTotal + basePricing.cleaningFee;
+  const grandTotal = discountedSubtotal - couponDiscountTotal + cleaningFee;
 
   return {
     pricing: {
       nightCount,
-      baseNightlyPrice: basePricing.baseNightlyPrice,
+      baseNightlyPrice: averageNightlyPrice,
       discountedNightlyPrice,
       subtotal,
       activeDiscountTotal,
       activeDiscountTitle: activeDiscount?.title,
       activeDiscountPercent: activeDiscount?.percentOff,
-      cleaningFee: basePricing.cleaningFee,
+      cleaningFee,
       couponCode: coupon?.code,
       couponTitle: coupon?.title,
       couponPercent: coupon?.percentOff,

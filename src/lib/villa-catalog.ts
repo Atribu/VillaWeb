@@ -31,6 +31,7 @@ export const VILLA_IMAGE_RULES = {
 export type AvailabilityRange = {
   id: string;
   startDate: string;
+  /** End-exclusive: the villa is available again on this date. */
   endDate: string;
   label: string;
   status: "UNAVAILABLE" | "RESERVED" | "MAINTENANCE";
@@ -40,6 +41,72 @@ export type AvailabilityRange = {
    */
   sourceRequestId?: string;
 };
+
+export type VillaAmenityItem = {
+  key: string;
+  label: string;
+  labelEn: string;
+  category: string;
+  categoryEn: string;
+};
+
+export type VillaPricingPeriod = {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  nightlyPrice: number;
+  cleaningFee?: number;
+  minNightCount?: number;
+  active: boolean;
+};
+
+export const VILLA_AMENITY_OPTIONS: VillaAmenityItem[] = [
+  { key: "wifi", label: "Wi-Fi", labelEn: "Wi-Fi", category: "Genel", categoryEn: "General" },
+  { key: "air-conditioning", label: "Klima", labelEn: "Air conditioning", category: "Genel", categoryEn: "General" },
+  { key: "parking", label: "Otopark", labelEn: "Parking", category: "Genel", categoryEn: "General" },
+  { key: "generator", label: "Jenerator", labelEn: "Generator", category: "Genel", categoryEn: "General" },
+  { key: "private-pool", label: "Ozel havuz", labelEn: "Private pool", category: "Havuz ve bahce", categoryEn: "Pool and garden" },
+  { key: "heated-pool", label: "Isitmali havuz", labelEn: "Heated pool", category: "Havuz ve bahce", categoryEn: "Pool and garden" },
+  { key: "childrens-pool", label: "Cocuk havuzu", labelEn: "Children's pool", category: "Havuz ve bahce", categoryEn: "Pool and garden" },
+  { key: "garden", label: "Ozel bahce", labelEn: "Private garden", category: "Havuz ve bahce", categoryEn: "Pool and garden" },
+  { key: "barbecue", label: "Barbeku", labelEn: "Barbecue", category: "Havuz ve bahce", categoryEn: "Pool and garden" },
+  { key: "sea-view", label: "Deniz manzarasi", labelEn: "Sea view", category: "Manzara", categoryEn: "View" },
+  { key: "nature-view", label: "Doga manzarasi", labelEn: "Nature view", category: "Manzara", categoryEn: "View" },
+  { key: "jacuzzi", label: "Jakuzi", labelEn: "Hot tub", category: "Konfor", categoryEn: "Comfort" },
+  { key: "sauna", label: "Sauna", labelEn: "Sauna", category: "Konfor", categoryEn: "Comfort" },
+  { key: "fireplace", label: "Somine", labelEn: "Fireplace", category: "Konfor", categoryEn: "Comfort" },
+  { key: "washing-machine", label: "Camasir makinesi", labelEn: "Washing machine", category: "Ev ekipmanlari", categoryEn: "Home equipment" },
+  { key: "dishwasher", label: "Bulasik makinesi", labelEn: "Dishwasher", category: "Ev ekipmanlari", categoryEn: "Home equipment" },
+  { key: "baby-cot", label: "Bebek yatagi", labelEn: "Baby cot", category: "Aile", categoryEn: "Family" },
+  { key: "high-chair", label: "Mama sandalyesi", labelEn: "High chair", category: "Aile", categoryEn: "Family" },
+  { key: "oven", label: "Firin", labelEn: "Oven", category: "Mutfak", categoryEn: "Kitchen" },
+  { key: "refrigerator", label: "Buzdolabi", labelEn: "Refrigerator", category: "Mutfak", categoryEn: "Kitchen" },
+  { key: "coffee-maker", label: "Kahve makinesi", labelEn: "Coffee maker", category: "Mutfak", categoryEn: "Kitchen" },
+  { key: "cookware", label: "Mutfak gerecleri", labelEn: "Cookware", category: "Mutfak", categoryEn: "Kitchen" },
+  { key: "hair-dryer", label: "Sac kurutma makinesi", labelEn: "Hair dryer", category: "Banyo", categoryEn: "Bathroom" },
+  { key: "towels", label: "Havlu seti", labelEn: "Towels", category: "Banyo", categoryEn: "Bathroom" },
+  { key: "hot-water", label: "Sicak su", labelEn: "Hot water", category: "Banyo", categoryEn: "Bathroom" },
+  { key: "television", label: "Televizyon", labelEn: "TV", category: "Eglence", categoryEn: "Entertainment" },
+  { key: "table-tennis", label: "Masa tenisi", labelEn: "Table tennis", category: "Eglence", categoryEn: "Entertainment" },
+  { key: "billiards", label: "Bilardo", labelEn: "Pool table", category: "Eglence", categoryEn: "Entertainment" },
+];
+
+export const VILLA_HOUSE_RULE_OPTIONS = [
+  { key: "no-smoking", label: "Kapali alanlarda sigara icilmez.", labelEn: "No smoking indoors." },
+  { key: "no-parties", label: "Parti ve etkinlik duzenlenemez.", labelEn: "No parties or events." },
+  { key: "no-pets", label: "Evcil hayvan kabul edilmez.", labelEn: "Pets are not allowed." },
+  { key: "quiet-hours", label: "22:00 - 08:00 saatleri arasinda sessizlik beklenir.", labelEn: "Quiet hours are from 22:00 to 08:00." },
+  { key: "registered-guests", label: "Yalnizca rezervasyonda belirtilen misafirler konaklayabilir.", labelEn: "Only registered guests may stay." },
+] as const;
+
+export const VILLA_SUITABILITY_OPTIONS = [
+  { key: "family", label: "Aileler icin uygun", labelEn: "Family friendly" },
+  { key: "elderly", label: "Yasli misafirler icin uygun", labelEn: "Suitable for elderly guests" },
+  { key: "pet-friendly", label: "Evcil hayvan kabul edilir", labelEn: "Pet friendly" },
+  { key: "wheelchair", label: "Engelli erisimine uygun", labelEn: "Wheelchair accessible" },
+  { key: "honeymoon", label: "Balayi icin uygun", labelEn: "Honeymoon friendly" },
+] as const;
 
 export type CatalogVilla = {
   id: string;
@@ -51,6 +118,18 @@ export type CatalogVilla = {
   locationLabel: string;
   city: string;
   district: string;
+  address?: string;
+  ownerVillaName?: string;
+  supplierName?: string;
+  supplierPhone?: string;
+  supplierEmail?: string;
+  supplierNotes?: string;
+  latitude?: number;
+  longitude?: number;
+  marketDistanceMeters?: number;
+  beachDistanceMeters?: number;
+  centerDistanceMeters?: number;
+  airportDistanceKm?: number;
   badge: string;
   badgeEn?: string;
   category: string;
@@ -71,6 +150,12 @@ export type CatalogVilla = {
   bathroomCount: number;
   poolType: string;
   poolTypeEn?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  suitabilityTags?: string[];
+  amenities?: VillaAmenityItem[];
+  houseRules?: string[];
+  houseRulesEn?: string[];
   imageCount: number;
   imageUrls: string[];
   coverImageUrl?: string;
@@ -89,7 +174,14 @@ export type CatalogVilla = {
   requestCount: number;
   revenueLabel: string;
   cleaningFee?: number;
+  electricityFee?: number;
+  waterFee?: number;
+  extraGuestFee?: number;
+  damageDeposit?: number;
+  extraFeeNotes?: string;
+  extraFeeNotesEn?: string;
   minNightCount?: number;
+  pricingPeriods?: VillaPricingPeriod[];
   activeDiscountTitle?: string;
   activeDiscountPercent?: number;
   createdAt: string;

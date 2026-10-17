@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
+import { isDateKey } from "@/lib/booking-dates";
 import { getDemoVillaBySlug } from "@/lib/server/demo-villa-store";
 import {
   DemoOperationsStoreError,
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
     const checkIn = String(payload.checkIn ?? "").trim();
     const checkOut = String(payload.checkOut ?? "").trim();
 
-    if (!villaSlug || !checkIn || !checkOut) {
+    if (!villaSlug || !isDateKey(checkIn) || !isDateKey(checkOut) || checkOut <= checkIn) {
       throw new DemoOperationsStoreError("Kupon dogrulamasi icin villa ve tarih secimi gereklidir.");
     }
 
@@ -28,7 +30,8 @@ export async function POST(request: Request) {
       throw new DemoOperationsStoreError("Lutfen bir kupon kodu gir.");
     }
 
-    const villa = await getDemoVillaBySlug(villaSlug);
+    const company = await getCurrentPublicCompany();
+    const villa = await getDemoVillaBySlug(villaSlug, { companyId: company.id, includeInactive: false, includeMetrics: false });
 
     if (!villa) {
       throw new DemoOperationsStoreError("Kupon icin secilen villa bulunamadi.");

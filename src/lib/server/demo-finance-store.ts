@@ -21,8 +21,11 @@ import {
   getFallbackPayments,
 } from "@/lib/server/development-fallback-data";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import { BookingWorkflowError, syncInvoiceConfirmation } from "@/lib/server/booking-workflow";
+import { updateFallbackFinance, withFallbackBookingMutation } from "@/lib/server/fallback-booking-workflow";
 
 export class DemoFinanceStoreError extends Error {}
+
 
 async function getScopedInvoices() {
   const companyId = await resolvePanelCompanyId();
@@ -91,6 +94,7 @@ function mapInvoiceStatus(status: string): DemoInvoiceStatus {
     case "CANCELLED":
       return "CANCELLED";
     case "SENT":
+    case "PARTIALLY_PAID":
       return "SENT";
     default:
       return "DRAFT";
@@ -213,120 +217,71 @@ export async function getDemoFinanceOverview(): Promise<DemoFinanceOverview> {
   return buildDemoFinanceOverview({ invoices, payments, cashEntries });
 }
 
+async function mutateFinance(input: { invoiceId: string; status: DemoInvoiceStatus } | { paymentId: string; status: DemoPaymentStatus }) {
+  try {
+    await withDevelopmentFallback(
+      async () => {
+        const payment = "paymentId" in input ? await db.payment.findUnique({ where: { id: input.paymentId } }) : null;
+        const invoiceId = "invoiceId" in input ? input.invoiceId : payment?.invoiceId;
+        if (!invoiceId) throw new DemoFinanceStoreError("Odeme kaydi bulunamadi.");
+        const invoice = await db.invoice.findUnique({ where: { id: invoiceId } });
+        if (!invoice) throw new DemoFinanceStoreError("Fatura bulunamadi.");
+        await assertPanelCompanyAccess(invoice.companyId);
+        await db.$transaction(async (tx) => {
+          if (invoice.bookingRequestId) {
+            const booking = await tx.bookingRequest.findUniqueOrThrow({ where: { id: invoice.bookingRequestId } });
+            await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${booking.villaId} FOR UPDATE`;
+          }
+          await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${invoiceId} FOR UPDATE`;
+          const current = await tx.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: { bookingRequest: true, payments: true } });
+          if (input.status === "PAID" && current.bookingRequest && current.bookingRequest.status !== "APPROVED") {
+            throw new DemoFinanceStoreError("Tahsilattan once talebi onaylayin ve villa tarihlerini ayirin.");
+          }
+          if ("paymentId" in input) {
+            if (current.status === "CANCELLED") throw new DemoFinanceStoreError("Iptal edilmis faturaya odeme islenemez.");
+            await tx.payment.update({ where: { id: input.paymentId }, data: {
+              status: input.status, paidAt: input.status === "PAID" ? new Date() : null,
+            } });
+          } else {
+            await tx.invoice.update({ where: { id: invoiceId }, data: { status: input.status } });
+            if (input.status === "PAID") {
+              const planned = current.payments.filter((item) => !["CANCELLED", "REFUNDED"].includes(item.status))
+                .reduce((sum, item) => sum + Math.round(item.amount.toNumber() * 100), 0);
+              const missing = Math.round(current.totalAmount.toNumber() * 100) - planned;
+              if (missing > 0) await tx.payment.create({ data: {
+                invoiceId, companyId: current.companyId, bookingRequestId: current.bookingRequestId,
+                paymentType: "BALANCE", title: "Kalan konaklama bedeli", method: "Banka havalesi",
+                amount: missing / 100, dueDate: current.dueDate,
+              } });
+              await tx.payment.updateMany({
+                where: { invoiceId, status: { notIn: ["CANCELLED", "REFUNDED"] } },
+                data: { status: "PAID", paidAt: new Date() },
+              });
+            }
+          }
+          await syncInvoiceConfirmation(tx, invoiceId);
+        });
+      },
+      () => withFallbackBookingMutation(() => updateFallbackFinance(input)),
+    );
+  } catch (error) {
+    if (error instanceof BookingWorkflowError) throw new DemoFinanceStoreError(error.message);
+    throw error;
+  }
+}
+
 export async function updateDemoInvoiceStatus(invoiceId: string, status: DemoInvoiceStatus) {
-  const invoice = await db.invoice.findUnique({
-    where: { id: invoiceId },
-    select: { id: true, companyId: true },
-  });
-
-  if (!invoice) {
-    throw new DemoFinanceStoreError("Fatura bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(invoice.companyId);
-
-  const nextStatus =
-    status === "PAID" ? "PAID" : status === "SENT" ? "SENT" : status === "CANCELLED" ? "CANCELLED" : "DRAFT";
-
-  await db.$transaction(async (tx) => {
-    await tx.invoice.update({
-      where: { id: invoiceId },
-      data: { status: nextStatus },
-    });
-
-    if (status === "PAID") {
-      await tx.payment.updateMany({
-        where: {
-          invoiceId,
-          status: {
-            notIn: ["CANCELLED", "REFUNDED"],
-          },
-        },
-        data: {
-          status: "PAID",
-          paidAt: new Date(),
-        },
-      });
-    }
-
-    if (status === "CANCELLED") {
-      await tx.payment.updateMany({
-        where: { invoiceId },
-        data: {
-          status: "CANCELLED",
-          paidAt: null,
-        },
-      });
-    }
-  });
-
-  const invoices = await getDemoInvoices();
-  const updatedInvoice = invoices.find((item) => item.id === invoiceId);
-
-  if (!updatedInvoice) {
-    throw new DemoFinanceStoreError("Guncel fatura kaydi okunamadi.");
-  }
-
-  return updatedInvoice;
+  await mutateFinance({ invoiceId, status });
+  const updated = (await getDemoInvoices()).find((item) => item.id === invoiceId);
+  if (!updated) throw new DemoFinanceStoreError("Guncel fatura okunamadi.");
+  return updated;
 }
 
 export async function updateDemoPaymentStatus(paymentId: string, status: DemoPaymentStatus) {
-  const payment = await db.payment.findUnique({
-    where: { id: paymentId },
-    select: { id: true, companyId: true, invoiceId: true },
-  });
-
-  if (!payment) {
-    throw new DemoFinanceStoreError("Odeme kaydi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(payment.companyId);
-
-  const nextStatus = status === "PAID" ? "PAID" : status === "CANCELLED" ? "CANCELLED" : "PENDING";
-
-  await db.payment.update({
-    where: { id: paymentId },
-    data: {
-      status: nextStatus,
-      paidAt: status === "PAID" ? new Date() : null,
-    },
-  });
-
-  const relatedPayments = await db.payment.findMany({
-    where: { invoiceId: payment.invoiceId },
-    select: { status: true, amount: true },
-  });
-
-  const paidTotal = relatedPayments
-    .filter((item) => item.status === "PAID")
-    .reduce((sum, item) => sum + decimalToNumber(item.amount), 0);
-
-  let invoiceStatus: "DRAFT" | "SENT" | "PAID" | "PARTIALLY_PAID" | "CANCELLED" = "SENT";
-
-  if (relatedPayments.length > 0 && relatedPayments.every((item) => item.status === "CANCELLED")) {
-    invoiceStatus = "CANCELLED";
-  } else if (relatedPayments.length > 0 && relatedPayments.every((item) => item.status === "PAID")) {
-    invoiceStatus = "PAID";
-  } else if (paidTotal > 0) {
-    invoiceStatus = "PARTIALLY_PAID";
-  }
-
-  await db.invoice.update({
-    where: { id: payment.invoiceId },
-    data: {
-      status: invoiceStatus,
-      paidTotal,
-    },
-  });
-
-  const payments = await getDemoPayments();
-  const updatedPayment = payments.find((item) => item.id === paymentId);
-
-  if (!updatedPayment) {
-    throw new DemoFinanceStoreError("Guncel odeme kaydi okunamadi.");
-  }
-
-  return updatedPayment;
+  await mutateFinance({ paymentId, status });
+  const updated = (await getDemoPayments()).find((item) => item.id === paymentId);
+  if (!updated) throw new DemoFinanceStoreError("Guncel odeme okunamadi.");
+  return updated;
 }
 
 export async function createManualCashEntry(input: {

@@ -49,8 +49,17 @@ import {
   getFallbackPricingRecords,
   getFallbackRequestEvents,
   getFallbackRequests,
+  getFallbackInvoices,
+  getFallbackPayments,
+  getFallbackCompanyRecordById,
+  getFallbackVillas,
+  saveFallbackRequest,
 } from "@/lib/server/development-fallback-data";
-import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import {
+  isDevelopmentFallbackForced,
+  isPrismaConnectionError,
+  withDevelopmentFallback,
+} from "@/lib/server/development-fallback";
 
 export class DemoOperationsStoreError extends Error {}
 
@@ -238,6 +247,11 @@ async function mapBookingRequestsToDemoRequests(
     quotedBaseAmount: { toNumber(): number } | null;
     quotedCleaningFee: { toNumber(): number } | null;
     quotedTotalAmount: { toNumber(): number } | null;
+    termsAcceptedAt: Date | null;
+    termsVersion: string | null;
+    confirmationToken: string | null;
+    confirmedAt: Date | null;
+    pricingSnapshot: import("@prisma/client").Prisma.JsonValue;
     createdAt: Date;
     villa: {
       slug: string;
@@ -294,10 +308,15 @@ async function mapBookingRequestsToDemoRequests(
       email: request.email ?? "",
       message: request.message ?? "",
       couponCode: request.couponCodeText ?? undefined,
+      termsAcceptedAt: request.termsAcceptedAt?.toISOString(),
+      termsVersion: request.termsVersion ?? undefined,
+      confirmationToken: request.confirmationToken ?? undefined,
+      confirmedAt: request.confirmedAt?.toISOString(),
       origin: mapRequestSourceToDemo(request.source),
       status: mapBookingStatusToDemo(request.status),
       createdAt: request.createdAt.toISOString(),
-      pricing,
+      pricing: request.pricingSnapshot && typeof request.pricingSnapshot === "object" && !Array.isArray(request.pricingSnapshot)
+        ? request.pricingSnapshot as unknown as DemoRequest["pricing"] : pricing,
     });
   }
 
@@ -447,6 +466,98 @@ export async function getDemoOperationTasks(input?: {
 export async function getDemoRequestById(requestId: string) {
   const requests = await getDemoRequests();
   return requests.find((request) => request.id === requestId) ?? null;
+}
+
+export async function getPublicBookingConfirmation(token: string) {
+  if (!/^[a-f0-9]{32}$/.test(token)) {
+    return null;
+  }
+
+  return withDevelopmentFallback(
+    async () => {
+      const request = await db.bookingRequest.findUnique({
+        where: { confirmationToken: token },
+        select: {
+          id: true,
+          status: true,
+          fullName: true,
+          guestCount: true,
+          checkIn: true,
+          checkOut: true,
+          quotedTotalAmount: true,
+          termsAcceptedAt: true,
+          confirmedAt: true,
+          company: { select: { publicName: true } },
+          villa: { select: { slug: true, title: true, coverImageUrl: true, checkInTime: true, checkOutTime: true } },
+          invoice: { select: { status: true, paidTotal: true, totalAmount: true } },
+          payments: { select: { status: true, amount: true, paidAt: true } },
+        },
+      });
+
+      if (!request) {
+        return null;
+      }
+
+      const paidTotal = request.payments
+        .filter((payment) => payment.status === "PAID")
+        .reduce((sum, payment) => sum + decimalToNumber(payment.amount), 0);
+
+      return {
+        id: request.id,
+        status: mapBookingStatusToDemo(request.status),
+        fullName: request.fullName,
+        guestCount: request.guestCount,
+        checkIn: dateKey(request.checkIn),
+        checkOut: dateKey(request.checkOut),
+        totalAmount: decimalToNumber(request.invoice?.totalAmount ?? request.quotedTotalAmount),
+        paidTotal,
+        isPaid: request.status === "APPROVED" && request.invoice?.status === "PAID" &&
+          Boolean(request.confirmedAt) && paidTotal >= decimalToNumber(request.invoice.totalAmount),
+        termsAcceptedAt: request.termsAcceptedAt?.toISOString(),
+        confirmedAt: request.confirmedAt?.toISOString(),
+        companyName: request.company.publicName,
+        villa: request.villa,
+      };
+    },
+    async () => {
+      const request = (await getFallbackRequests()).find(
+        (item) => item.confirmationToken === token,
+      );
+
+      if (!request) {
+        return null;
+      }
+
+      const invoices = await getFallbackInvoices(request.companyId);
+      const invoice = invoices.find((item) => item.requestId === request.id);
+      const payments = await getFallbackPayments(request.companyId);
+      const paidTotal = payments.filter((item) => item.invoiceId === invoice?.id && item.status === "PAID")
+        .reduce((total, item) => total + item.amount, 0);
+      const company = await getFallbackCompanyRecordById(request.companyId);
+      const villa = (await getFallbackVillas(request.companyId)).find((item) => item.slug === request.villaSlug);
+      return {
+        id: request.id,
+        status: request.status,
+        fullName: request.fullName,
+        guestCount: request.guestCount,
+        checkIn: request.checkIn,
+        checkOut: request.checkOut,
+        totalAmount: invoice?.totalAmount ?? request.pricing.grandTotal,
+        paidTotal,
+        isPaid: request.status === "APPROVED" && invoice?.status === "PAID" && Boolean(request.confirmedAt) && paidTotal >= invoice.totalAmount,
+        termsAcceptedAt: request.termsAcceptedAt,
+        confirmedAt: request.confirmedAt,
+        companyName: company?.name ?? "BookToVilla",
+        villa: {
+          slug: request.villaSlug,
+          title: request.villaTitle,
+          coverImageUrl: null,
+          checkInTime: villa?.checkInTime ?? null,
+          checkOutTime: villa?.checkOutTime ?? null,
+        },
+      };
+    },
+  );
 }
 
 export async function syncOperationTasksForApprovedRequest(request: DemoRequest) {
@@ -909,6 +1020,8 @@ export async function createDemoRequest(input: {
   email: string;
   message: string;
   couponCode?: string;
+  termsAccepted?: boolean;
+  termsVersion?: string;
   origin?: "PUBLIC_FORM" | "MANUAL_PANEL";
   actorLabel?: string;
 }) {
@@ -935,52 +1048,91 @@ export async function createDemoRequest(input: {
   }
 
   const createdId = `request-${randomUUID().slice(0, 8)}`;
+  const confirmationToken = randomUUID().replaceAll("-", "");
+  const createdAt = new Date().toISOString();
+  const fallbackRequest = {
+    id: createdId,
+    companyId: input.villa.companyId,
+    villaSlug: input.villa.slug,
+    villaTitle: input.villa.title,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    guestCount: input.guestCount,
+    fullName: input.fullName.trim(),
+    phone: input.phone.trim(),
+    email: input.email.trim(),
+    message: input.message.trim(),
+    couponCode: resolved.coupon?.code,
+    termsAcceptedAt: input.termsAccepted ? createdAt : undefined,
+    termsVersion: input.termsAccepted ? input.termsVersion ?? "2026-10" : undefined,
+    confirmationToken,
+    origin: input.origin ?? "PUBLIC_FORM",
+    status: "NEW" as const,
+    createdAt,
+    pricing: resolved.pricing,
+  } satisfies DemoRequest;
 
-  await db.$transaction(async (tx) => {
-    await tx.bookingRequest.create({
-      data: {
-        id: createdId,
-        companyId: input.villa.companyId,
-        websiteId,
-        villaId: input.villa.id,
-        status: "NEW",
-        source: mapDemoOriginToSource(input.origin),
-        fullName: input.fullName.trim(),
-        phone: input.phone.trim(),
-        email: input.email.trim(),
-        guestCount: input.guestCount,
-        checkIn: new Date(`${input.checkIn}T15:00:00.000Z`),
-        checkOut: new Date(`${input.checkOut}T10:00:00.000Z`),
-        message: input.message.trim(),
-        couponCodeText: resolved.coupon?.code ?? null,
-        quotedBaseAmount: resolved.pricing.subtotal,
-        quotedDiscountAmount:
-          resolved.pricing.activeDiscountTotal + resolved.pricing.couponDiscountTotal,
-        quotedCleaningFee: resolved.pricing.cleaningFee,
-        quotedTotalAmount: resolved.pricing.grandTotal,
-      },
-    });
+  if (isDevelopmentFallbackForced()) {
+    return saveFallbackRequest(fallbackRequest);
+  }
 
-    if (resolved.coupon) {
-      await tx.coupon.update({
-        where: { id: resolved.coupon.id },
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.bookingRequest.create({
         data: {
-          usedCount: {
-            increment: 1,
+          id: createdId,
+          companyId: input.villa.companyId,
+          websiteId,
+          villaId: input.villa.id,
+          status: "NEW",
+          source: mapDemoOriginToSource(input.origin),
+          fullName: input.fullName.trim(),
+          phone: input.phone.trim(),
+          email: input.email.trim(),
+          guestCount: input.guestCount,
+          checkIn: new Date(`${input.checkIn}T15:00:00.000Z`),
+          checkOut: new Date(`${input.checkOut}T10:00:00.000Z`),
+          message: input.message.trim(),
+          couponCodeText: resolved.coupon?.code ?? null,
+          quotedBaseAmount: resolved.pricing.subtotal,
+          quotedDiscountAmount:
+            resolved.pricing.activeDiscountTotal + resolved.pricing.couponDiscountTotal,
+          quotedCleaningFee: resolved.pricing.cleaningFee,
+          quotedTotalAmount: resolved.pricing.grandTotal,
+          pricingSnapshot: JSON.parse(JSON.stringify(resolved.pricing)),
+          termsAcceptedAt: input.termsAccepted ? new Date() : null,
+          termsVersion: input.termsAccepted ? input.termsVersion ?? "2026-10" : null,
+          confirmationToken,
+        },
+      });
+
+      if (resolved.coupon) {
+        await tx.coupon.update({
+          where: { id: resolved.coupon.id },
+          data: {
+            usedCount: {
+              increment: 1,
+            },
           },
-        },
-      });
+        });
 
-      await tx.couponRedemption.create({
-        data: {
-          id: `redemption-${randomUUID().slice(0, 8)}`,
-          couponId: resolved.coupon.id,
-          bookingRequestId: createdId,
-          discountAmount: resolved.pricing.couponDiscountTotal,
-        },
-      });
+        await tx.couponRedemption.create({
+          data: {
+            id: `redemption-${randomUUID().slice(0, 8)}`,
+            couponId: resolved.coupon.id,
+            bookingRequestId: createdId,
+            discountAmount: resolved.pricing.couponDiscountTotal,
+          },
+        });
+      }
+    });
+  } catch (error) {
+    if (isPrismaConnectionError(error)) {
+      return saveFallbackRequest(fallbackRequest);
     }
-  });
+
+    throw error;
+  }
 
   const created = await getDemoRequestById(createdId);
 

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import type { RequestStatus } from "@/lib/demo-operations";
+import { getUserSession } from "@/lib/auth/server-session";
+import { canAccessPanelPath } from "@/lib/auth/panel-access";
+import { REQUEST_STATUS_OPTIONS, type RequestStatus } from "@/lib/demo-operations";
 import {
   DemoOperationsStoreError,
   DemoVillaStoreError,
@@ -16,6 +18,9 @@ type RouteContext = {
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const session = await getUserSession();
+  if (!session) return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
+  if (!canAccessPanelPath(session.role, "/panel/talepler")) return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -23,7 +28,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       villaSlug?: string;
     };
 
-    if (!payload.status) {
+    if (!payload.status || !REQUEST_STATUS_OPTIONS.some((option) => option.value === payload.status)) {
       throw new DemoOperationsStoreError("Talep durumu zorunludur.");
     }
 

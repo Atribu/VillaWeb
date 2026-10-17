@@ -75,7 +75,9 @@ export function cloneDevelopmentValue<T>(value: T): T {
 }
 
 export async function readDevelopmentDataFile<T>(fileName: string, fallbackValue: T): Promise<T> {
-  const targetPath = path.join(process.cwd(), "data", fileName);
+  const dataDir = isDevelopmentEnvironment() && process.env.DEV_DATA_DIRECTORY
+    ? process.env.DEV_DATA_DIRECTORY : path.join(process.cwd(), "data");
+  const targetPath = path.join(dataDir, fileName);
 
   try {
     const raw = await readFile(targetPath, "utf8");
@@ -86,7 +88,8 @@ export async function readDevelopmentDataFile<T>(fileName: string, fallbackValue
 }
 
 export async function writeDevelopmentDataFile<T>(fileName: string, value: T) {
-  const dataDir = path.join(process.cwd(), "data");
+  const dataDir = isDevelopmentEnvironment() && process.env.DEV_DATA_DIRECTORY
+    ? process.env.DEV_DATA_DIRECTORY : path.join(process.cwd(), "data");
   const targetPath = path.join(dataDir, fileName);
 
   await mkdir(dataDir, { recursive: true });

@@ -146,6 +146,16 @@ export function getLocalizedVilla(villa: CatalogVilla, locale: AppLocale): Catal
     seoDescription:
       villa.seoDescriptionEn ?? translation?.seoDescription ?? villa.seoDescription,
     focusKeyword: villa.focusKeywordEn ?? translation?.focusKeyword ?? villa.focusKeyword,
+    amenities: villa.amenities?.map((amenity) => ({
+      ...amenity,
+      label: amenity.labelEn,
+      category: amenity.categoryEn,
+    })),
+    houseRules:
+      villa.houseRulesEn && villa.houseRulesEn.length > 0
+        ? villa.houseRulesEn
+        : villa.houseRules,
+    extraFeeNotes: villa.extraFeeNotesEn ?? villa.extraFeeNotes,
     availabilityRanges: villa.availabilityRanges.map((range) => ({
       ...range,
       label: getLocalizedAvailabilityLabel(range, locale),

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AvailabilityRange, CatalogVilla } from "@/lib/villa-catalog";
 import { formatShortDate } from "@/lib/villa-catalog";
+import { shiftDateKey } from "@/lib/booking-dates";
 
 type VillaAvailabilityManagerProps = {
   villa: CatalogVilla;
@@ -95,8 +96,8 @@ export function VillaAvailabilityManager({ villa }: VillaAvailabilityManagerProp
       return;
     }
 
-    if (formState.endDate <= formState.startDate) {
-      handleError("Bitis tarihi baslangic tarihinden sonra olmalidir.");
+    if (formState.endDate < formState.startDate) {
+      handleError("Bitis tarihi baslangic tarihinden once olamaz.");
       return;
     }
 
@@ -136,6 +137,7 @@ export function VillaAvailabilityManager({ villa }: VillaAvailabilityManagerProp
   }
 
   async function handleDelete(rangeId: string) {
+    if (!window.confirm("Bu manuel blok kaldirilsin mi? Tarihler yeniden satisa acilacak.")) return;
     setMessage("");
     setDeletingRangeId(rangeId);
 
@@ -173,11 +175,11 @@ export function VillaAvailabilityManager({ villa }: VillaAvailabilityManagerProp
           Yeni Tarih Bloku
         </p>
         <h3 className="mt-4 text-3xl font-semibold text-[var(--color-ink)]">
-          Secili villa icin dolu, bakim veya kapali tarih ekle
+          Takvimi manuel kapat
         </h3>
         <p className="mt-4 text-sm leading-7 text-slate-600">
           Eklenen her tarih araligi sadece <span className="font-semibold">{villa.title}</span>{" "}
-          icin gecerli olur. Sistem cakisan bloklara izin vermez.
+          icin gecerli olur. Baslangic ve bitis gunleri dahildir. Tek gun icin iki alana ayni tarihi girin.
         </p>
 
         <form onSubmit={handleCreate} className="mt-8 space-y-5">
@@ -212,11 +214,11 @@ export function VillaAvailabilityManager({ villa }: VillaAvailabilityManagerProp
           </div>
 
           <div>
-            <label htmlFor="status" className="text-sm font-medium text-slate-700">
+            <label htmlFor="availability-status" className="text-sm font-medium text-slate-700">
               Durum
             </label>
             <select
-              id="status"
+              id="availability-status"
               value={formState.status}
               onChange={(event) =>
                 updateField("status", event.target.value as AvailabilityRange["status"])
@@ -311,20 +313,20 @@ export function VillaAvailabilityManager({ villa }: VillaAvailabilityManagerProp
                       {getAvailabilityLabel(range.status)}
                     </div>
                     <p className="text-lg font-semibold text-[var(--color-ink)]">
-                      {formatShortDate(range.startDate)} - {formatShortDate(range.endDate)}
+                      {formatShortDate(range.startDate)} - {formatShortDate(shiftDateKey(range.endDate, -1))}
                     </p>
                     <p className="text-sm leading-7 text-slate-600">{range.label}</p>
                   </div>
 
                   <button
                     type="button"
-                    disabled={isSubmitting || deletingRangeId !== null}
+                    disabled={isSubmitting || deletingRangeId !== null || Boolean(range.sourceRequestId)}
                     onClick={() => {
                       void handleDelete(range.id);
                     }}
                     className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                   >
-                    {deletingRangeId === range.id ? "Siliniyor..." : "Bloku Sil"}
+                    {range.sourceRequestId ? "Rezervasyona bagli" : deletingRangeId === range.id ? "Siliniyor..." : "Bloku Sil"}
                   </button>
                 </div>
               </article>

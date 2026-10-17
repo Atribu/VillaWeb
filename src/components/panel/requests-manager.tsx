@@ -11,25 +11,26 @@ import {
   type RequestStatus,
 } from "@/lib/demo-operations";
 import { formatCurrency, formatShortDate } from "@/lib/villa-catalog";
+import { BookingConfirmationActions } from "@/components/panel/booking-confirmation-actions";
 
 type RequestsManagerProps = {
   requests: DemoRequest[];
+  initialQuery?: string;
 };
 
-export function RequestsManager({ requests }: RequestsManagerProps) {
+export function RequestsManager({ requests, initialQuery = "" }: RequestsManagerProps) {
   const router = useRouter();
   const [selectedStatus, setSelectedStatus] = useState<RequestStatus | "ALL">("ALL");
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"success" | "error">("success");
+  const [query, setQuery] = useState(initialQuery);
 
   const filteredRequests = useMemo(() => {
-    if (selectedStatus === "ALL") {
-      return requests;
-    }
-
-    return requests.filter((request) => request.status === selectedStatus);
-  }, [requests, selectedStatus]);
+    const term = query.trim().toLocaleLowerCase("tr-TR");
+    return requests.filter((request) => (selectedStatus === "ALL" || request.status === selectedStatus) &&
+      (!term || [request.id, request.fullName, request.villaTitle, request.phone, request.email].join(" ").toLocaleLowerCase("tr-TR").includes(term)));
+  }, [requests, selectedStatus, query]);
 
   const statusSummary = useMemo(
     () =>
@@ -101,6 +102,8 @@ export function RequestsManager({ requests }: RequestsManagerProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <input aria-label="Talep ara" placeholder="Misafir, villa veya referans ara" value={query}
+          onChange={(event) => setQuery(event.target.value)} className="panel-input max-w-md" />
         <button
           type="button"
           onClick={() => setSelectedStatus("ALL")}
@@ -183,6 +186,7 @@ export function RequestsManager({ requests }: RequestsManagerProps) {
                     {request.message}
                   </div>
                 ) : null}
+                <BookingConfirmationActions request={request} />
               </div>
 
               <div className="w-full max-w-[320px] space-y-4 rounded-[1.6rem] bg-[var(--color-slate-soft)] p-5">

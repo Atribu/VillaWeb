@@ -7,6 +7,7 @@ import { pickLocalized } from "@/lib/i18n";
 import { getLocalizedAvailabilityLabel, getLocalizedVilla } from "@/lib/villa-content-i18n";
 import type { CatalogVilla } from "@/lib/villa-catalog";
 import { formatShortDate } from "@/lib/villa-catalog";
+import { getMinimumNightCountForStay } from "@/lib/demo-operations";
 import {
   findBlockedRange,
   getNightCount,
@@ -57,13 +58,15 @@ export function RequestDateSelector({
       };
     }
 
-    if (nightCount < (localizedVilla.minNightCount ?? 1)) {
+    const minimumNightCount = getMinimumNightCountForStay(localizedVilla, checkIn, checkOut);
+
+    if (nightCount < minimumNightCount) {
       return {
         status: "invalid" as const,
         message: pickLocalized(
           locale,
-          `Bu villa icin minimum ${localizedVilla.minNightCount ?? 1} gece secmelisin.`,
-          `You need to choose at least ${localizedVilla.minNightCount ?? 1} nights for this villa.`,
+          `Secilen fiyat donemi icin minimum ${minimumNightCount} gece secmelisin.`,
+          `You need to choose at least ${minimumNightCount} nights for the selected pricing period.`,
         ),
       };
     }
@@ -95,7 +98,7 @@ export function RequestDateSelector({
         `Your ${nightCount}-night stay is available. You can open the inquiry form now.`,
       ),
     };
-  }, [checkIn, checkOut, locale, localizedVilla.availabilityRanges, localizedVilla.minNightCount]);
+  }, [checkIn, checkOut, locale, localizedVilla]);
 
   const isValid = selection.status === "available";
   const hasChanged = checkIn !== initialCheckIn || checkOut !== initialCheckOut;

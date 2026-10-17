@@ -3,7 +3,8 @@ import { getDemoRequests } from "@/lib/server/demo-operations-store";
 
 export const dynamic = "force-dynamic";
 
-export default async function PanelRequestsPage() {
+export default async function PanelRequestsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q } = await searchParams;
   const requests = await getDemoRequests();
 
   return (
@@ -13,15 +14,14 @@ export default async function PanelRequestsPage() {
           Talep Yonetimi
         </p>
         <h2 className="mt-4 text-3xl font-semibold text-[var(--color-ink)]">
-          Public formdan gelen talepler burada canli olarak yonetiliyor
+          Talepler ve rezervasyon onaylari
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Talep durumu bu ekranda degistikce raporlar, villa ilgisi ve ticari pipeline metrikleri
-          ayni demo verisi uzerinden guncellenir.
+          Misafir taleplerini inceleyin, tarihleri onaylayin ve odeme sonrasi konfirmasyon belgesini paylasin.
         </p>
       </div>
 
-      <RequestsManager requests={requests} />
+      <RequestsManager key={q ?? ""} requests={requests} initialQuery={q} />
     </div>
   );
 }

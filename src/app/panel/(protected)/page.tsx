@@ -209,7 +209,7 @@ function QuickActionTile({
   return (
     <Link
       href={href}
-      className="inline-flex min-w-[154px] items-center justify-center gap-2 rounded-md border border-[#cfd6dd] bg-white px-5 py-5 text-center text-[15px] font-medium text-[#444f5f] shadow-[0_3px_8px_rgba(15,23,42,0.1)] transition hover:-translate-y-0.5 hover:border-[#9ec1d8]"
+      className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 transition hover:border-sky-300 hover:bg-sky-50"
     >
       <span className={tone === "green" ? "text-[#57a83f]" : "text-[#2b78ad]"}>{icon}</span>
       <span>{label}</span>
@@ -301,7 +301,7 @@ function DashboardFilterBar({
   crmFocus: string;
 }) {
   return (
-    <section className="rounded-sm bg-white px-5 py-5 shadow-[0_6px_20px_rgba(15,23,42,0.08)]">
+    <section className="rounded-xl border border-slate-200 bg-white px-5 py-5">
       <div className="flex flex-col gap-4">
         <div>
           <p className="text-sm font-semibold text-slate-700">Dashboard filtreleri</p>
@@ -310,7 +310,7 @@ function DashboardFilterBar({
           </p>
         </div>
 
-        <form action="/panel" method="get" className="grid gap-4 2xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
+        <form action="/panel" method="get" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           {reservationSearch ? (
             <input type="hidden" name="reservationSearch" value={reservationSearch} />
           ) : null}
@@ -412,8 +412,8 @@ function DashboardFilterBar({
             </select>
           </label>
 
-          <div className="flex flex-col items-start justify-end gap-3">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+          <div className="col-span-full flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <label className="mr-auto inline-flex items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
                 name="onlyActionable"
@@ -482,9 +482,9 @@ function MetricCard({
   href?: string;
 }) {
   const body = (
-    <article className="rounded-sm bg-white px-5 py-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5">
+    <article className="h-full rounded-xl border border-slate-200 bg-white px-5 py-5 transition hover:border-sky-300">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
       <p className="mt-2 text-sm text-slate-500">{detail}</p>
     </article>
   );
@@ -1448,36 +1448,43 @@ export default async function PanelDashboardPage({
 
   return (
     <div className="space-y-7">
-      <section className="rounded-sm border border-[#d8dde4] bg-[#f9fafb] p-4 shadow-[0_2px_8px_rgba(15,23,42,0.05)]">
-        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-700">Gunluk operasyon merkezi</p>
+      <section className="rounded-xl border border-slate-200 bg-white p-6">
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-sky-700">Genel bakis</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Operasyon merkezi</h1>
             <p className="text-sm text-slate-500">
               Rezervasyon, operasyon, muhasebe, CRM ve dijital kanallar ayni panelden takip ediliyor.
             </p>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-5">
+          <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">
             <QuickActionTile
               href="/panel/rezervasyonlar/yeni-rezervasyon"
               label="Yeni Rezervasyon"
-              icon="🛒"
+              icon="+"
               tone="green"
             />
             <QuickActionTile
               href="/panel/rezervasyonlar/ev-rezervasyonlari"
               label="Rezervasyon Listesi"
-              icon="☰"
+              icon="="
             />
-            <QuickActionTile href="/panel/villalar" label="Evlerim" icon="🏠" />
-            <QuickActionTile href="/panel/villalar/yeni" label="Hizli Villa Ekleme" icon="🪄" />
+            <QuickActionTile href="/panel/villalar" label="Villalarim" icon="" />
+            <QuickActionTile href="/panel/villalar/yeni" label="Villa Ekle" icon="+" />
             <QuickActionTile
               href="/panel/takip-operasyon/ev-karsilama"
               label="Girisler Cikislar"
-              icon="🗝️"
+              icon=""
             />
           </div>
         </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {metricCards.map((item) => (
+          <MetricCard key={item.label} {...item} />
+        ))}
       </section>
 
       <DashboardFilterBar
@@ -1493,12 +1500,6 @@ export default async function PanelDashboardPage({
       />
 
       <ActiveFiltersBar items={activeFilterLabels} />
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {metricCards.map((item) => (
-          <MetricCard key={item.label} {...item} />
-        ))}
-      </section>
 
       <section className="grid gap-5 xl:grid-cols-2">
         <SearchPanel

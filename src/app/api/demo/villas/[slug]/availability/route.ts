@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getUserSession } from "@/lib/auth/server-session";
+import { canAccessPanelPath } from "@/lib/auth/panel-access";
 import {
   addDemoVillaAvailability,
   deleteDemoVillaAvailability,
@@ -23,6 +24,7 @@ function revalidateVillaPaths(slug: string) {
   revalidatePath("/panel");
   revalidatePath("/panel/villalar");
   revalidatePath(`/panel/villalar/${slug}/uygunluk`);
+  revalidatePath(`/panel/villalar/${slug}/duzenle`);
 }
 
 function isAvailabilityStatus(value: string): value is AvailabilityRange["status"] {
@@ -35,6 +37,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
   }
+  if (!canAccessPanelPath(session.role, "/panel/villalar")) return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
 
   try {
     const { slug } = await context.params;
@@ -81,6 +84,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
   }
+  if (!canAccessPanelPath(session.role, "/panel/villalar")) return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
 
   try {
     const { slug } = await context.params;

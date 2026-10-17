@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { BOOKING_TERMS_VERSION } from "@/lib/booking-terms";
 import type { AppLocale } from "@/lib/i18n";
 import { pickLocalized } from "@/lib/i18n";
 import { getLocalizedVilla } from "@/lib/villa-content-i18n";
@@ -41,6 +42,8 @@ export function RequestForm({
   const [email, setEmail] = useState("");
   const [guestCount, setGuestCount] = useState(Math.min(2, villa.capacity));
   const [message, setMessage] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [confirmationPath, setConfirmationPath] = useState("");
   const [couponCode, setCouponCode] = useState(initialPricing.couponCode ?? "");
   const [pricing, setPricing] = useState(initialPricing);
   const [appliedCoupon, setAppliedCoupon] = useState<DemoCoupon | null>(null);
@@ -156,6 +159,18 @@ export function RequestForm({
       return;
     }
 
+    if (!termsAccepted) {
+      setSubmitTone("error");
+      setSubmitMessage(
+        pickLocalized(
+          locale,
+          "Talep olusturmak icin kullanim kosullari ve KVKK metnini onaylamalisin.",
+          "You must accept the terms and privacy notice before creating an inquiry.",
+        ),
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -174,6 +189,8 @@ export function RequestForm({
           email,
           message,
           couponCode: pricing.couponCode ?? couponCode,
+          termsAccepted,
+          termsVersion: BOOKING_TERMS_VERSION,
         }),
       });
 
@@ -181,6 +198,7 @@ export function RequestForm({
         error?: string;
         request?: {
           id: string;
+          confirmationToken?: string;
         };
       };
 
@@ -193,6 +211,11 @@ export function RequestForm({
       }
 
       setSubmitTone("success");
+      setConfirmationPath(
+        payload.request.confirmationToken
+          ? `/rezervasyon/${payload.request.confirmationToken}`
+          : "",
+      );
       setSubmitMessage(
         pickLocalized(
           locale,
@@ -205,6 +228,7 @@ export function RequestForm({
       setEmail("");
       setGuestCount(Math.min(2, localizedVilla.capacity));
       setMessage("");
+      setTermsAccepted(false);
       setCouponCode("");
       setAppliedCoupon(null);
       setPricing(initialPricing);
@@ -360,6 +384,39 @@ export function RequestForm({
           ) : null}
         </div>
 
+        <label className="mt-6 flex items-start gap-3 rounded-[12px] border border-[var(--serene-outline-variant)] bg-white px-4 py-4 text-sm leading-6 text-[var(--serene-on-surface-variant)]">
+          <input
+            type="checkbox"
+            required
+            checked={termsAccepted}
+            onChange={(event) => setTermsAccepted(event.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-slate-300"
+          />
+          <span>
+            {pickLocalized(locale, "", "I have read and accept the ")}
+            <Link
+              href="/kullanim-kosullari"
+              target="_blank"
+              className="font-semibold text-[var(--serene-primary)] underline underline-offset-4"
+            >
+              {pickLocalized(locale, "Rezervasyon ve Kullanim Kosullari", "Booking and Usage Terms")}
+            </Link>
+            {pickLocalized(locale, ", ", ", ")}
+            <Link
+              href="/kvkk"
+              target="_blank"
+              className="font-semibold text-[var(--serene-primary)] underline underline-offset-4"
+            >
+              {pickLocalized(locale, "KVKK Aydinlatma Metni", "Privacy Notice")}
+            </Link>
+            {pickLocalized(
+              locale,
+              " ve rezervasyon talebi icin bilgilerimin islenmesini okudum, kabul ediyorum.",
+              " and consent to the processing of my information for this booking inquiry.",
+            )}
+          </span>
+        </label>
+
         {submitMessage ? (
           <div
             className={`mt-6 rounded-[1.4rem] border px-4 py-3 text-sm ${
@@ -369,6 +426,14 @@ export function RequestForm({
             }`}
           >
             {submitMessage}
+            {confirmationPath ? (
+              <Link
+                href={confirmationPath}
+                className="mt-3 block font-semibold underline underline-offset-4"
+              >
+                {pickLocalized(locale, "Talep durumunu goruntule", "View inquiry status")}
+              </Link>
+            ) : null}
           </div>
         ) : null}
 

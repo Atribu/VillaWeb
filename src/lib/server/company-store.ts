@@ -9,10 +9,12 @@ import {
   getFallbackCompanyRecordBySlug,
   getFallbackCompanyRecords,
   getFallbackDefaultCompanyRecord,
+  getFallbackWebsites,
   updateFallbackCompany,
 } from "@/lib/server/development-fallback-data";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 import { assertSuperAdminPanelAccess } from "@/lib/server/demo-company-context";
+import { normalizeSiteHost } from "@/lib/site-templates";
 
 export class DemoCompanyStoreError extends Error {}
 
@@ -275,6 +277,30 @@ export async function getCompanyRecordById(companyId?: string | null) {
   );
 }
 
+export async function getCompanyRecordForHost(value: string) {
+  const host = normalizeSiteHost(value);
+  if (!host || host === "localhost" || host === "127.0.0.1" || host === "[::1]") return null;
+  const domains = [host, `https://${host}`, `http://${host}`, `https://${host}/`, `http://${host}/`];
+  const ids = await withDevelopmentFallback(
+    async () => (await db.company.findMany({
+      where: { status: "ACTIVE", OR: [
+        { primaryDomain: { in: domains, mode: "insensitive" } },
+        { websites: { some: { domain: { in: domains, mode: "insensitive" } } } },
+      ] },
+      select: { id: true }, take: 2,
+    })).map((company) => company.id),
+    async () => {
+      const companies = await getFallbackCompanyRecords();
+      const websites = await getFallbackWebsites();
+      return companies.filter((company) => company.status === "ACTIVE" && (
+        normalizeSiteHost(company.primaryDomain) === host || websites.some((site) => site.companyId === company.id && normalizeSiteHost(site.domain) === host)
+      )).map((company) => company.id);
+    },
+  );
+  if (ids.length > 1) throw new DemoCompanyStoreError("Alan adı birden fazla firmaya bağlı. Site ayarlarını kontrol edin.");
+  return ids[0] ? getCompanyRecordById(ids[0]) : null;
+}
+
 export async function getCompanyRecordBySlug(companySlug?: string | null) {
   if (!companySlug) {
     return null;
@@ -387,7 +413,7 @@ export async function createDemoCompany(input: CompanyMutationInput) {
             brandHeadline: defaults.heroTitle,
             metaTitle: `${normalized.publicName} | Villa Kiralama`,
             metaDescription: defaults.heroDescription,
-            themeKey: "marketplace-core",
+            themeKey: "secki",
           },
         });
 
@@ -537,7 +563,7 @@ export async function updateDemoCompany(companyId: string, input: CompanyMutatio
               brandHeadline: defaults.heroTitle,
               metaTitle: `${normalized.publicName} | Villa Kiralama`,
               metaDescription: defaults.heroDescription,
-              themeKey: "marketplace-core",
+              themeKey: "secki",
             },
           });
         }

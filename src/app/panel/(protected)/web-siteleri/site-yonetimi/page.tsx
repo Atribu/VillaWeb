@@ -13,11 +13,11 @@ export default async function PanelWebsiteManagementPage() {
           Site Yonetimi
         </p>
         <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--color-ink)]">
-          Alan adlari ve yayin durumlarini panelden yonet
+          Web siteleriniz, tasarımlarınız
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Canli, staging veya duraklatilmis site kayitlari burada tutulur. Varsayilan site secimi
-          de bu ekrandan degistirilebilir.
+          Her siteniz için Seçki, Kıyı veya Rota şablonunu seçebilirsiniz. Tasarım değişirken
+          villalar, fiyatlar ve rezervasyonlar korunur. Yayın durumunu ve varsayılan siteyi de buradan yönetebilirsiniz.
         </p>
       </div>
 

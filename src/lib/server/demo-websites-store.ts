@@ -3,16 +3,17 @@ import "server-only";
 import type {
   DemoLandingStatus,
   DemoSeoContentStatus,
-  DemoWebsiteStatus,
 } from "@/lib/demo-websites";
 import { db } from "@/lib/db";
+import { getUserSession } from "@/lib/auth/server-session";
+import { canManageWebsite, parseWebsiteUpdate, resolveSiteTemplate, type WebsiteUpdate } from "@/lib/site-templates";
 import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
 import {
   getFallbackLandingPages,
   getFallbackSeoContents,
   getFallbackWebsites,
 } from "@/lib/server/development-fallback-data";
-import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import { withDevelopmentFallback, writeDevelopmentDataFile } from "@/lib/server/development-fallback";
 import {
   mapDemoWebsiteStatusToPrisma,
   mapSeoStatusToDemo,
@@ -20,6 +21,8 @@ import {
 } from "@/lib/server/prisma-demo-shared";
 
 export class DemoWebsitesStoreError extends Error {}
+export class WebsiteAccessError extends Error {}
+export class WebsiteNotFoundError extends Error {}
 
 function mapSeoContentTypeToDemo(type: "BLOG" | "LANDING" | "CATEGORY" | "PAGE") {
   return type === "PAGE" ? ("CATEGORY" as const) : type;
@@ -43,10 +46,11 @@ export async function getDemoWebsites() {
         status: mapWebsiteStatusToDemo(website.status),
         primaryChannel: website.primaryChannel ?? "SEO + Direkt Talep",
         default: website.isPrimary,
+        themeKey: resolveSiteTemplate(website.themeKey),
         updatedAt: website.updatedAt.toISOString(),
       }));
     },
-    async () => getFallbackWebsites(await resolvePanelCompanyId()),
+    async () => (await getFallbackWebsites(await resolvePanelCompanyId())).map((website) => ({ ...website, themeKey: resolveSiteTemplate(website.themeKey) })),
   );
 }
 
@@ -102,39 +106,44 @@ export async function getDemoSeoContents() {
 
 export async function updateDemoWebsite(
   websiteId: string,
-  input: {
-    status?: DemoWebsiteStatus;
-    default?: boolean;
-  },
+  input: WebsiteUpdate,
 ) {
-  const website = await db.companyWebsite.findUnique({
-    where: { id: websiteId },
-    select: { id: true, companyId: true },
-  });
-
-  if (!website) {
-    throw new DemoWebsitesStoreError("Site kaydi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(website.companyId);
-
-  await db.$transaction(async (tx) => {
-    if (input.default) {
-      await tx.companyWebsite.updateMany({
-        where: { companyId: website.companyId },
-        data: { isPrimary: false },
+  const session = await getUserSession();
+  if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.role)) throw new WebsiteAccessError("Site yönetimi yetkiniz bulunmuyor.");
+  const update = parseWebsiteUpdate(input);
+  const authorize = (companyId: string) => {
+    if (!canManageWebsite(session.role, session.companyId, companyId)) throw new WebsiteAccessError("Bu site için yetkiniz bulunmuyor.");
+  };
+  await withDevelopmentFallback(
+    async () => {
+      const website = await db.companyWebsite.findUnique({ where: { id: websiteId }, select: { id: true, companyId: true } });
+      if (!website) throw new WebsiteNotFoundError("Site kaydı bulunamadı.");
+      authorize(website.companyId);
+      await db.$transaction(async (tx) => {
+        if (update.default) {
+          await tx.companyWebsite.updateMany({ where: { companyId: website.companyId }, data: { isPrimary: false } });
+        }
+        await tx.companyWebsite.update({
+          where: { id: websiteId, companyId: website.companyId },
+          data: {
+            status: update.status ? mapDemoWebsiteStatusToPrisma(update.status) : undefined,
+            isPrimary: update.default,
+            themeKey: update.themeKey,
+          },
+        });
       });
-    }
-
-    await tx.companyWebsite.update({
-      where: { id: websiteId },
-      data: {
-        status: input.status ? mapDemoWebsiteStatusToPrisma(input.status) : undefined,
-        isPrimary: input.default ?? undefined,
-      },
-    });
-  });
-
+    },
+    async () => {
+      const websites = await getFallbackWebsites();
+      const website = websites.find((site) => site.id === websiteId);
+      if (!website?.companyId) throw new WebsiteNotFoundError("Site kaydı bulunamadı.");
+      authorize(website.companyId);
+      await writeDevelopmentDataFile("demo-websites.json", websites.map((site) => {
+        if (site.id === websiteId) return { ...site, ...update, updatedAt: new Date().toISOString() };
+        return update.default && site.companyId === website.companyId ? { ...site, default: false } : site;
+      }));
+    },
+  );
   const websites = await getDemoWebsites();
   return websites.find((item) => item.id === websiteId) ?? null;
 }

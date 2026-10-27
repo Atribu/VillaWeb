@@ -9,6 +9,8 @@ import {
   type DemoWebsiteStatus,
 } from "@/lib/demo-websites";
 import { formatShortDate } from "@/lib/villa-catalog";
+import { SiteTemplatePicker } from "@/components/panel/site-template-picker";
+import type { SiteTemplateKey } from "@/lib/site-templates";
 
 type WebsitesManagerProps = {
   websites: DemoWebsiteRecord[];
@@ -27,6 +29,7 @@ export function WebsitesManager({ websites }: WebsitesManagerProps) {
     payload: {
       status?: DemoWebsiteStatus;
       default?: boolean;
+      themeKey?: SiteTemplateKey;
     },
   ) {
     setBusyWebsiteId(websiteId);
@@ -61,6 +64,7 @@ export function WebsitesManager({ websites }: WebsitesManagerProps) {
     <div className="space-y-6">
       {message ? (
         <div
+          role={messageTone === "error" ? "alert" : "status"}
           className={`rounded-[1.2rem] border px-4 py-3 text-sm ${
             messageTone === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -112,7 +116,8 @@ export function WebsitesManager({ websites }: WebsitesManagerProps) {
               <div className="grid w-full max-w-[320px] gap-4 rounded-[1.5rem] bg-[#f8fafc] p-5">
                 <select
                   value={website.status}
-                  disabled={busyWebsiteId === website.id}
+                  aria-label={`${website.name} yayın durumu`}
+                  disabled={busyWebsiteId !== null}
                   onChange={(event) =>
                     updateWebsite(website.id, { status: event.target.value as DemoWebsiteStatus })
                   }
@@ -126,7 +131,7 @@ export function WebsitesManager({ websites }: WebsitesManagerProps) {
                 </select>
                 <button
                   type="button"
-                  disabled={busyWebsiteId === website.id || website.default}
+                  disabled={busyWebsiteId !== null || website.default}
                   onClick={() => updateWebsite(website.id, { default: true })}
                   className="rounded-full border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -134,6 +139,7 @@ export function WebsitesManager({ websites }: WebsitesManagerProps) {
                 </button>
               </div>
             </div>
+            <SiteTemplatePicker key={`${website.id}-${website.themeKey}`} websiteId={website.id} themeKey={website.themeKey} busy={busyWebsiteId !== null} onApply={(themeKey) => updateWebsite(website.id, { themeKey })} />
           </article>
         ))}
       </div>

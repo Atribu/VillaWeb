@@ -11,6 +11,7 @@ export type DemoWebsiteRecord = {
   status: DemoWebsiteStatus;
   primaryChannel: string;
   default: boolean;
+  themeKey?: string;
   updatedAt: string;
 };
 

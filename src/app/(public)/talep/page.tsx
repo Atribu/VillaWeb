@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PublicPageHero } from "@/components/public/public-page-hero";
+import { RequestSummary } from "@/components/public/request-summary";
+import { SiteIcon } from "@/components/site-templates/site-icon";
+import { validSearchStay } from "@/lib/public-search";
+import s from "@/components/site-templates/stay-pages.module.css";
 import { RequestForm } from "@/components/public/request-form";
 import { RequestDateSelector } from "@/components/public/request-date-selector";
-import { Container } from "@/components/ui/container";
 import { getDemoCompanySiteHref } from "@/lib/demo-companies";
 import { getMinimumNightCountForStay, getResolvedStayPricing } from "@/lib/demo-operations";
 import { pickLocalized } from "@/lib/i18n";
-import { getLocalizedAvailabilityLabel, getLocalizedVilla } from "@/lib/villa-content-i18n";
-import { getCompanyHeroImage } from "@/lib/public-gallery";
+import { getLocalizedAvailabilityLabel } from "@/lib/villa-content-i18n";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { formatShortDate } from "@/lib/villa-catalog";
 import { findBlockedRange, getNightCount } from "@/lib/villa-availability";
@@ -54,18 +55,19 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
         includeInactive: false,
       })
     : null;
-  const localizedVilla = villa ? getLocalizedVilla(villa, locale) : null;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const validDates = Boolean(checkIn && checkOut && validSearchStay(checkIn, checkOut, today));
   const blockedRange =
-    villa && checkIn && checkOut
+    villa && validDates
       ? findBlockedRange(checkIn, checkOut, villa.availabilityRanges)
       : null;
-  const nightCount = checkIn && checkOut ? getNightCount(checkIn, checkOut) : 0;
+  const nightCount = validDates ? getNightCount(checkIn, checkOut) : 0;
   const minimumNightCount = villa
     ? getMinimumNightCountForStay(villa, checkIn, checkOut)
     : 1;
   const belowMinimumStay = Boolean(villa && nightCount > 0 && nightCount < minimumNightCount);
   const isValidSelection = Boolean(
-    villa && checkIn && checkOut && nightCount > 0 && !blockedRange && !belowMinimumStay,
+    villa && validDates && nightCount > 0 && !blockedRange && !belowMinimumStay,
   );
   const pricingDependencies = isValidSelection
     ? await Promise.all([
@@ -85,154 +87,47 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
           checkOut,
         })
       : null;
-  const recoveryHref = villa ? `/villalar/${villa.slug}` : "/villalar";
-  const selectedVillaLabel =
-    localizedVilla?.title ??
-    pickLocalized(locale, "Villa secimi bekleniyor", "Waiting for villa selection");
-  const heroImage = getCompanyHeroImage(company.slug, localizedVilla?.coverImageUrl);
-  const validationMessage = !villa
-    ? pickLocalized(locale, "Talep formunu acmadan once bir villa secmelisin.", "You need to select a villa before opening the inquiry form.")
-    : !checkIn || !checkOut
-      ? pickLocalized(locale, "Talep olusturmak icin once villa detayinda giris ve cikis tarihini secmelisin.", "To create an inquiry, you need to choose check-in and check-out dates on the villa detail page first.")
-      : nightCount <= 0
-        ? pickLocalized(locale, "Cikis tarihi giris tarihinden sonra olmalidir.", "Check-out must be after check-in.")
-        : belowMinimumStay
-          ? pickLocalized(
-              locale,
-              `Secilen fiyat donemi icin minimum ${minimumNightCount} gece secmen gerekiyor.`,
-              `You need to select at least ${minimumNightCount} nights for the selected pricing period.`,
-            )
-          : blockedRange
-          ? pickLocalized(
-              locale,
-              `${formatShortDate(blockedRange.startDate, locale)} - ${formatShortDate(blockedRange.endDate, locale)} araliginda ${getLocalizedAvailabilityLabel(blockedRange, locale).toLowerCase()} oldugu icin bu talep acilamaz.`,
-              `This inquiry cannot be created because ${getLocalizedAvailabilityLabel(blockedRange, locale).toLowerCase()} exists between ${formatShortDate(blockedRange.startDate, locale)} and ${formatShortDate(blockedRange.endDate, locale)}.`,
-            )
-          : "";
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
+  const href = (path: string) => getDemoCompanySiteHref(company.slug, path);
+  const validationMessage = !validDates && (checkIn || checkOut)
+    ? t("Giriş ve çıkış tarihlerini kontrol edin. Geçmiş tarihlerle talep oluşturulamaz.", "Check your arrival and departure dates. Past dates cannot be used.")
+    : belowMinimumStay
+      ? t(`Bu dönem için en az ${minimumNightCount} gece seçmelisiniz.`, `Choose at least ${minimumNightCount} nights for this period.`)
+      : blockedRange
+        ? t(`${formatShortDate(blockedRange.startDate, locale)} - ${formatShortDate(blockedRange.endDate, locale)} aralığı ${getLocalizedAvailabilityLabel(blockedRange, locale).toLowerCase()}. Lütfen başka tarihler seçin.`, `The villa is unavailable between ${formatShortDate(blockedRange.startDate, locale)} and ${formatShortDate(blockedRange.endDate, locale)}. Please choose other dates.`)
+        : "";
 
-  return (
-    <Container className="py-14 sm:py-16">
-      <PublicPageHero
-        eyebrow={pickLocalized(locale, "Talep Formu", "Inquiry Form")}
-        title={pickLocalized(
-          locale,
-          `${company.shortName} icin tarih secimi tamamlandiginda acilan talep ekrani`,
-          `Inquiry screen that opens after date selection is completed for ${company.shortName}`,
-        )}
-        description={pickLocalized(
-          locale,
-          "Talep akisi yalnizca aktif firmanin gecerli giris ve cikis secimiyle ilerler. Uygun olmayan tarih secimleri bu ekranin icine dahil edilmez.",
-          "The inquiry flow proceeds only with a valid check-in and check-out selection for the active company. Invalid date selections are not allowed into this screen.",
-        )}
-        backgroundImage={heroImage}
-        actions={[
-          {
-            href: getDemoCompanySiteHref(company.slug, "/villalar"),
-            label: pickLocalized(locale, "Tum villalari incele", "Browse all villas"),
-          },
-          ...(villa
-            ? [
-                {
-                  href: `${recoveryHref}?company=${company.slug}`,
-                  label: pickLocalized(locale, "Villa detayina don", "Back to villa details"),
-                  variant: "secondary" as const,
-                },
-              ]
-            : []),
-        ]}
-      >
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-[12px] border border-white/14 bg-white/10 px-5 py-5 text-sm text-white/82 backdrop-blur">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
-              {pickLocalized(locale, "Villa", "Villa")}
-            </span>
-            <span className="mt-3 block text-base font-semibold text-white">
-              {selectedVillaLabel}
-            </span>
+  return <div className={s.page}>
+    <nav className={s.breadcrumbs} aria-label={t("Sayfa yolu", "Breadcrumb")}>
+      <Link href={href("/")}>{t("Ana sayfa", "Home")}</Link><span>/</span>
+      <Link href={href(villa ? `/villalar/${villa.slug}` : "/villalar")}>{villa ? t("Villa detayına dön", "Back to villa details") : t("Villa koleksiyonu", "Villa collection")}</Link><span>/</span>
+      <span aria-current="page">{t("Konaklama talebi", "Stay inquiry")}</span>
+    </nav>
+    <header>
+      <p className={s.eyebrow}>{company.shortName} / {t("BİRLİKTE PLANLAYALIM", "LET’S PLAN YOUR STAY")}</p>
+      <h1 className={s.title}>{t("Size ait bir tatil,", "A holiday of your own,")}<br /><em>{t("bir adım uzakta.", "one step closer.")}</em></h1>
+      <p className={s.intro}>{t("Tarihlerinizi ve iletişim bilgilerinizi paylaşın. Size özel konaklamanın detaylarını birlikte netleştirelim.", "Share your dates and contact details. Let’s take care of the details of your next stay together.")}</p>
+    </header>
+    <ol className={s.steps} aria-label={t("Talep adımları", "Inquiry steps")}>
+      <li aria-current={!isValidSelection ? "step" : undefined}><span>01</span>{t("Tarih seçimi", "Your dates")}</li>
+      <li aria-current={isValidSelection ? "step" : undefined}><span>02</span>{t("Bilgileriniz", "Your details")}</li>
+      <li><span>03</span>{t("Talep ve dönüş", "Send & hear from us")}</li>
+    </ol>
+    {villa ? isValidSelection && resolvedPricing
+      ? <RequestForm key={`${villa.id}-${checkIn}-${checkOut}`} villa={villa} checkIn={checkIn} checkOut={checkOut} initialPricing={resolvedPricing.pricing} locale={locale} companySlug={company.slug} />
+      : <div className={s.requestGrid}>
+          <div>
+            <RequestDateSelector key={`${checkIn}-${checkOut}`} villa={villa} initialCheckIn={checkIn} initialCheckOut={checkOut} locale={locale} companySlug={company.slug} />
+            {validationMessage && <p role="alert" className={s.notice} data-tone="error">{validationMessage}</p>}
+            <p className={s.note}>{t("Uygun tarihleri uyguladığınızda iletişim formunuz burada açılacak.", "Your contact form will appear here once you apply available dates.")}</p>
           </div>
-          <div className="rounded-[12px] border border-white/14 bg-white/10 px-5 py-5 text-sm text-white/82 backdrop-blur">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
-              {pickLocalized(locale, "Giris", "Check-in")}
-            </span>
-            <span className="mt-3 block text-base font-semibold text-white">
-              {checkIn
-                ? formatShortDate(checkIn, locale)
-                : pickLocalized(locale, "Secilmedi", "Not selected")}
-            </span>
-          </div>
-          <div className="rounded-[12px] border border-white/14 bg-white/10 px-5 py-5 text-sm text-white/82 backdrop-blur">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
-              {pickLocalized(locale, "Cikis", "Check-out")}
-            </span>
-            <span className="mt-3 block text-base font-semibold text-white">
-              {checkOut
-                ? formatShortDate(checkOut, locale)
-                : pickLocalized(locale, "Secilmedi", "Not selected")}
-            </span>
-          </div>
+          <aside className={s.bookingAside}><RequestSummary villa={villa} checkIn={checkIn} checkOut={checkOut} locale={locale} /></aside>
         </div>
-      </PublicPageHero>
-
-      {villa ? (
-        <div className="mt-8">
-          <RequestDateSelector
-            villa={villa}
-            initialCheckIn={checkIn}
-            initialCheckOut={checkOut}
-            locale={locale}
-          />
-        </div>
-      ) : null}
-
-      {isValidSelection && villa ? (
-        <div className="mt-10 space-y-6">
-          <div className="rounded-[16px] border border-emerald-200 bg-emerald-50 p-6 text-sm leading-7 text-emerald-700">
-            {pickLocalized(
-              locale,
-              `${nightCount} gecelik uygun aralik secildi. Bu villa icin talep detaylarini doldurabilir, varsa kuponunu uygulayabilir ve formu dogrudan panel akisine dusurebilirsin.`,
-              `A valid ${nightCount}-night range has been selected. You can fill in the inquiry details for this villa, apply a coupon if available and send the form directly into the panel flow.`,
-            )}
-          </div>
-
-          {resolvedPricing ? (
-            <RequestForm
-              villa={villa}
-              checkIn={checkIn}
-              checkOut={checkOut}
-              initialPricing={resolvedPricing.pricing}
-              locale={locale}
-            />
-          ) : null}
-        </div>
-      ) : (
-        <div className="serene-card mt-10 border-rose-200 bg-rose-50 p-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-600">
-            {pickLocalized(locale, "Teklif Formu Henuz Acik Degil", "Inquiry Form Not Available Yet")}
-          </p>
-          <h2 className="mt-4 font-display text-3xl font-semibold text-[var(--serene-on-surface)]">
-            {villa
-              ? pickLocalized(locale, "Uygun tarih secimi tamamlaninca teklif formu otomatik acilir", "The inquiry form will open automatically once valid dates are selected")
-              : pickLocalized(locale, "Gecerli bir villa ve tarih secimi olmadan talep formu kullanilamaz", "The inquiry form cannot be used without a valid villa and date selection")}
-          </h2>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--serene-on-surface-variant)]">{validationMessage}</p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            {villa ? (
-              <Link
-                href={recoveryHref}
-                className="serene-button-primary inline-flex px-5 py-3 text-sm font-semibold"
-              >
-                {pickLocalized(locale, "Villa Detayina Don", "Back to Villa Detail")}
-              </Link>
-            ) : null}
-            <Link
-              href="/villalar"
-              className="serene-button-secondary inline-flex px-5 py-3 text-sm font-semibold"
-            >
-              {pickLocalized(locale, "Tum Villalari Incele", "Browse All Villas")}
-            </Link>
-          </div>
-        </div>
-      )}
-    </Container>
-  );
+      : <section className={s.empty}>
+          <p className={s.eyebrow}>{t("ÖNCE SİZE UYGUN EVİ BULALIM", "LET’S FIND YOUR PLACE FIRST")}</p>
+          <h2 className={s.sectionTitle}>{t("Hangi villada uyanmak istersiniz?", "Where would you like to wake up?")}</h2>
+          <p>{t("Koleksiyonumuzdan bir villa seçin. Ardından uygun tarihleri belirleyerek tatil talebinizi bize iletebilirsiniz.", "Choose a villa from our collection, select available dates and send us your holiday inquiry.")}</p>
+          <Link href={href("/villalar")} className={s.button}>{t("Villaları keşfet", "Explore villas")}<SiteIcon name="arrow" /></Link>
+        </section>}
+  </div>;
 }

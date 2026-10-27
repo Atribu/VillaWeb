@@ -508,9 +508,9 @@ export async function getFallbackWebsites(companyId?: string | null) {
   const fileData = await readDevelopmentDataFile("demo-websites.json", seedDemoWebsites);
   const normalized = fileData.map((record) => ({
     ...(record as DemoWebsiteRecord),
-    companyId:
-      (record as DemoWebsiteRecord).companyId ??
-      inferCompanyIdFromText(record.name, record.domain, record.primaryChannel),
+    companyId: normalizeDevelopmentCompanyId(
+      (record as DemoWebsiteRecord).companyId ?? inferCompanyIdFromText(record.name, record.domain, record.primaryChannel),
+    ),
   })) satisfies DemoWebsiteRecord[];
 
   return filterDevelopmentRecordsByCompany(normalized, companyId, inferWebsiteCompanyId);
@@ -1020,6 +1020,7 @@ export async function createFallbackCompany(input: {
     status: "STAGING",
     primaryChannel: "Direkt Talep",
     default: true,
+    themeKey: "secki",
     updatedAt: now,
   };
 

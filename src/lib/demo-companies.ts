@@ -108,7 +108,11 @@ export function getFallbackCompanyIdForVillaSlug(villaSlug: string) {
 
 export function getDemoCompanySiteHref(companySlug: string, pathname = "/") {
   const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
-  return `${normalizedPath}?company=${companySlug}`;
+  const [pathAndQuery, hash] = normalizedPath.split("#", 2);
+  const [path, query] = pathAndQuery.split("?", 2);
+  const params = new URLSearchParams(query);
+  params.set("company", companySlug);
+  return `${path}?${params}${hash ? `#${hash}` : ""}`;
 }
 
 const localizedCompanyContent: Record<

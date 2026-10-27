@@ -8,8 +8,12 @@ import { BOOKING_TERMS_VERSION } from "@/lib/booking-terms";
 import type { AppLocale } from "@/lib/i18n";
 import { pickLocalized } from "@/lib/i18n";
 import { getLocalizedVilla } from "@/lib/villa-content-i18n";
-import type { CatalogVilla } from "@/lib/villa-catalog";
-import { formatCurrency, formatShortDate } from "@/lib/villa-catalog";
+import { formatCurrency, type CatalogVilla } from "@/lib/villa-catalog";
+import { getDemoCompanySiteHref } from "@/lib/demo-companies";
+import { RequestSummary } from "./request-summary";
+import { RequestDateSelector } from "./request-date-selector";
+import { SiteIcon } from "@/components/site-templates/site-icon";
+import s from "@/components/site-templates/stay-pages.module.css";
 import type { DemoCoupon, RequestPricingBreakdown } from "@/lib/demo-operations";
 
 type RequestFormProps = {
@@ -18,6 +22,7 @@ type RequestFormProps = {
   checkOut: string;
   initialPricing: RequestPricingBreakdown;
   locale?: AppLocale;
+  companySlug: string;
 };
 
 function getEmptyFieldErrorMessage(locale: AppLocale) {
@@ -34,6 +39,7 @@ export function RequestForm({
   checkOut,
   initialPricing,
   locale = "tr",
+  companySlug,
 }: RequestFormProps) {
   const router = useRouter();
   const localizedVilla = useMemo(() => getLocalizedVilla(villa, locale), [locale, villa]);
@@ -52,38 +58,6 @@ export function RequestForm({
   const [submitTone, setSubmitTone] = useState<"success" | "error">("success");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const totalSummary = useMemo(
-    () => [
-      {
-        label: pickLocalized(locale, "Ara toplam", "Subtotal"),
-        value: formatCurrency(pricing.subtotal, locale),
-      },
-      {
-        label: pricing.activeDiscountTitle
-          ? `${pricing.activeDiscountTitle} (${pricing.activeDiscountPercent}%)`
-          : pickLocalized(locale, "Kampanya", "Campaign"),
-        value:
-          pricing.activeDiscountTotal > 0
-            ? `- ${formatCurrency(pricing.activeDiscountTotal, locale)}`
-            : pickLocalized(locale, "Uygulanmadi", "Not applied"),
-      },
-      {
-        label: pickLocalized(locale, "Temizlik ucreti", "Cleaning fee"),
-        value: formatCurrency(pricing.cleaningFee, locale),
-      },
-      {
-        label: pricing.couponTitle
-          ? `${pricing.couponTitle} (${pricing.couponPercent}%)`
-          : pickLocalized(locale, "Kupon indirimi", "Coupon discount"),
-        value:
-          pricing.couponDiscountTotal > 0
-            ? `- ${formatCurrency(pricing.couponDiscountTotal, locale)}`
-            : pickLocalized(locale, "Uygulanmadi", "Not applied"),
-      },
-    ],
-    [locale, pricing],
-  );
 
   function resetCouponState() {
     setPricing(initialPricing);
@@ -159,6 +133,16 @@ export function RequestForm({
       return;
     }
 
+    if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > villa.capacity) {
+      setSubmitTone("error");
+      setSubmitMessage(pickLocalized(locale, "Villa kapasitesine uygun bir misafir sayısı girin.", "Enter a guest count within the villa capacity."));
+      return;
+    }
+    if (couponCode.trim() && pricing.couponCode?.toUpperCase() !== couponCode.trim().toUpperCase()) {
+      setSubmitTone("error");
+      setSubmitMessage(pickLocalized(locale, "Kuponu önce uygulayın veya kupon alanını temizleyin.", "Apply your coupon first or clear the coupon field."));
+      return;
+    }
     if (!termsAccepted) {
       setSubmitTone("error");
       setSubmitMessage(
@@ -188,7 +172,7 @@ export function RequestForm({
           phone,
           email,
           message,
-          couponCode: pricing.couponCode ?? couponCode,
+          couponCode: pricing.couponCode,
           termsAccepted,
           termsVersion: BOOKING_TERMS_VERSION,
         }),
@@ -219,8 +203,8 @@ export function RequestForm({
       setSubmitMessage(
         pickLocalized(
           locale,
-          `Talebin olusturuldu. Referans kodun: ${payload.request.id}. Panelde yeni talep olarak listeleniyor.`,
-          `Your inquiry has been created. Reference code: ${payload.request.id}. It is now listed in the panel as a new inquiry.`,
+          `Talebiniz bize ulaştı. Referans kodunuz: ${payload.request.id}. Ekibimiz sizinle iletişime geçecek.`,
+          `Your inquiry has been received. Reference: ${payload.request.id}. Our team will contact you shortly.`,
         ),
       );
       setFullName("");
@@ -247,292 +231,44 @@ export function RequestForm({
     }
   }
 
-  return (
-    <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
-      <form
-        onSubmit={handleSubmit}
-        className="serene-card p-8"
-      >
-        <p className="serene-eyebrow">
-          {pickLocalized(locale, "Talep Bilgileri", "Inquiry Details")}
-        </p>
-        <h2 className="mt-4 font-display text-3xl font-semibold tracking-[-0.03em] text-[var(--serene-on-surface)]">
-          {pickLocalized(locale, "Gecerli tarih secimi ile panelde islenebilir talep olustur", "Create a panel-ready inquiry with valid dates")}
-        </h2>
-        <p className="mt-4 text-sm leading-8 text-[var(--serene-on-surface-variant)]">
-          {pickLocalized(
-            locale,
-            "Form tamamlandiginda kayit dogrudan paneldeki Talepler ekranina duser. Kupon kullanirsan toplam tutar burada ve panel kaydinda ayni sekilde gorunur.",
-            "Once submitted, the record appears directly in the panel inquiries screen. If you use a coupon, the same total is shown here and in the panel record.",
-          )}
-        </p>
-
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
-          <div>
-            <label htmlFor="fullName" className="text-sm font-medium text-[var(--serene-on-surface)]">
-              {pickLocalized(locale, "Ad soyad", "Full name")}
-            </label>
-            <input
-              id="fullName"
-              value={fullName}
-              onChange={(event) => setFullName(event.target.value)}
-              placeholder={pickLocalized(locale, "Ornek: Ayse Yilmaz", "Example: Emily Johnson")}
-              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
-            />
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
+  const href = (path: string) => getDemoCompanySiteHref(companySlug, path);
+  return <div className={s.requestGrid}>
+    <div className={s.requestMain}>
+      <RequestDateSelector villa={villa} initialCheckIn={checkIn} initialCheckOut={checkOut} locale={locale} companySlug={companySlug} validSelection />
+      <form onSubmit={handleSubmit}>
+        <div className={s.formHeader}><p className={s.eyebrow}>{t("02 / SİZİ TANIYALIM", "02 / A LITTLE ABOUT YOU")}</p><h2>{t("Tatiliniz burada başlıyor.", "Your holiday starts here.")}</h2><p>{t("Size ulaşabileceğimiz bilgileri paylaşın. Gerisini birlikte planlayalım.", "Leave your contact details. We will plan the next steps together.")}</p></div>
+        <fieldset disabled={isSubmitting} className={s.formGrid}>
+          <legend className="sr-only">{t("İletişim ve misafir bilgileri", "Contact and guest details")}</legend>
+          <label className={s.field}><span>{t("Ad soyad", "Full name")} *</span><input id="fullName" name="fullName" required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={t("Adınız ve soyadınız", "Your full name")} /></label>
+          <label className={s.field}><span>{t("Misafir sayısı", "Guest count")} *</span><input id="guestCount" name="guestCount" type="number" min={1} max={villa.capacity} step={1} required value={guestCount} onChange={(event) => setGuestCount(Number(event.target.value))} /></label>
+          <label className={s.field}><span>{t("Telefon", "Phone")} *</span><input id="phone" name="phone" type="tel" required autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+90 5xx xxx xx xx" /></label>
+          <label className={s.field}><span>{t("E-posta", "Email")} *</span><input id="email" name="email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="mail@example.com" /></label>
+          <label className={`${s.field} ${s.fullWidth}`}><span>{t("Bizimle paylaşmak istediğiniz bir not", "Anything you would like us to know")}</span><textarea id="message" name="message" value={message} onChange={(event) => setMessage(event.target.value)} rows={4} placeholder={t("Transfer, bebek yatağı veya özel istekleriniz…", "Transfers, a baby cot or any special requests…")} /></label>
+        </fieldset>
+        <details className={s.coupon}>
+          <summary>{t("Bir indirim kodunuz var mı?", "Have a discount code?")}</summary>
+          <div className={s.couponRow}>
+            <label className={s.field}><span>{t("Kupon kodu", "Coupon code")}</span><input id="couponCode" disabled={isApplyingCoupon || isSubmitting} value={couponCode} onChange={(event) => { setCouponCode(event.target.value.toUpperCase()); resetCouponState(); }} placeholder={t("Kodunuzu girin", "Enter your code")} /></label>
+            <button type="button" className={s.secondaryButton} onClick={handleApplyCoupon} disabled={isApplyingCoupon || isSubmitting}>{isApplyingCoupon ? t("Kontrol ediliyor…", "Checking…") : t("Kuponu uygula", "Apply coupon")}</button>
           </div>
-
-          <div>
-            <label htmlFor="guestCount" className="text-sm font-medium text-[var(--serene-on-surface)]">
-              {pickLocalized(locale, "Misafir sayisi", "Guest count")}
-            </label>
-            <input
-              id="guestCount"
-              type="number"
-              min={1}
-              max={villa.capacity}
-              value={guestCount}
-              onChange={(event) => setGuestCount(Number(event.target.value))}
-              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="phone" className="text-sm font-medium text-[var(--serene-on-surface)]">
-              {pickLocalized(locale, "Telefon", "Phone")}
-            </label>
-            <input
-              id="phone"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              placeholder="+90 5xx xxx xx xx"
-              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="text-sm font-medium text-[var(--serene-on-surface)]">
-              {pickLocalized(locale, "E-posta", "Email")}
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="ornek@mail.com"
-              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label htmlFor="message" className="text-sm font-medium text-[var(--serene-on-surface)]">
-              {pickLocalized(locale, "Ek not", "Additional note")}
-            </label>
-            <textarea
-              id="message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              rows={4}
-              placeholder={pickLocalized(
-                locale,
-                "Transfer, cocuk yatagi, erken giris gibi taleplerini yazabilirsin.",
-                "You can add notes such as transfer, baby cot or early check-in.",
-              )}
-              className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)] focus:bg-white"
-            />
-          </div>
-        </div>
-
-        <div className="mt-8 rounded-[16px] border border-[var(--color-border-soft)] bg-[var(--serene-surface-low)] p-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end">
-            <div className="flex-1">
-              <label htmlFor="couponCode" className="text-sm font-medium text-[var(--serene-on-surface)]">
-                {pickLocalized(locale, "Kupon kodu", "Coupon code")}
-              </label>
-              <input
-                id="couponCode"
-                value={couponCode}
-                onChange={(event) => {
-                  setCouponCode(event.target.value.toUpperCase());
-                  if (!event.target.value.trim()) {
-                    resetCouponState();
-                  }
-                }}
-                placeholder={pickLocalized(locale, "Ornek: YAZBASLIYOR10", "Example: SUMMERSTART10")}
-                className="mt-2 w-full rounded-[8px] border border-[var(--serene-outline-variant)] bg-white px-4 py-3 text-sm text-[var(--serene-on-surface)] outline-none transition focus:border-[var(--serene-primary)]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleApplyCoupon}
-              disabled={isApplyingCoupon}
-              className="serene-button-primary inline-flex items-center justify-center px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isApplyingCoupon
-                ? pickLocalized(locale, "Kontrol ediliyor...", "Checking...")
-                : pickLocalized(locale, "Kuponu Uygula", "Apply Coupon")}
-            </button>
-          </div>
-
-          {couponMessage ? (
-            <p
-              className={`mt-4 text-sm leading-7 ${
-                appliedCoupon ? "text-emerald-700" : "text-rose-700"
-              }`}
-            >
-              {couponMessage}
-            </p>
-          ) : null}
-        </div>
-
-        <label className="mt-6 flex items-start gap-3 rounded-[12px] border border-[var(--serene-outline-variant)] bg-white px-4 py-4 text-sm leading-6 text-[var(--serene-on-surface-variant)]">
-          <input
-            type="checkbox"
-            required
-            checked={termsAccepted}
-            onChange={(event) => setTermsAccepted(event.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-slate-300"
-          />
-          <span>
-            {pickLocalized(locale, "", "I have read and accept the ")}
-            <Link
-              href="/kullanim-kosullari"
-              target="_blank"
-              className="font-semibold text-[var(--serene-primary)] underline underline-offset-4"
-            >
-              {pickLocalized(locale, "Rezervasyon ve Kullanim Kosullari", "Booking and Usage Terms")}
-            </Link>
-            {pickLocalized(locale, ", ", ", ")}
-            <Link
-              href="/kvkk"
-              target="_blank"
-              className="font-semibold text-[var(--serene-primary)] underline underline-offset-4"
-            >
-              {pickLocalized(locale, "KVKK Aydinlatma Metni", "Privacy Notice")}
-            </Link>
-            {pickLocalized(
-              locale,
-              " ve rezervasyon talebi icin bilgilerimin islenmesini okudum, kabul ediyorum.",
-              " and consent to the processing of my information for this booking inquiry.",
-            )}
-          </span>
+          {couponMessage && <p role="status" className={s.notice} data-tone={appliedCoupon ? undefined : "error"} style={{ marginTop: 15 }}>{couponMessage}</p>}
+        </details>
+        <label className={s.consent}>
+          <input type="checkbox" required checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={isSubmitting} />
+          <span>{t("", "I have read and accept the ")}<Link href={href("/kullanim-kosullari")} target="_blank" rel="noopener noreferrer">{t("Rezervasyon ve Kullanım Koşulları", "Booking and Usage Terms")}</Link>{t(", ", ", ")}<Link href={href("/kvkk")} target="_blank" rel="noopener noreferrer">{t("KVKK Aydınlatma Metni", "Privacy Notice")}</Link>{t(" ve rezervasyon talebi için bilgilerimin işlenmesini okudum, kabul ediyorum.", " and consent to processing my information for this booking inquiry.")}</span>
         </label>
-
-        {submitMessage ? (
-          <div
-            className={`mt-6 rounded-[1.4rem] border px-4 py-3 text-sm ${
-              submitTone === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-rose-200 bg-rose-50 text-rose-700"
-            }`}
-          >
-            {submitMessage}
-            {confirmationPath ? (
-              <Link
-                href={confirmationPath}
-                className="mt-3 block font-semibold underline underline-offset-4"
-              >
-                {pickLocalized(locale, "Talep durumunu goruntule", "View inquiry status")}
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="mt-8 flex flex-wrap gap-3">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="serene-button-primary inline-flex px-6 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting
-              ? pickLocalized(locale, "Kaydediliyor...", "Saving...")
-              : pickLocalized(locale, "Talebi Gonder", "Send Inquiry")}
-          </button>
-          <Link
-            href={`/villalar/${villa.slug}`}
-            className="serene-button-secondary inline-flex px-6 py-3 text-sm font-semibold"
-          >
-            {pickLocalized(locale, "Villa Detayina Don", "Back to Villa Details")}
-          </Link>
+        {submitMessage && <div role={submitTone === "error" ? "alert" : "status"} className={s.notice} data-tone={submitTone === "error" ? "error" : undefined}>{submitMessage}{confirmationPath && <Link href={href(confirmationPath)} className={s.textLink}>{t("Talep durumunu görüntüle", "View inquiry status")}</Link>}</div>}
+        <div className={s.submitTotal} aria-live="polite"><span>{pickLocalized(locale, "Konaklama toplamı", "Stay total")} · {pricing.nightCount} {pickLocalized(locale, "gece", "nights")}</span><strong>{formatCurrency(pricing.grandTotal, locale)}</strong></div>
+        <div className={s.submitRow}>
+          <button type="submit" disabled={isSubmitting || isApplyingCoupon} className={s.button}>{isSubmitting ? t("Gönderiliyor…", "Sending…") : t("Talebimi gönder", "Send my inquiry")}<SiteIcon name="arrow" /></button>
+          <span className={s.note}>{t("Şimdi ödeme yapmanız gerekmez.", "No payment is required now.")}</span>
         </div>
       </form>
-
-      <aside className="space-y-6">
-        <div className="rounded-[16px] bg-ocean-panel p-8 text-white shadow-[0_20px_50px_rgba(26,54,93,0.18)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-tertiary-soft)]">
-            {pickLocalized(locale, "Secim Ozeti", "Selection Summary")}
-          </p>
-          <h3 className="mt-4 text-3xl font-semibold leading-tight">{localizedVilla.title}</h3>
-          <div className="mt-5 space-y-3 text-sm text-slate-300">
-            <p>
-              {pickLocalized(locale, "Giris", "Check-in")}: {formatShortDate(checkIn, locale)}
-            </p>
-            <p>
-              {pickLocalized(locale, "Cikis", "Check-out")}: {formatShortDate(checkOut, locale)}
-            </p>
-            <p>
-              {pickLocalized(locale, "Konaklama", "Stay")}: {pricing.nightCount}{" "}
-              {pickLocalized(locale, "gece", "nights")}, {pickLocalized(locale, "minimum", "minimum")}{" "}
-              {localizedVilla.minNightCount ?? 1} {pickLocalized(locale, "gece", "nights")}
-            </p>
-            <p>
-              {pickLocalized(locale, "Kapasite", "Capacity")}: {pickLocalized(
-                locale,
-                `en fazla ${localizedVilla.capacity} misafir`,
-                `up to ${localizedVilla.capacity} guests`,
-              )}
-            </p>
-          </div>
-        </div>
-
-        <div className="serene-card p-8">
-          <p className="serene-eyebrow">
-            {pickLocalized(locale, "Fiyat Ozeti", "Price Summary")}
-          </p>
-          <div className="mt-6 space-y-4">
-            <div className="flex items-center justify-between text-sm text-slate-600">
-              <span>{pickLocalized(locale, "Gecelik fiyat", "Nightly price")}</span>
-              <span className="font-semibold text-slate-900">
-                {formatCurrency(pricing.discountedNightlyPrice, locale)}
-              </span>
-            </div>
-
-            {totalSummary.map((item) => (
-              <div key={item.label} className="flex items-center justify-between gap-4 text-sm">
-                <span className="text-slate-500">{item.label}</span>
-                <span className="font-semibold text-slate-900">{item.value}</span>
-              </div>
-            ))}
-
-            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-              <span className="text-base font-semibold text-slate-900">
-                {pickLocalized(locale, "Toplam", "Total")}
-              </span>
-              <span className="text-2xl font-semibold text-slate-900">
-                {formatCurrency(pricing.grandTotal, locale)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="serene-card p-8">
-          <p className="serene-eyebrow">
-            {pickLocalized(locale, "Panel Etkisi", "Panel Effect")}
-          </p>
-          <p className="mt-4 text-sm leading-8 text-[var(--serene-on-surface-variant)]">
-            {pickLocalized(
-              locale,
-              "Bu kayit admin panelindeki ",
-              "This record appears in the admin panel ",
-            )}
-            <strong>{pickLocalized(locale, "Talepler", "Inquiries")}</strong>
-            {pickLocalized(
-              locale,
-              " ekraninda durum degistirilebilir, raporlara yansir ve ilgili villanin ilgi metriklerini besler.",
-              " screen, where its status can be updated, reflected in reports and used to feed the villa's interest metrics.",
-            )}
-          </p>
-        </div>
-      </aside>
     </div>
-  );
+    <aside className={s.bookingAside}>
+      <RequestSummary villa={villa} checkIn={checkIn} checkOut={checkOut} pricing={pricing} guestCount={guestCount} locale={locale} />
+      <div className={s.bookingHelp}><SiteIcon name="sun" /><div>{t("Tatil planınızda yanınızdayız.", "Here to help plan your stay.")}<Link href={href("/iletisim")}>{t("Bir sorum var", "I have a question")}</Link></div></div>
+    </aside>
+  </div>;
 }

@@ -5,6 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { createHmac } = require('node:crypto');
+const http = require('node:http');
 const { loadTs } = require('./load-ts.cjs');
 
 async function main() {
@@ -19,7 +20,12 @@ async function main() {
   const other = { ...seedVillaCatalog[1], companyId: 'seed-company-sahil', slug: 'other-company-test', status: 'ACTIVE', availabilityRanges: [] };
   const files = { 'demo-villas.json': [villa, other], 'demo-companies.json': demoCompanies,
     'demo-pricing.json': [], 'demo-discounts.json': [], 'demo-coupons.json': [], 'demo-requests.json': [],
-    'demo-invoices.json': [], 'demo-payments.json': [], 'demo-operation-tasks.json': [], 'demo-region-airports.json': [] };
+    'demo-invoices.json': [], 'demo-payments.json': [], 'demo-operation-tasks.json': [], 'demo-region-airports.json': [],
+    'demo-websites.json': [
+      { id: 'test-site-a', companyId, name: 'Test A', domain: 'a.test', locale: 'tr-TR', status: 'LIVE', default: true, primaryChannel: 'Direct', themeKey: 'marketplace-core', updatedAt: new Date().toISOString() },
+      { id: 'test-site-a-micro', companyId, name: 'Test A Collection', domain: 'collection.a.test', locale: 'tr-TR', status: 'LIVE', default: false, primaryChannel: 'Direct', themeKey: 'kiyi', updatedAt: new Date().toISOString() },
+      { id: 'test-site-b', companyId: other.companyId, name: 'Test B', domain: 'b.test', locale: 'tr-TR', status: 'LIVE', default: true, primaryChannel: 'Direct', themeKey: 'rota', updatedAt: new Date().toISOString() },
+    ] };
   for (const [name, value] of Object.entries(files)) await fs.writeFile(path.join(directory, name), JSON.stringify(value));
   const port = process.env.SMOKE_PORT || '3012';
   const base = `http://localhost:${port}`;
@@ -44,10 +50,58 @@ async function main() {
     let json; try { json = JSON.parse(text); } catch { json = null; }
     return { status: response.status, json, text };
   }
+  function hostedPage(host, route = '/') {
+    // Node fetch normalizes Host; use a raw HTTP request for virtual-host routing tests.
+    return new Promise((resolve, reject) => {
+      http.get(base + route, { headers: { Host: host } }, (response) => {
+        let html = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => { html += chunk; });
+        response.on('end', () => resolve(html));
+      }).on('error', reject);
+    });
+  }
   try {
     for (let i = 0; i < 120 && !log.includes('Ready in'); i++) {
       if (server.exitCode !== null) throw new Error(`Server exited: ${log.slice(-2000)}`);
       await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    {
+      const siteRoute = '/api/demo/websites/sites/test-site-a';
+      assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', '')).status, 401);
+      assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', cookie('STAFF'))).status, 403);
+      assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', cookie('ADMIN', other.companyId))).status, 403);
+      assert.equal((await call(siteRoute, { themeKey: 'invalid' }, 'PATCH')).status, 400);
+      assert.equal((await call(siteRoute, { companyId: other.companyId }, 'PATCH')).status, 400);
+      assert.match((await call('/?company=villavera', undefined, 'GET', '')).text, /data-site-theme="secki"/);
+      for (const themeKey of ['kiyi', 'rota', 'secki']) {
+        const updated = await call(siteRoute, { themeKey }, 'PATCH', cookie('ADMIN'));
+        assert.equal(updated.status, 200, updated.text);
+        assert.equal(updated.json.website.themeKey, themeKey);
+        const home = await call('/?company=villavera', undefined, 'GET', '');
+        assert.equal(home.status, 200, home.text.slice(0, 300));
+        assert.match(home.text, new RegExp(`data-site-theme="${themeKey}"`));
+        assert.doesNotMatch(home.text, /PRIVATE_OWNER_MARKER|PRIVATE_SUPPLIER_MARKER/);
+      }
+      const savedSites = JSON.parse(await fs.readFile(path.join(directory, 'demo-websites.json'), 'utf8'));
+      assert.equal(savedSites.find(site => site.id === 'test-site-a').themeKey, 'secki');
+      assert.equal(savedSites.find(site => site.id === 'test-site-b').themeKey, 'rota');
+      const otherHome = await call('/?company=sahil-collection', undefined, 'GET', '');
+      assert.match(otherHome.text, /data-site-theme="rota"/);
+      const hostedText = await hostedPage('b.test', '/?company=villavera');
+      assert.match(hostedText, /data-site-theme="rota"/);
+      assert.match(hostedText, /Sahil Collection/);
+      assert.match(await hostedPage('collection.a.test'), /data-site-theme="kiyi"/);
+      const english = await call('/?company=villavera', undefined, 'GET', 'villaweb-locale=en');
+      assert.match(english.text, /Beyond the/);
+      assert.doesNotMatch(english.text, /Olağanın/);
+      const panel = await call('/panel/web-siteleri/site-yonetimi', undefined, 'GET', cookie('ADMIN'));
+      assert.equal(panel.status, 200);
+      assert.match(panel.text, /Seçili tasarımı uygula/);
+      // Next dev includes raw filesystem reads in RSC debug traces, not in rendered UI.
+      const panelMarkup = panel.text.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+      assert.doesNotMatch(panelMarkup, /Test B/);
+      console.log('PASS templates: persistence, three renderers, role/tenant isolation, domain routing, English and panel picker');
     }
     const periodRoute = `/api/demo/villas/${villa.slug}/pricing-periods`;
     const period = { title: 'Test sezon', startDate: '2027-07-01', endDate: '2027-07-31', nightlyPrice: 2500, cleaningFee: 100, minNightCount: 2 };
@@ -113,6 +167,29 @@ async function main() {
     assert.equal((await call(`/api/ical/${companyId}/${villa.slug}?token=wrong`, undefined, 'GET', '')).status, 403);
     const inquiry = { villaSlug: villa.slug, checkIn: '2027-07-10', checkOut: '2027-07-13', guestCount: 2,
       fullName: 'Smoke Test Guest', phone: '05000000000', email: 'smoke@example.test', termsAccepted: true, termsVersion: '2026-10' };
+    {
+      const requestUrl = `/talep?company=villavera&villa=${villa.slug}`;
+      const markup = (html) => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+      const valid = await call(`${requestUrl}&checkIn=2027-07-10&checkOut=2027-07-13`, undefined, 'GET', '');
+      assert.equal(valid.status, 200);
+      assert.match(markup(valid.text), /name="fullName"/);
+      assert.match(markup(valid.text), /KONAKLAMA ÖZETİNİZ/);
+      assert.doesNotMatch(valid.text, /PRIVATE_OWNER_MARKER|PRIVATE_SUPPLIER_MARKER/);
+      for (const query of ['', '&checkIn=2020-01-01&checkOut=2020-01-04', '&checkIn=2027-08-10&checkOut=2027-08-12', '&checkIn=2027-07-10&checkOut=2027-07-11']) {
+        const invalid = await call(requestUrl + query, undefined, 'GET', '');
+        assert.equal(invalid.status, 200);
+        assert.doesNotMatch(markup(invalid.text), /name="fullName"/);
+      }
+      const englishRequest = await call(`${requestUrl}&checkIn=2027-07-10&checkOut=2027-07-13`, undefined, 'GET', 'villaweb-locale=en');
+      assert.match(markup(englishRequest.text), /YOUR STAY AT A GLANCE/);
+      const listing = await call('/villalar?company=villavera&location=TEST-REPORT&checkIn=2027-07-10&checkOut=2027-07-13', undefined, 'GET', '');
+      assert.equal(listing.status, 200);
+      assert.match(markup(listing.text), /checkIn=2027-07-10/);
+      assert.doesNotMatch(markup(listing.text), /other-company-test/);
+      const impossible = await call('/villalar?company=villavera&maxPrice=0', undefined, 'GET', '');
+      assert.match(markup(impossible.text), /Bu seçimlerle bir villa bulamadık/);
+      console.log('PASS Secki stay pages: dates, pricing summary, English, filter results and tenant scope');
+    }
     assert.equal((await call('/api/demo/requests', { ...inquiry, termsVersion: 'old' }, 'POST', '')).status, 400);
     assert.equal((await call('/api/demo/requests', { ...inquiry, termsAccepted: false }, 'POST', '')).status, 400);
     assert.equal((await call('/api/demo/requests', { ...inquiry, checkIn: '2027-08-10', checkOut: '2027-08-12' }, 'POST', '')).status, 400);

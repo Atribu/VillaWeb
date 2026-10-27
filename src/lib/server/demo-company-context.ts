@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies, headers } from "next/headers";
+import { cache } from "react";
 import {
   DEMO_COMPANY_COOKIE_NAME,
   type DemoCompanyRecord,
@@ -10,6 +11,7 @@ import {
   getCompanyRecordById,
   getCompanyRecordBySlug,
   getDefaultCompanyRecord,
+  getCompanyRecordForHost,
 } from "@/lib/server/company-store";
 
 export type DemoCompanyScope = {
@@ -93,7 +95,10 @@ export async function assertSuperAdminPanelAccess() {
   }
 }
 
-export async function getCurrentPublicCompany(): Promise<DemoCompanyRecord> {
+export const getCurrentPublicCompany = cache(async (): Promise<DemoCompanyRecord> => {
+  // A registered domain is authoritative; query/cookie selection is for the shared demo host.
+  const domainCompany = await getCompanyRecordForHost((await headers()).get("host") ?? "");
+  if (domainCompany) return domainCompany;
   const headerSlug = await readCompanySlugFromHeaders();
   const cookieSlug = await readCompanySlugFromCookies();
   const resolved =
@@ -106,7 +111,7 @@ export async function getCurrentPublicCompany(): Promise<DemoCompanyRecord> {
   }
 
   return resolved;
-}
+});
 
 export async function getCurrentCompanyLabel() {
   const session = await getUserSession().catch(() => null);

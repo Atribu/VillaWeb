@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { getDemoCompanySiteHref } from "@/lib/demo-companies";
+import { isDateKey } from "@/lib/booking-dates";
+import { StayModal } from "@/components/site-templates/stay-modal";
+import { SiteIcon } from "@/components/site-templates/site-icon";
+import s from "@/components/site-templates/stay-pages.module.css";
 import type { AppLocale } from "@/lib/i18n";
 import { pickLocalized } from "@/lib/i18n";
 import {
@@ -9,7 +14,7 @@ import {
   getLocalizedVilla,
 } from "@/lib/villa-content-i18n";
 import type { CatalogVilla } from "@/lib/villa-catalog";
-import { formatCurrency, formatShortDate } from "@/lib/villa-catalog";
+import { formatShortDate } from "@/lib/villa-catalog";
 import { getMinimumNightCountForStay } from "@/lib/demo-operations";
 import {
   findBlockedRange,
@@ -22,6 +27,10 @@ import {
 type AvailabilityCardProps = {
   villa: CatalogVilla;
   locale?: AppLocale;
+  companySlug?: string;
+  initialCheckIn?: string;
+  initialCheckOut?: string;
+  onSelect?: (checkIn: string, checkOut: string) => void;
 };
 
 type AvailabilityRange = CatalogVilla["availabilityRanges"][number];
@@ -62,18 +71,6 @@ function getMonthDays(date: Date) {
   return cells;
 }
 
-function getSelectionStep(checkIn: string, checkOut: string, locale: AppLocale) {
-  if (!checkIn) {
-    return pickLocalized(locale, "1. adim: Giris tarihini sec", "Step 1: Select check-in");
-  }
-
-  if (!checkOut) {
-    return pickLocalized(locale, "2. adim: Cikis tarihini sec", "Step 2: Select check-out");
-  }
-
-  return pickLocalized(locale, "Secim tamamlandi", "Selection complete");
-}
-
 function getModalHeading(
   availability: {
     status: "idle" | "invalid" | "blocked" | "available";
@@ -97,11 +94,15 @@ function getModalHeading(
 export function VillaAvailabilityCard({
   villa,
   locale = "tr",
+  companySlug,
+  initialCheckIn = "",
+  initialCheckOut = "",
+  onSelect,
 }: AvailabilityCardProps) {
   const localizedVilla = useMemo(() => getLocalizedVilla(villa, locale), [locale, villa]);
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [visibleMonth, setVisibleMonth] = useState(() => getStartOfMonth(new Date()));
+  const [checkIn, setCheckIn] = useState(isDateKey(initialCheckIn) ? initialCheckIn : "");
+  const [checkOut, setCheckOut] = useState(isDateKey(initialCheckOut) ? initialCheckOut : "");
+  const [visibleMonth, setVisibleMonth] = useState(() => getStartOfMonth(isDateKey(initialCheckIn) && initialCheckIn >= toDateKey(new Date()) ? new Date(`${initialCheckIn}T12:00:00`) : new Date()));
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const today = useMemo(() => toDateKey(new Date()), []);
   const currentMonth = useMemo(() => getStartOfMonth(new Date()), []);
@@ -183,13 +184,13 @@ export function VillaAvailabilityCard({
 
     const nightCount = getNightCount(checkIn, checkOut);
 
-    if (nightCount <= 0) {
+    if (nightCount <= 0 || checkIn < today) {
       return {
         status: "invalid" as const,
         message: pickLocalized(
           locale,
-          "Cikis tarihi, giris tarihinden sonra olmalidir.",
-          "Check-out must be after check-in.",
+          "Giriş geçmişte olamaz; çıkış tarihi girişten sonra olmalıdır.",
+          "Arrival cannot be in the past; departure must be after arrival.",
         ),
         blockedRange: null,
         nightCount: 0,
@@ -242,162 +243,38 @@ export function VillaAvailabilityCard({
       blockedRange: null,
       nightCount,
     };
-  }, [checkIn, checkOut, locale, localizedVilla]);
+  }, [checkIn, checkOut, locale, localizedVilla, today]);
 
-  const statusClasses =
-    availability.status === "available"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : availability.status === "blocked" || availability.status === "invalid"
-      ? "border-rose-200 bg-rose-50 text-rose-700"
-      : "border-[var(--serene-outline-variant)] bg-white text-[var(--serene-on-surface-variant)]";
-
-  const requestHref =
-    availability.status === "available"
-      ? `/talep?villa=${localizedVilla.slug}&checkIn=${checkIn}&checkOut=${checkOut}`
-      : null;
-
-  const selectionStep = getSelectionStep(checkIn, checkOut, locale);
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
+  const selectedRequest = `/talep?villa=${encodeURIComponent(villa.slug)}&checkIn=${checkIn}&checkOut=${checkOut}`;
+  const requestHref = companySlug ? getDemoCompanySiteHref(companySlug, selectedRequest) : selectedRequest;
   const modalHeading = getModalHeading(availability, checkIn, checkOut, locale);
 
-  return (
-    <>
-      <div className="serene-card p-5 text-[var(--color-ink)]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="serene-eyebrow">
-              {pickLocalized(locale, "Rezervasyon Takvimi", "Reservation Calendar")}
-            </p>
-            <p className="mt-2 font-display text-[1.85rem] font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
-              {pickLocalized(locale, "Tarih secerek devam et", "Continue by selecting dates")}
-            </p>
-          </div>
-          {availability.nightCount > 0 ? (
-            <span className="rounded-[8px] bg-[var(--serene-tertiary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--serene-tertiary-deep)]">
-              {availability.nightCount} {pickLocalized(locale, "gece", "nights")}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setIsCalendarOpen(true)}
-            className={`rounded-[8px] border px-4 py-3 text-left transition ${
-              checkIn ? "border-[var(--serene-primary)] bg-[var(--serene-primary-soft)]" : "border-[var(--serene-outline-variant)] bg-white"
-            }`}
-          >
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
-              {pickLocalized(locale, "Giris", "Check-in")}
-            </span>
-            <span className="mt-2 block text-base font-semibold text-[var(--serene-on-surface)]">
-              {checkIn
-                ? formatShortDate(checkIn, locale)
-                : pickLocalized(locale, "Tarih sec", "Select date")}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsCalendarOpen(true)}
-            className={`rounded-[8px] border px-4 py-3 text-left transition ${
-              checkOut ? "border-[var(--serene-primary)] bg-[var(--serene-primary-soft)]" : "border-[var(--serene-outline-variant)] bg-white"
-            }`}
-          >
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
-              {pickLocalized(locale, "Cikis", "Check-out")}
-            </span>
-            <span className="mt-2 block text-base font-semibold text-[var(--serene-on-surface)]">
-              {checkOut
-                ? formatShortDate(checkOut, locale)
-                : pickLocalized(locale, "Tarih sec", "Select date")}
-            </span>
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setIsCalendarOpen(true)}
-            className="serene-button-secondary inline-flex px-4 py-2.5 text-sm font-semibold"
-          >
-            {pickLocalized(locale, "Takvimi Ac", "Open Calendar")}
-          </button>
-          <span className="rounded-[8px] bg-[var(--serene-surface-low)] px-3 py-1.5 text-xs font-semibold text-[var(--serene-primary)]">
-            {selectionStep}
-          </span>
-          {(checkIn || checkOut) && (
-            <button
-              type="button"
-              onClick={clearAll}
-              className="ml-auto text-sm font-semibold text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
-            >
-              {pickLocalized(locale, "Tarihleri temizle", "Clear dates")}
-            </button>
-          )}
-        </div>
-
-        <div className={`mt-4 rounded-[1.1rem] border px-4 py-3 text-sm leading-6 ${statusClasses}`}>
-          {availability.message}
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[8px] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface-variant)]">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
-              {pickLocalized(locale, "Minimum gece", "Minimum nights")}
-            </span>
-            <span className="mt-2 block font-semibold text-[var(--serene-on-surface)]">
-              {localizedVilla.minNightCount ?? 1} {pickLocalized(locale, "gece", "nights")}
-            </span>
-          </div>
-          <div className="rounded-[8px] bg-[var(--serene-surface-low)] px-4 py-3 text-sm text-[var(--serene-on-surface-variant)]">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--serene-outline)]">
-              {pickLocalized(locale, "Temizlik", "Cleaning")}
-            </span>
-            <span className="mt-2 block font-semibold text-[var(--serene-on-surface)]">
-              {formatCurrency(localizedVilla.cleaningFee ?? 0, locale)}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-          {requestHref ? (
-            <Link
-              href={requestHref}
-              className="serene-button-primary rounded-[8px] px-5 py-3 text-center text-sm font-semibold"
-            >
-              {pickLocalized(locale, "Bu Tarihler Icin Talep Gonder", "Send Inquiry for These Dates")}
-            </Link>
-          ) : (
-            <span className="rounded-[8px] bg-[var(--serene-surface-container)] px-5 py-3 text-center text-sm font-semibold text-[var(--serene-on-surface-variant)]">
-              {pickLocalized(
-                locale,
-                "Uygun Giris ve Cikis Tarihi Sec",
-                "Select Valid Check-in and Check-out Dates",
-              )}
-            </span>
-          )}
-          <Link
-            href="/iletisim"
-            className="serene-button-secondary rounded-[8px] px-5 py-3 text-center text-sm font-semibold"
-          >
-            {pickLocalized(locale, "Destek Al", "Get Support")}
-          </Link>
-        </div>
+  return <>
+    <div className={s.calendarCard}>
+      <h2>{t("Güzel günlerinizi seçin.", "Choose your days away.")}</h2>
+      <div className={s.dateButtons}>
+        <button type="button" onClick={() => setIsCalendarOpen(true)} aria-haspopup="dialog"><span>{t("Giriş", "Check-in")}</span><strong>{checkIn ? formatShortDate(checkIn, locale) : t("Tarih seç", "Select date")}</strong></button>
+        <button type="button" onClick={() => setIsCalendarOpen(true)} aria-haspopup="dialog"><span>{t("Çıkış", "Check-out")}</span><strong>{checkOut ? formatShortDate(checkOut, locale) : t("Tarih seç", "Select date")}</strong></button>
       </div>
-
-      {isCalendarOpen ? (
-        <div
-          className="fixed inset-0 z-50 bg-[#001b3c]/60 p-4 backdrop-blur-[3px] sm:p-6"
-          onClick={() => setIsCalendarOpen(false)}
-        >
-          <div className="flex min-h-full items-center justify-center">
-            <div
-              className="w-full max-w-5xl rounded-[16px] border border-[var(--color-border-soft)] bg-white p-5 shadow-2xl shadow-[rgba(0,27,60,0.24)] sm:p-6"
-              onClick={(event) => event.stopPropagation()}
-            >
+      <div className={s.calendarTools}>
+        <button type="button" onClick={() => setIsCalendarOpen(true)}>{t("Takvimi aç", "Open calendar")}</button>
+        {(checkIn || checkOut) && <button type="button" onClick={clearAll}>{t("Tarihleri temizle", "Clear dates")}</button>}
+      </div>
+      <p className={s.notice} data-tone={availability.status === "blocked" || availability.status === "invalid" ? "error" : undefined} aria-live="polite">{availability.message}</p>
+      <p className={s.note} style={{ marginTop: 12 }}>{t("Minimum", "Minimum")} {getMinimumNightCountForStay(localizedVilla, checkIn, checkOut)} {t("gece", "nights")} · {t("Dolu tarihler seçilemez.", "Unavailable dates cannot be selected.")}</p>
+      {availability.status === "available"
+        ? onSelect
+          ? <button type="button" className={s.button} onClick={() => onSelect(checkIn, checkOut)}>{t("Tarihleri uygula", "Apply dates")}<SiteIcon name="arrow" /></button>
+          : <Link href={requestHref} className={s.button}>{t("Bu tarihler için talep gönder", "Send inquiry for these dates")}<SiteIcon name="arrow" /></Link>
+        : <button type="button" className={s.button} onClick={() => setIsCalendarOpen(true)}><SiteIcon name="calendar" />{t("Uygun tarihleri gör", "See available dates")}</button>}
+      <p className={s.note} style={{ textAlign: "center", marginTop: 12 }}>{t("Bu aşamada ödeme alınmaz.", "You will not be charged at this stage.")}</p>
+    </div>
+    {isCalendarOpen && <StayModal label={t("Konaklama tarihlerini seç", "Choose your stay dates")} onClose={() => setIsCalendarOpen(false)}>
+              <div className="mb-5 flex justify-end"><button type="button" autoFocus className={s.dialogClose} onClick={() => setIsCalendarOpen(false)}>{pickLocalized(locale, "Kapat", "Close")}</button></div>
               <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="font-display text-4xl font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
+                  <p className="font-display text-3xl font-normal tracking-[-0.04em] text-[var(--serene-on-surface)]">
                     {modalHeading}
                   </p>
                   <p className="mt-2 text-sm text-slate-500">
@@ -410,7 +287,7 @@ export function VillaAvailabilityCard({
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[360px]">
                   <div
-                    className={`rounded-[1rem] border px-4 py-3 ${
+                    className={`rounded-[4px] border px-4 py-3 ${
                       checkIn ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
                     }`}
                   >
@@ -428,6 +305,7 @@ export function VillaAvailabilityCard({
                       {checkIn ? (
                         <button
                           type="button"
+                          aria-label={pickLocalized(locale, "Giriş tarihini temizle", "Clear check-in date")}
                           onClick={clearCheckIn}
                           className="rounded-[8px] px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                         >
@@ -438,7 +316,7 @@ export function VillaAvailabilityCard({
                   </div>
 
                   <div
-                    className={`rounded-[1rem] border px-4 py-3 ${
+                    className={`rounded-[4px] border px-4 py-3 ${
                       checkOut ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
                     }`}
                   >
@@ -456,6 +334,7 @@ export function VillaAvailabilityCard({
                       {checkOut ? (
                         <button
                           type="button"
+                          aria-label={pickLocalized(locale, "Çıkış tarihini temizle", "Clear check-out date")}
                           onClick={clearCheckOut}
                           className="rounded-[8px] px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                         >
@@ -485,23 +364,23 @@ export function VillaAvailabilityCard({
                 </button>
               </div>
 
-              <div className="mt-6 grid gap-6 xl:grid-cols-2">
+              <div className="mt-6 grid gap-6 md:grid-cols-2">
                 {visibleMonths.map((monthDate) => (
                   <div key={`${monthDate.getFullYear()}-${monthDate.getMonth()}`}>
-                    <p className="text-center text-2xl font-semibold text-slate-900">
+                    <p className="text-center text-base font-semibold text-slate-900">
                       {getMonthLabel(monthDate, locale)}
                     </p>
 
-                    <div className="mt-6 grid grid-cols-7 gap-2 text-center text-xs font-medium text-slate-500">
+                    <div className="mt-6 grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500">
                       {weekdayLabels.map((label) => (
                         <span key={label}>{label}</span>
                       ))}
                     </div>
 
-                    <div className="mt-4 grid grid-cols-7 gap-2">
+                    <div className="mt-4 grid grid-cols-7 gap-1">
                       {getMonthDays(monthDate).map((day, index) => {
                         if (!day) {
-                          return <div key={`empty-${index}`} className="h-11 rounded-full" />;
+                          return <div key={`empty-${index}`} className="h-10 rounded-full" />;
                         }
 
                         const dateKey = toDateKey(day);
@@ -559,8 +438,10 @@ export function VillaAvailabilityCard({
                             type="button"
                             disabled={isDisabled}
                             title={title}
+                            aria-label={`${formatShortDate(dateKey, locale)} · ${title}`}
+                            aria-pressed={isSelectedStart || isSelectedEnd}
                             onClick={() => handleDateSelection(dateKey)}
-                            className={`h-11 rounded-full border text-sm font-semibold transition ${dayClasses}`}
+                            className={`h-10 rounded-full border text-sm font-semibold transition ${dayClasses}`}
                           >
                             {dayNumber}
                           </button>
@@ -604,10 +485,6 @@ export function VillaAvailabilityCard({
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
+    </StayModal>}
+  </>;
 }

@@ -5,7 +5,7 @@ import { canAccessPanelPath, getPanelHomePath } from "@/lib/auth/panel-access";
 import { SESSION_COOKIE_NAME, readSessionToken } from "@/lib/auth/session";
 import { APP_LOCALE_COOKIE_NAME, normalizeAppLocale } from "@/lib/i18n";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const companySlugFromUrl = request.nextUrl.searchParams.get("company");
   const companySlugFromCookie = request.cookies.get(DEMO_COMPANY_COOKIE_NAME)?.value;
@@ -15,6 +15,7 @@ export async function middleware(request: NextRequest) {
     companySlugFromUrl?.trim().toLowerCase() || companySlugFromCookie?.trim().toLowerCase() || null;
   const resolvedLocale = normalizeAppLocale(localeFromUrl ?? localeFromCookie);
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete("x-demo-company-slug");
 
   if (resolvedCompanySlug) {
     requestHeaders.set("x-demo-company-slug", resolvedCompanySlug);

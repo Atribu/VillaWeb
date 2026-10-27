@@ -17,8 +17,8 @@ export default async function PanelCalendarSourcesPage() {
           Kanal bazli takvim kaynaklarini aktif olarak yonet
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Her kaynak ilgili villa ve kanal baglantisini temsil eder. Manuel senkron butonu yeni
-          log kaydi olusturur ve kaynak sagligini gunceller.
+          Manuel Senkron, kanal takvimini indirip ilgili villanin dolulugunu gunceller.
+          Hatalarda eski doluluk korunur; degisiklikler ve cakismalar senkron loglarinda gorunur.
         </p>
       </div>
 

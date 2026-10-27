@@ -1,4 +1,5 @@
 import type { CatalogVilla } from "@/lib/villa-catalog";
+import { todayInTurkey } from "@/lib/booking-dates";
 import { getFallbackCompanyIdForVillaSlug } from "@/lib/demo-companies";
 import { formatCurrency, seedVillaCatalog } from "@/lib/villa-catalog";
 import { getNightCount } from "@/lib/villa-availability";
@@ -456,7 +457,7 @@ export function getActiveDiscountForVilla(
     referenceDate?: string;
   },
 ) {
-  const referenceDate = input?.referenceDate ?? DEMO_REFERENCE_DATE;
+  const referenceDate = input?.referenceDate ?? todayInTurkey();
 
   return (
     [...discounts]

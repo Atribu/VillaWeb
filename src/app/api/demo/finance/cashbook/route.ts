@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoCashDirection } from "@/lib/demo-finance";
 import {
@@ -10,6 +11,8 @@ export const runtime = "nodejs";
 const ALLOWED_DIRECTIONS = new Set<DemoCashDirection>(["INCOME", "EXPENSE"]);
 
 export async function POST(request: Request) {
+  const denied = await authorizePanelApi(request, "finance");
+  if (denied) return denied;
   try {
     const payload = (await request.json()) as {
       direction?: DemoCashDirection;
@@ -35,6 +38,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ entry });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoFinanceStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

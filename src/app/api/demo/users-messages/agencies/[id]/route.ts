@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoAgencyStatus } from "@/lib/demo-users-messages";
 import {
@@ -16,6 +17,8 @@ type RouteContext = {
 const ALLOWED_STATUSES = new Set<DemoAgencyStatus>(["ACTIVE", "PAUSED"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "users");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -30,6 +33,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ agency });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoUsersMessagesStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

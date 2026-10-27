@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoPaymentMethodStatus } from "@/lib/demo-settings";
 import {
@@ -16,6 +17,8 @@ type RouteContext = {
 const ALLOWED_STATUSES = new Set<DemoPaymentMethodStatus>(["ACTIVE", "PASSIVE"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "settings");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -35,6 +38,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const method = await updateDemoPaymentMethod(id, payload);
     return NextResponse.json({ method });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoSettingsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

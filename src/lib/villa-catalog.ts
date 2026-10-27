@@ -40,6 +40,8 @@ export type AvailabilityRange = {
    * hangi request'e ait olduğunu tutar. Manuel bloklarda undefined kalır.
    */
   sourceRequestId?: string;
+  calendarSourceId?: string;
+  externalEventId?: string;
 };
 
 export type VillaAmenityItem = {

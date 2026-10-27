@@ -1,4 +1,6 @@
 import "server-only";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
@@ -27,6 +29,8 @@ import {
 import {
   assertPanelCompanyAccess,
   resolvePanelCompanyId,
+  resolveCatalogCompanyId,
+  type CatalogReadScope,
 } from "@/lib/server/demo-company-context";
 import {
   dateKey,
@@ -59,12 +63,13 @@ import {
   isDevelopmentFallbackForced,
   isPrismaConnectionError,
   withDevelopmentFallback,
+  writeDevelopmentDataFile,
 } from "@/lib/server/development-fallback";
 
 export class DemoOperationsStoreError extends Error {}
 
-async function queryScopedVillas(input?: { companyId?: string | null; includeAll?: boolean }) {
-  const companyId = await resolvePanelCompanyId(input);
+async function queryScopedVillas(input?: CatalogReadScope) {
+  const companyId = await resolveCatalogCompanyId(input);
 
   return db.villa.findMany({
     where: companyId ? { companyId } : undefined,
@@ -82,6 +87,7 @@ async function queryScopedVillas(input?: { companyId?: string | null; includeAll
 }
 
 export async function getDemoPricingRecords(input?: {
+  publicSite?: boolean;
   companyId?: string | null;
   includeAll?: boolean;
 }) {
@@ -100,17 +106,18 @@ export async function getDemoPricingRecords(input?: {
         }) satisfies DemoPricingRecord)
         .sort((left, right) => left.villaSlug.localeCompare(right.villaSlug));
     },
-    async () => getFallbackPricingRecords(await resolvePanelCompanyId(input)),
+    async () => getFallbackPricingRecords(await resolveCatalogCompanyId(input)),
   );
 }
 
 export async function getDemoDiscountCampaigns(input?: {
+  publicSite?: boolean;
   companyId?: string | null;
   includeAll?: boolean;
 }) {
   return withDevelopmentFallback(
     async () => {
-      const companyId = await resolvePanelCompanyId(input);
+      const companyId = await resolveCatalogCompanyId(input);
       const campaigns = await db.campaign.findMany({
         where: companyId ? { companyId } : undefined,
         include: {
@@ -138,14 +145,14 @@ export async function getDemoDiscountCampaigns(input?: {
         createdAt: campaign.createdAt.toISOString(),
       })) satisfies DemoDiscountCampaign[];
     },
-    async () => getFallbackDiscountCampaigns(await resolvePanelCompanyId(input)),
+    async () => getFallbackDiscountCampaigns(await resolveCatalogCompanyId(input)),
   );
 }
 
-export async function getDemoCoupons(input?: { companyId?: string | null; includeAll?: boolean }) {
+export async function getDemoCoupons(input?: CatalogReadScope) {
   return withDevelopmentFallback(
     async () => {
-      const companyId = await resolvePanelCompanyId(input);
+      const companyId = await resolveCatalogCompanyId(input);
       const coupons = await db.coupon.findMany({
         where: companyId ? { companyId } : undefined,
         include: {
@@ -175,7 +182,7 @@ export async function getDemoCoupons(input?: { companyId?: string | null; includ
         createdAt: coupon.createdAt.toISOString(),
       })) satisfies DemoCoupon[];
     },
-    async () => getFallbackCoupons(await resolvePanelCompanyId(input)),
+    async () => getFallbackCoupons(await resolveCatalogCompanyId(input)),
   );
 }
 
@@ -487,8 +494,8 @@ export async function getPublicBookingConfirmation(token: string) {
           quotedTotalAmount: true,
           termsAcceptedAt: true,
           confirmedAt: true,
-          company: { select: { publicName: true } },
-          villa: { select: { slug: true, title: true, coverImageUrl: true, checkInTime: true, checkOutTime: true } },
+          company: { select: { publicName: true, slug: true } },
+          villa: { select: { slug: true, title: true, titleEn: true, coverImageUrl: true, checkInTime: true, checkOutTime: true } },
           invoice: { select: { status: true, paidTotal: true, totalAmount: true } },
           payments: { select: { status: true, amount: true, paidAt: true } },
         },
@@ -516,6 +523,7 @@ export async function getPublicBookingConfirmation(token: string) {
         termsAcceptedAt: request.termsAcceptedAt?.toISOString(),
         confirmedAt: request.confirmedAt?.toISOString(),
         companyName: request.company.publicName,
+        companySlug: request.company.slug,
         villa: request.villa,
       };
     },
@@ -548,9 +556,11 @@ export async function getPublicBookingConfirmation(token: string) {
         termsAcceptedAt: request.termsAcceptedAt,
         confirmedAt: request.confirmedAt,
         companyName: company?.name ?? "BookToVilla",
+        companySlug: company?.slug ?? "",
         villa: {
           slug: request.villaSlug,
           title: request.villaTitle,
+          titleEn: villa?.titleEn ?? null,
           coverImageUrl: null,
           checkInTime: villa?.checkInTime ?? null,
           checkOutTime: villa?.checkOutTime ?? null,
@@ -624,36 +634,41 @@ export async function updateDemoOperationTaskStatus(
   taskId: string,
   status: DemoOperationTaskStatus,
 ) {
-  const task = await db.operationTask.findUnique({
-    where: { id: taskId },
-    select: {
-      id: true,
-      companyId: true,
-    },
+  return withDevelopmentFallback(async () => {
+    const task = await db.operationTask.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        companyId: true,
+      },
+    });
+
+    if (!task) {
+      throw new DemoOperationsStoreError("Gorev bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(task.companyId);
+
+    await db.operationTask.update({
+      where: { id: taskId },
+      data: {
+        status: mapDemoOperationStatusToPrisma(status),
+        completedAt: status === "DONE" ? new Date() : null,
+      },
+    });
+
+    const tasks = await getDemoOperationTasks({ companyId: task.companyId });
+    const updated = tasks.find((item) => item.id === taskId);
+
+    if (!updated) {
+      throw new DemoOperationsStoreError("Guncel operasyon gorevi okunamadi.");
+    }
+
+    return updated;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-operation-tasks.json", fallbackRecords.getFallbackOperationTasks, taskId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!task) {
-    throw new DemoOperationsStoreError("Gorev bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(task.companyId);
-
-  await db.operationTask.update({
-    where: { id: taskId },
-    data: {
-      status: mapDemoOperationStatusToPrisma(status),
-      completedAt: status === "DONE" ? new Date() : null,
-    },
-  });
-
-  const tasks = await getDemoOperationTasks({ companyId: task.companyId });
-  const updated = tasks.find((item) => item.id === taskId);
-
-  if (!updated) {
-    throw new DemoOperationsStoreError("Guncel operasyon gorevi okunamadi.");
-  }
-
-  return updated;
 }
 
 export async function upsertDemoPricingRecord(
@@ -673,37 +688,48 @@ export async function upsertDemoPricingRecord(
     throw new DemoOperationsStoreError("Minimum gece en az 1 olmalidir.");
   }
 
-  const villa = await db.villa.findFirst({
-    where: {
-      slug: input.villaSlug,
-      ...(input.companyId ? { companyId: input.companyId } : {}),
-    },
-    select: {
-      id: true,
-      companyId: true,
-    },
+  const scopedCompanyId = await resolvePanelCompanyId(input);
+  return withDevelopmentFallback(async () => {
+    const villa = await db.villa.findFirst({
+      where: {
+        slug: input.villaSlug,
+        ...(scopedCompanyId ? { companyId: scopedCompanyId } : {}),
+      },
+      select: {
+        id: true,
+        companyId: true,
+      },
+    });
+
+    if (!villa) {
+      throw new DemoOperationsStoreError("Fiyat guncellenecek villa bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(villa.companyId);
+
+    await db.villa.update({
+      where: { id: villa.id },
+      data: {
+        nightlyBasePrice: input.baseNightlyPrice,
+        cleaningFee: input.cleaningFee,
+        minNightCount: input.minNightCount,
+      },
+    });
+
+    return {
+      ...input,
+      companyId: villa.companyId,
+      updatedAt: new Date().toISOString(),
+    } satisfies DemoPricingRecord;
+  }, async () => {
+    const villa = (await getFallbackVillas(scopedCompanyId)).find((item) => item.slug === input.villaSlug);
+    if (!villa) throw new DemoOperationsStoreError("Fiyat guncellenecek villa bulunamadi.");
+    await assertPanelCompanyAccess(villa.companyId);
+    const record = { ...input, companyId: villa.companyId, updatedAt: new Date().toISOString() };
+    const records = await getFallbackPricingRecords();
+    await writeDevelopmentDataFile("demo-pricing.json", [...records.filter((item) => !(item.companyId === villa.companyId && item.villaSlug === villa.slug)), record]);
+    return record;
   });
-
-  if (!villa) {
-    throw new DemoOperationsStoreError("Fiyat guncellenecek villa bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(villa.companyId);
-
-  await db.villa.update({
-    where: { id: villa.id },
-    data: {
-      nightlyBasePrice: input.baseNightlyPrice,
-      cleaningFee: input.cleaningFee,
-      minNightCount: input.minNightCount,
-    },
-  });
-
-  return {
-    ...input,
-    companyId: villa.companyId,
-    updatedAt: new Date().toISOString(),
-  } satisfies DemoPricingRecord;
 }
 
 export async function createDemoDiscountCampaign(
@@ -731,103 +757,120 @@ export async function createDemoDiscountCampaign(
 
   await assertPanelCompanyAccess(companyId);
 
-  const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
+  return withDevelopmentFallback(async () => {
+    const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
 
-  const created = await db.campaign.create({
-    data: {
-      companyId,
-      websiteId,
-      createdByUserId: null,
-      name: input.title.trim(),
-      slug: normalizeVillaSlug(input.title),
-      status: input.active ? "ACTIVE" : "PAUSED",
-      discountMethod: "PERCENTAGE",
-      discountValue: input.percentOff,
-      startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
-      endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
-      bannerLabel: input.title.trim(),
-      note: input.note.trim(),
-      villas:
-        input.villaScope === "ALL"
-          ? undefined
-          : {
-              create: {
-                villa: {
-                  connect: {
-                    companyId_slug: {
-                      companyId,
-                      slug: input.villaScope,
+    const created = await db.campaign.create({
+      data: {
+        companyId,
+        websiteId,
+        createdByUserId: null,
+        name: input.title.trim(),
+        slug: normalizeVillaSlug(input.title),
+        status: input.active ? "ACTIVE" : "PAUSED",
+        discountMethod: "PERCENTAGE",
+        discountValue: input.percentOff,
+        startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
+        endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
+        bannerLabel: input.title.trim(),
+        note: input.note.trim(),
+        villas:
+          input.villaScope === "ALL"
+            ? undefined
+            : {
+                create: {
+                  villa: {
+                    connect: {
+                      companyId_slug: {
+                        companyId,
+                        slug: input.villaScope,
+                      },
                     },
                   },
                 },
               },
-            },
-    },
-    include: {
-      villas: {
-        include: { villa: { select: { slug: true } } },
       },
-    },
-  });
+      include: {
+        villas: {
+          include: { villa: { select: { slug: true } } },
+        },
+      },
+    });
 
-  return {
-    id: created.id,
-    companyId: created.companyId,
-    title: created.name,
-    villaScope: created.villas[0]?.villa.slug ?? "ALL",
-    percentOff: decimalToNumber(created.discountValue),
-    startDate: dateKey(created.startsAt),
-    endDate: dateKey(created.endsAt),
-    note: created.note ?? "",
-    active: mapCampaignStatusToActive(created.status),
-    createdAt: created.createdAt.toISOString(),
-  } satisfies DemoDiscountCampaign;
+    return {
+      id: created.id,
+      companyId: created.companyId,
+      title: created.name,
+      villaScope: created.villas[0]?.villa.slug ?? "ALL",
+      percentOff: decimalToNumber(created.discountValue),
+      startDate: dateKey(created.startsAt),
+      endDate: dateKey(created.endsAt),
+      note: created.note ?? "",
+      active: mapCampaignStatusToActive(created.status),
+      createdAt: created.createdAt.toISOString(),
+    } satisfies DemoDiscountCampaign;
+  }, async () => {
+    if (input.villaScope !== "ALL" && !(await getFallbackVillas(companyId)).some((villa) => villa.slug === input.villaScope)) throw new DemoOperationsStoreError("Secilen villa bu firmaya ait degil.");
+    const records = await getFallbackDiscountCampaigns();
+    const created = { ...input, companyId, id: randomUUID(), title: input.title.trim(), note: input.note.trim(), createdAt: new Date().toISOString() };
+    await writeDevelopmentDataFile("demo-discounts.json", [...records, created]);
+    return created;
+  });
 }
 
 export async function updateDemoDiscountCampaign(
   discountId: string,
   input: Partial<Pick<DemoDiscountCampaign, "active">>,
 ) {
-  const current = await db.campaign.findUnique({
-    where: { id: discountId },
-    select: { id: true, companyId: true },
+  return withDevelopmentFallback(async () => {
+    const current = await db.campaign.findUnique({
+      where: { id: discountId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!current) {
+      throw new DemoOperationsStoreError("Kampanya bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    await db.campaign.update({
+      where: { id: discountId },
+      data: {
+        status: input.active ? "ACTIVE" : "PAUSED",
+      },
+    });
+
+    const discounts = await getDemoDiscountCampaigns({ companyId: current.companyId });
+    const updated = discounts.find((discount) => discount.id === discountId);
+
+    if (!updated) {
+      throw new DemoOperationsStoreError("Guncel kampanya okunamadi.");
+    }
+
+    return updated;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-discounts.json", fallbackRecords.getFallbackDiscountCampaigns, discountId, (record) => ({ ...record, ...input, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!current) {
-    throw new DemoOperationsStoreError("Kampanya bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
-  await db.campaign.update({
-    where: { id: discountId },
-    data: {
-      status: input.active ? "ACTIVE" : "PAUSED",
-    },
-  });
-
-  const discounts = await getDemoDiscountCampaigns({ companyId: current.companyId });
-  const updated = discounts.find((discount) => discount.id === discountId);
-
-  if (!updated) {
-    throw new DemoOperationsStoreError("Guncel kampanya okunamadi.");
-  }
-
-  return updated;
 }
 
 export async function deleteDemoDiscountCampaign(discountId: string) {
-  const current = await db.campaign.findUnique({
-    where: { id: discountId },
-    select: { id: true, companyId: true },
+  return withDevelopmentFallback(async () => {
+    const current = await db.campaign.findUnique({
+      where: { id: discountId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!current) {
+      throw new DemoOperationsStoreError("Silinecek kampanya bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+    await db.campaign.delete({ where: { id: discountId } });
+  }, async () => {
+    await mutateFallbackRecord("demo-discounts.json", fallbackRecords.getFallbackDiscountCampaigns, discountId, () => null);
   });
-
-  if (!current) {
-    throw new DemoOperationsStoreError("Silinecek kampanya bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-  await db.campaign.delete({ where: { id: discountId } });
 }
 
 export async function createDemoCoupon(
@@ -865,114 +908,132 @@ export async function createDemoCoupon(
 
   await assertPanelCompanyAccess(companyId);
 
-  const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
+  return withDevelopmentFallback(async () => {
+    const websiteId = await getPrimaryWebsiteIdForCompany(companyId);
 
-  const existing = await db.coupon.findFirst({
-    where: { companyId, code },
-    select: { id: true },
-  });
+    const existing = await db.coupon.findFirst({
+      where: { companyId, code },
+      select: { id: true },
+    });
 
-  if (existing) {
-    throw new DemoOperationsStoreError("Bu kupon kodu zaten kayitli.");
-  }
+    if (existing) {
+      throw new DemoOperationsStoreError("Bu kupon kodu zaten kayitli.");
+    }
 
-  const created = await db.coupon.create({
-    data: {
-      companyId,
-      websiteId,
-      code,
-      title: input.title.trim(),
-      description: "",
-      status: input.active ? "ACTIVE" : "PAUSED",
-      discountMethod: "PERCENTAGE",
-      discountValue: input.percentOff,
-      startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
-      endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
-      usageLimit: input.usageLimit,
-      usedCount: 0,
-      minimumStayNights: 1,
-      minimumOrderAmount: 0,
-      isPublic: true,
-      villas:
-        input.villaScope === "ALL"
-          ? undefined
-          : {
-              create: {
-                villa: {
-                  connect: {
-                    companyId_slug: {
-                      companyId,
-                      slug: input.villaScope,
+    const created = await db.coupon.create({
+      data: {
+        companyId,
+        websiteId,
+        code,
+        title: input.title.trim(),
+        description: "",
+        status: input.active ? "ACTIVE" : "PAUSED",
+        discountMethod: "PERCENTAGE",
+        discountValue: input.percentOff,
+        startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
+        endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
+        usageLimit: input.usageLimit,
+        usedCount: 0,
+        minimumStayNights: 1,
+        minimumOrderAmount: 0,
+        isPublic: true,
+        villas:
+          input.villaScope === "ALL"
+            ? undefined
+            : {
+                create: {
+                  villa: {
+                    connect: {
+                      companyId_slug: {
+                        companyId,
+                        slug: input.villaScope,
+                      },
                     },
                   },
                 },
               },
-            },
-    },
-    include: {
-      villas: {
-        include: { villa: { select: { slug: true } } },
       },
-    },
-  });
+      include: {
+        villas: {
+          include: { villa: { select: { slug: true } } },
+        },
+      },
+    });
 
-  return {
-    id: created.id,
-    companyId: created.companyId,
-    title: created.title,
-    code: created.code,
-    villaScope: created.villas[0]?.villa.slug ?? "ALL",
-    percentOff: decimalToNumber(created.discountValue),
-    startDate: dateKey(created.startsAt),
-    endDate: dateKey(created.endsAt),
-    usageLimit: created.usageLimit ?? 9999,
-    usageCount: created.usedCount,
-    active: mapCouponStatusToActive(created.status),
-    createdAt: created.createdAt.toISOString(),
-  } satisfies DemoCoupon;
+    return {
+      id: created.id,
+      companyId: created.companyId,
+      title: created.title,
+      code: created.code,
+      villaScope: created.villas[0]?.villa.slug ?? "ALL",
+      percentOff: decimalToNumber(created.discountValue),
+      startDate: dateKey(created.startsAt),
+      endDate: dateKey(created.endsAt),
+      usageLimit: created.usageLimit ?? 9999,
+      usageCount: created.usedCount,
+      active: mapCouponStatusToActive(created.status),
+      createdAt: created.createdAt.toISOString(),
+    } satisfies DemoCoupon;
+  }, async () => {
+    if (input.villaScope !== "ALL" && !(await getFallbackVillas(companyId)).some((villa) => villa.slug === input.villaScope)) throw new DemoOperationsStoreError("Secilen villa bu firmaya ait degil.");
+    const records = await getFallbackCoupons();
+    if (records.some((record) => record.companyId === companyId && record.code === code)) throw new DemoOperationsStoreError("Bu kupon kodu zaten kayitli.");
+    const created = { ...input, companyId, id: randomUUID(), title: input.title.trim(), code, usageCount: 0, createdAt: new Date().toISOString() };
+    await writeDevelopmentDataFile("demo-coupons.json", [...records, created]);
+    return created;
+  });
 }
 
 export async function updateDemoCoupon(couponId: string, input: Partial<Pick<DemoCoupon, "active">>) {
-  const current = await db.coupon.findUnique({
-    where: { id: couponId },
-    select: { id: true, companyId: true },
+  return withDevelopmentFallback(async () => {
+    const current = await db.coupon.findUnique({
+      where: { id: couponId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!current) {
+      throw new DemoOperationsStoreError("Kupon bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    await db.coupon.update({
+      where: { id: couponId },
+      data: {
+        status: input.active ? "ACTIVE" : "PAUSED",
+      },
+    });
+
+    const coupons = await getDemoCoupons({ companyId: current.companyId });
+    const updated = coupons.find((coupon) => coupon.id === couponId);
+
+    if (!updated) {
+      throw new DemoOperationsStoreError("Guncel kupon okunamadi.");
+    }
+
+    return updated;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-coupons.json", fallbackRecords.getFallbackCoupons, couponId, (record) => ({ ...record, ...input, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!current) {
-    throw new DemoOperationsStoreError("Kupon bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
-  await db.coupon.update({
-    where: { id: couponId },
-    data: {
-      status: input.active ? "ACTIVE" : "PAUSED",
-    },
-  });
-
-  const coupons = await getDemoCoupons({ companyId: current.companyId });
-  const updated = coupons.find((coupon) => coupon.id === couponId);
-
-  if (!updated) {
-    throw new DemoOperationsStoreError("Guncel kupon okunamadi.");
-  }
-
-  return updated;
 }
 
 export async function deleteDemoCoupon(couponId: string) {
-  const current = await db.coupon.findUnique({
-    where: { id: couponId },
-    select: { id: true, companyId: true },
+  return withDevelopmentFallback(async () => {
+    const current = await db.coupon.findUnique({
+      where: { id: couponId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!current) {
+      throw new DemoOperationsStoreError("Silinecek kupon bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+    await db.coupon.delete({ where: { id: couponId } });
+  }, async () => {
+    await mutateFallbackRecord("demo-coupons.json", fallbackRecords.getFallbackCoupons, couponId, () => null);
   });
-
-  if (!current) {
-    throw new DemoOperationsStoreError("Silinecek kupon bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-  await db.coupon.delete({ where: { id: couponId } });
 }
 
 export async function validateDemoCoupon(input: {
@@ -982,9 +1043,9 @@ export async function validateDemoCoupon(input: {
   checkOut: string;
 }) {
   const [pricingRecords, discounts, coupons] = await Promise.all([
-    getDemoPricingRecords({ companyId: input.villa.companyId }),
-    getDemoDiscountCampaigns({ companyId: input.villa.companyId }),
-    getDemoCoupons({ companyId: input.villa.companyId }),
+    getDemoPricingRecords({ publicSite: true, companyId: input.villa.companyId }),
+    getDemoDiscountCampaigns({ publicSite: true, companyId: input.villa.companyId }),
+    getDemoCoupons({ publicSite: true, companyId: input.villa.companyId }),
   ]);
   const coupon = getEligibleCoupon(coupons, {
     code: input.code,
@@ -1026,9 +1087,9 @@ export async function createDemoRequest(input: {
   actorLabel?: string;
 }) {
   const [pricingRecords, discounts, coupons, websiteId] = await Promise.all([
-    getDemoPricingRecords({ companyId: input.villa.companyId }),
-    getDemoDiscountCampaigns({ companyId: input.villa.companyId }),
-    getDemoCoupons({ companyId: input.villa.companyId }),
+    getDemoPricingRecords({ publicSite: input.origin !== "MANUAL_PANEL", companyId: input.villa.companyId }),
+    getDemoDiscountCampaigns({ publicSite: input.origin !== "MANUAL_PANEL", companyId: input.villa.companyId }),
+    getDemoCoupons({ publicSite: input.origin !== "MANUAL_PANEL", companyId: input.villa.companyId }),
     getPrimaryWebsiteIdForCompany(input.villa.companyId),
   ]);
 

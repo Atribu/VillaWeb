@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoReviewStatus } from "@/lib/demo-crm";
 import { DemoOperationsStoreError } from "@/lib/server/demo-operations-store";
@@ -15,6 +16,8 @@ type RouteContext = {
 const ALLOWED_STATUSES = new Set<DemoReviewStatus>(["PUBLISHED", "PENDING", "HIDDEN"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "crm");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -31,6 +34,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ review });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoOperationsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

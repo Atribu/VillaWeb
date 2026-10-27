@@ -8,11 +8,14 @@ import { getAllCompanyRecords } from "@/lib/server/company-store";
 export const metadata: Metadata = {
   title: "Panel Giris",
   description: "Super admin, firma admini ve firma personeli icin panel giris ekrani.",
+  robots: { index: false, follow: false },
 };
 
 export default async function PanelLoginPage() {
-  const [locale, companies] = await Promise.all([getCurrentLocale(), getAllCompanyRecords()]);
-  const publicCredentials = loginCredentials.filter((credential) => credential.role !== "SUPER_ADMIN");
+  const locale = await getCurrentLocale();
+  const showDemoHints = process.env.NODE_ENV !== "production" && process.env.SHOW_DEMO_LOGIN_HINTS === "true";
+  const companies = showDemoHints ? (await getAllCompanyRecords()).map(({ id, name, shortName, slug }) => ({ id, name, shortName, slug })) : [];
+  const publicCredentials = showDemoHints ? loginCredentials.filter((credential) => credential.role !== "SUPER_ADMIN") : [];
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-16 sm:px-6 lg:px-8">

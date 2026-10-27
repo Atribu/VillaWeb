@@ -27,6 +27,7 @@ import { getUserSession } from "@/lib/auth/server-session";
 import {
   assertPanelCompanyAccess,
   resolvePanelCompanyId,
+  resolveCatalogCompanyId,
 } from "@/lib/server/demo-company-context";
 import {
   dateKey,
@@ -691,6 +692,8 @@ function mapAvailabilityRange(
     note: string | null;
     blockType: "RESERVED" | "MAINTENANCE" | "UNAVAILABLE" | "OWNER_STAY";
     sourceRequestId: string | null;
+    calendarSourceId?: string | null;
+    externalEventId?: string | null;
   },
 ): AvailabilityRange {
   return {
@@ -700,6 +703,8 @@ function mapAvailabilityRange(
     label: range.note ?? "Manuel blok",
     status: range.blockType === "OWNER_STAY" ? "UNAVAILABLE" : range.blockType,
     sourceRequestId: range.sourceRequestId ?? undefined,
+    calendarSourceId: range.calendarSourceId ?? undefined,
+    externalEventId: range.externalEventId ?? undefined,
   };
 }
 
@@ -740,6 +745,7 @@ function mapVillaPricingPeriod(rule: {
 }
 
 type DemoVillaQueryInput = {
+  publicSite?: boolean;
   companyId?: string | null;
   includeAll?: boolean;
   includeMetrics?: boolean;
@@ -747,7 +753,7 @@ type DemoVillaQueryInput = {
 };
 
 async function queryVillas(input?: DemoVillaQueryInput) {
-  const companyId = await resolvePanelCompanyId(input);
+  const companyId = await resolveCatalogCompanyId(input);
   const where: Prisma.VillaWhereInput = {
     ...(companyId ? { companyId } : {}),
     ...(input?.includeInactive === false ? { status: "ACTIVE" } : {}),
@@ -892,6 +898,8 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
                 note: range.note,
                 blockType: range.blockType,
                 sourceRequestId: range.sourceRequestId,
+                calendarSourceId: range.calendarSourceId,
+                externalEventId: range.externalEventId,
               }),
             ),
           ),
@@ -912,7 +920,7 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
     },
     async () => {
       const [villas, pricingRecords, discountCampaigns, requests] = await Promise.all([
-        getFallbackVillas(await resolvePanelCompanyId(input)),
+        getFallbackVillas(await resolveCatalogCompanyId(input)),
         getDemoPricingRecords(input),
         getDemoDiscountCampaigns(input),
         includeMetrics ? getDemoRequests(input) : Promise.resolve([]),
@@ -1886,6 +1894,8 @@ export async function updateDemoVillaStatus(
             note: range.note,
             blockType: range.blockType,
             sourceRequestId: range.sourceRequestId,
+            calendarSourceId: range.calendarSourceId,
+            externalEventId: range.externalEventId,
           }),
         ),
       ),
@@ -2211,6 +2221,9 @@ export async function deleteDemoVillaAvailability(input: { slug: string; rangeId
     if (villa.availabilityRanges.find((range) => range.id === input.rangeId)?.sourceRequestId) {
       throw new DemoVillaStoreError("Rezervasyona bagli bloklar talepler ekranindan iptal edilmelidir.");
     }
+    if (villa.availabilityRanges.find((range) => range.id === input.rangeId)?.calendarSourceId) {
+      throw new DemoVillaStoreError("iCal bloklari kaynak takvimden yonetilir; kaynagi guncelleyip yeniden senkronize edin.");
+    }
 
     return saveFallbackVilla({
       ...villa,
@@ -2245,6 +2258,7 @@ export async function deleteDemoVillaAvailability(input: { slug: string; rangeId
 
     await assertPanelCompanyAccess(range.villa.companyId);
     if (range.sourceRequestId) throw new DemoVillaStoreError("Rezervasyona bagli bloklar talepler ekranindan iptal edilmelidir.");
+    if (range.calendarSourceId) throw new DemoVillaStoreError("iCal bloklari kaynak takvimden yonetilir; kaynagi guncelleyip yeniden senkronize edin.");
     await db.villaAvailabilityBlock.delete({
       where: { id: range.id },
     });

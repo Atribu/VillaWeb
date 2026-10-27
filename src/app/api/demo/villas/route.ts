@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
@@ -53,11 +54,15 @@ function createUnexpectedUploadErrorResponse(error: unknown, stage: string) {
 }
 
 export async function POST(request: Request) {
+  const denied = await authorizePanelApi(request, "villas");
+  if (denied) return denied;
   let formData: FormData;
 
   try {
     formData = await request.formData();
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     return createUnexpectedUploadErrorResponse(error, "FORM_DATA_PARSE");
   }
 
@@ -66,6 +71,8 @@ export async function POST(request: Request) {
   try {
     villa = await createDemoVillaFromFormData(formData);
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoVillaStoreError) {
       return NextResponse.json(
         { error: error.message, stage: "VILLA_VALIDATION" },
@@ -86,6 +93,8 @@ export async function POST(request: Request) {
     revalidatePath("/panel/villalar");
     revalidatePath("/panel/villalar/yeni");
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     return createUnexpectedUploadErrorResponse(error, "VILLA_REVALIDATE");
   }
 

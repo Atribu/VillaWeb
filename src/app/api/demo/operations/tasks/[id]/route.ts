@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoOperationTaskStatus } from "@/lib/demo-operations-workflow";
 import { DemoOperationsStoreError, updateDemoOperationTaskStatus } from "@/lib/server/demo-operations-store";
@@ -20,6 +21,8 @@ const ALLOWED_STATUSES = new Set<DemoOperationTaskStatus>([
 ]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "operations");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -35,6 +38,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ task });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoOperationsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

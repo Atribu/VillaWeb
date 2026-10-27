@@ -44,7 +44,7 @@ export default async function VillasPage({ searchParams }: {
   const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
   const filters = readVillaFilters((await searchParams) ?? {});
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(new Date());
-  const catalog = await getDemoVillas({ companyId: company.id, includeMetrics: false, includeInactive: false });
+  const catalog = await getDemoVillas({ publicSite: true, companyId: company.id, includeMetrics: false, includeInactive: false });
   const { villas, invalidDates, invalidBudget } = filterVillas(catalog, filters, today);
   const locations = Array.from(new Set(catalog.flatMap((villa) => [villa.city, villa.district]).filter(Boolean))).sort();
   function options(key: "poolType" | "category") {

@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoSyncMode } from "@/lib/demo-calendar-sync";
 import {
@@ -10,6 +11,8 @@ export const runtime = "nodejs";
 const ALLOWED_MODES = new Set<DemoSyncMode>(["IMPORT_ONLY", "TWO_WAY"]);
 
 export async function POST(request: Request) {
+  const denied = await authorizePanelApi(request, "calendar");
+  if (denied) return denied;
   try {
     const payload = (await request.json()) as {
       villaId?: string;
@@ -31,6 +34,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ mapping });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoCalendarSyncStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

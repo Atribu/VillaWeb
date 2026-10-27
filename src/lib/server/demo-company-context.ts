@@ -7,6 +7,7 @@ import {
   type DemoCompanyRecord,
 } from "@/lib/demo-companies";
 import { getUserSession } from "@/lib/auth/server-session";
+import { PanelAccessError } from "@/lib/auth/access-error";
 import {
   getCompanyRecordById,
   getCompanyRecordBySlug,
@@ -18,6 +19,14 @@ export type DemoCompanyScope = {
   companyId: string | null;
   isSuperAdmin: boolean;
 };
+
+export type CatalogReadScope = { companyId?: string | null; includeAll?: boolean; publicSite?: boolean };
+
+export async function resolveCatalogCompanyId(input?: CatalogReadScope) {
+  // Public browsing is independent of the panel account signed in on the same browser.
+  if (input?.publicSite) return (await getCurrentPublicCompany()).id;
+  return resolvePanelCompanyId(input);
+}
 
 async function readCompanySlugFromHeaders() {
   try {
@@ -83,7 +92,7 @@ export async function assertPanelCompanyAccess(companyId?: string | null) {
   }
 
   if (!companyId || !scope.companyId || scope.companyId !== companyId) {
-    throw new Error("Bu kayda erisim yetkin bulunmuyor.");
+    throw new PanelAccessError();
   }
 }
 
@@ -91,7 +100,7 @@ export async function assertSuperAdminPanelAccess() {
   const session = await getUserSession().catch(() => null);
 
   if (!session || session.role !== "SUPER_ADMIN") {
-    throw new Error("Bu islem yalnizca super admin tarafindan kullanilabilir.");
+    throw new PanelAccessError("Bu islem yalnizca super admin tarafindan kullanilabilir.");
   }
 }
 

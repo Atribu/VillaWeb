@@ -1,12 +1,16 @@
-import { timingSafeEqual, scryptSync } from "node:crypto";
 import "server-only";
 
 import type { MembershipRole, PlatformRole } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAllCompanyRecords } from "@/lib/server/company-store";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import { writeDevelopmentDataFile } from "@/lib/server/development-fallback";
+import { getFallbackTeamUsers } from "@/lib/server/development-fallback-data";
+import { getDevelopmentIdentity, readDevelopmentAuth, registerDevelopmentIdentity } from "@/lib/auth/development-auth";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { membershipAppRole, type AppRole } from "@/lib/auth/permissions";
 
-export type AppRole = "SUPER_ADMIN" | "ADMIN" | "STAFF";
+export type { AppRole } from "@/lib/auth/permissions";
 
 export type AppUser = {
   id: string;
@@ -79,7 +83,7 @@ export const loginCredentials = [
     username: process.env.SEED_SAHIL_FINANCE_USERNAME ?? "sahil-finance",
     password: process.env.SEED_SAHIL_FINANCE_PASSWORD ?? "SahilFinans2026!",
     displayName: "Sahil Collection Finans",
-    role: "STAFF" as const,
+    role: "FINANCE" as const,
     companyName: "Sahil Collection Villas",
   },
 ];
@@ -96,24 +100,7 @@ function mapPlatformRoleToAppRole(
     return "ADMIN";
   }
 
-  return "STAFF";
-}
-
-function verifyScryptPassword(storedHash: string, password: string) {
-  const [algorithm, salt, hash] = storedHash.split(":");
-
-  if (algorithm !== "scrypt" || !salt || !hash) {
-    return false;
-  }
-
-  const derived = scryptSync(password, salt, 64);
-  const stored = Buffer.from(hash, "hex");
-
-  if (derived.length !== stored.length) {
-    return false;
-  }
-
-  return timingSafeEqual(derived, stored);
+  return membershipAppRole(membershipRole ?? "") ?? "STAFF";
 }
 
 function toSearchKey(value: string) {
@@ -180,7 +167,7 @@ export async function validateUser(
         } satisfies LoginValidationResult;
       }
 
-      if (!verifyScryptPassword(user.passwordHash, password)) {
+      if (!verifyPassword(user.passwordHash, password)) {
         return {
           ok: false,
           reason: "INVALID_CREDENTIALS",
@@ -227,7 +214,7 @@ export async function validateUser(
       const membership =
         user.memberships.find((item) => item.companyId === selectedCompany.id) ?? null;
 
-      if (!membership) {
+      if (!membership || membership.company.status !== "ACTIVE") {
         return {
           ok: false,
           reason: "COMPANY_ACCESS_DENIED",
@@ -269,72 +256,47 @@ export async function validateUser(
       } satisfies LoginValidationResult;
     },
     async () => {
-      const credential = loginCredentials.find(
-        (item) =>
+      const members = await getFallbackTeamUsers();
+      const auth = await readDevelopmentAuth();
+      const member = members.find((item) => [item.username, item.email].some((value) => value.toLowerCase() === normalizedUsername));
+      let identity = auth.users.find((item) => item.id === member?.id ||
+        (item.isOwner && [item.username, item.email].some((value) => value.toLowerCase() === normalizedUsername)));
+
+      if (!identity) {
+        const credential = loginCredentials.find((item) =>
           item.username.toLowerCase() === normalizedUsername ||
-          ("email" in item &&
-            typeof item.email === "string" &&
-            item.email.toLowerCase() === normalizedUsername),
-      );
-
-      if (!credential || credential.password !== password) {
-        return {
-          ok: false,
-          reason: "INVALID_CREDENTIALS",
-        } satisfies LoginValidationResult;
+          ("email" in item && item.email?.toLowerCase() === normalizedUsername));
+        if (!credential || credential.password !== password) return { ok: false, reason: "INVALID_CREDENTIALS" };
+        // Never recreate an account that was removed or renamed by the administrator.
+        if (auth.users.some((item) => item.username.toLowerCase() === credential.username.toLowerCase())) {
+          return { ok: false, reason: "INVALID_CREDENTIALS" };
+        }
+        const company = "companyName" in credential ? await resolveLoginCompany(credential.companyName ?? "") : null;
+        if (credential.role !== "SUPER_ADMIN" && (!company || company.status !== "ACTIVE")) {
+          return { ok: false, reason: "COMPANY_ACCESS_DENIED" };
+        }
+        const id = member?.id ?? `dev-${credential.username}`;
+        if (credential.role !== "SUPER_ADMIN" && !member) {
+          await writeDevelopmentDataFile("demo-team-users.json", [...members, {
+            id, companyId: company!.id, username: credential.username, email: `${credential.username}@local.invalid`,
+            fullName: credential.displayName, phone: "", roleId: credential.role === "STAFF" ? "CONTENT" : credential.role,
+            status: "ACTIVE", agencyId: "", agencyName: "", branchId: "", branchName: "", responsibility: "", lastActiveAt: "",
+          }]);
+        }
+        identity = { id, username: credential.username, email: "email" in credential ? credential.email ?? "" : "",
+          displayName: credential.displayName, passwordHash: hashPassword(password), isOwner: credential.role === "SUPER_ADMIN" };
+        await registerDevelopmentIdentity(identity);
       }
 
-      if (credential.role === "SUPER_ADMIN") {
-        return {
-          ok: true,
-          user: {
-            id: `dev-${credential.username}`,
-            username: credential.username,
-            displayName: credential.displayName,
-            role: credential.role,
-          },
-        } satisfies LoginValidationResult;
-      }
-
-      if (!normalizedCompanyName) {
-        return {
-          ok: false,
-          reason: "COMPANY_REQUIRED",
-        } satisfies LoginValidationResult;
-      }
-
+      if (!verifyPassword(identity.passwordHash, password)) return { ok: false, reason: "INVALID_CREDENTIALS" };
+      const user = await getDevelopmentIdentity(identity.id);
+      if (!user) return { ok: false, reason: "INVALID_CREDENTIALS" };
+      if (user.role === "SUPER_ADMIN") return { ok: true, user };
+      if (!normalizedCompanyName) return { ok: false, reason: "COMPANY_REQUIRED" };
       const selectedCompany = await resolveLoginCompany(normalizedCompanyName);
-
-      if (!selectedCompany) {
-        return {
-          ok: false,
-          reason: "COMPANY_NOT_FOUND",
-        } satisfies LoginValidationResult;
-      }
-
-      const company = credential.companyName
-        ? await resolveLoginCompany(credential.companyName)
-        : null;
-
-      if (!company || company.id !== selectedCompany.id) {
-        return {
-          ok: false,
-          reason: "COMPANY_ACCESS_DENIED",
-        } satisfies LoginValidationResult;
-      }
-
-      return {
-        ok: true,
-        user: {
-          id: `dev-${credential.username}`,
-          username: credential.username,
-          displayName: credential.displayName,
-          role: credential.role,
-          companyId: company.id,
-          companySlug: company.slug,
-          companyName: company.name,
-        },
-      } satisfies LoginValidationResult;
+      if (!selectedCompany) return { ok: false, reason: "COMPANY_NOT_FOUND" };
+      if (selectedCompany.id !== user.companyId) return { ok: false, reason: "COMPANY_ACCESS_DENIED" };
+      return { ok: true, user };
     },
   );
 }

@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoRoleId, DemoTeamUserStatus } from "@/lib/demo-users-messages";
 import {
@@ -18,6 +19,8 @@ const ALLOWED_ROLES = new Set<DemoRoleId>([
 ]);
 
 export async function POST(request: Request) {
+  const denied = await authorizePanelApi(request, "users");
+  if (denied) return denied;
   try {
     const payload = (await request.json()) as {
       fullName?: string;
@@ -53,6 +56,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ user });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoUsersMessagesStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

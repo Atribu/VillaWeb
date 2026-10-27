@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import {
   deleteDemoDiscountCampaign,
@@ -15,6 +16,8 @@ type RouteContext = {
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "crm");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -29,6 +32,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ discount });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoOperationsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -43,6 +48,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "crm");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -54,6 +61,8 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoOperationsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

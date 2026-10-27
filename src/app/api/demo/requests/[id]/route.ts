@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import { getUserSession } from "@/lib/auth/server-session";
 import { canAccessPanelPath } from "@/lib/auth/panel-access";
@@ -18,6 +19,8 @@ type RouteContext = {
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "reservations");
+  if (denied) return denied;
   const session = await getUserSession();
   if (!session) return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
   if (!canAccessPanelPath(session.role, "/panel/talepler")) return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
@@ -42,6 +45,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ request: updatedRequest });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoOperationsStoreError || error instanceof DemoVillaStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

@@ -1,0 +1,122 @@
+.heading { padding: 18px 0 46px; border-bottom: 1px solid var(--site-line); }
+.heading h1 { max-width: 900px; }
+.heading > p:last-child { max-width: 600px; }
+.journalFeature { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: clamp(28px,6vw,85px); padding: 45px 0; border-bottom: 1px solid var(--site-line); }
+.featureImage { height: clamp(280px,32vw,420px); overflow: hidden; border-radius: 3px; background: var(--site-soft); }
+.featureImage img { width: 100%; height: 100%; object-fit: cover; }
+.featureImage > div { height: 100%; }
+.featureCopy h2 { font-family: var(--site-title-font); font-size: clamp(35px,3.8vw,54px); font-weight: 400; line-height: 1.1; letter-spacing: -.035em; margin: 20px 0; }
+.featureCopy > p:not(:first-child) { color: var(--site-muted); font-size: 13px; line-height: 1.9; margin-bottom: 22px; }
+.journalGrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 32px; margin: 40px 0 60px; }
+.journalCard { display: flex; flex-direction: column; align-items: start; min-width: 0; padding-top: 24px; border-top: 1px solid var(--site-line); }
+.journalCard h2 { font-family: var(--site-title-font); font-size: 32px; font-weight: 400; line-height: 1.15; margin: 18px 0; }
+.journalCard p { color: var(--site-muted); font-size: 12px; line-height: 1.9; margin-bottom: 20px; }
+.journalCard > a { margin-top: auto; }
+.articleLayout, .documentLayout { display: grid; grid-template-columns: 250px minmax(0,1fr); align-items: start; gap: clamp(35px,6vw,90px); padding: 48px 0 65px; }
+.contents { position: sticky; top: 30px; }
+.contents > p { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--site-muted); margin-bottom: 18px; }
+.contents nav { display: grid; }
+.contents a { padding: 13px 0; border-bottom: 1px solid var(--site-line); font-size: 12px; line-height: 1.6; }
+.contents a:hover { color: var(--site-accent); text-decoration: underline; text-underline-offset: 4px; }
+.reading { min-width: 0; max-width: 780px; }
+.reading section { padding: 30px 0; border-bottom: 1px solid var(--site-line); scroll-margin-top: 30px; }
+.reading section:first-child { padding-top: 0; }
+.reading h2 { font-family: var(--site-title-font); font-size: clamp(30px,3vw,38px); font-weight: 400; line-height: 1.15; margin-bottom: 20px; letter-spacing: -.025em; }
+.reading p { color: var(--site-muted); font-size: 14px; line-height: 2; }
+.documentVersion { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 22px; color: var(--site-muted); font-size: 11px; }
+.pendingNotice { display: flex; gap: 14px; padding: 20px 22px; margin: 30px 0 0; border: 1px solid var(--site-line); border-left: 3px solid var(--site-accent); border-radius: 3px; background: var(--site-soft); }
+.pendingNotice svg { flex-shrink: 0; color: var(--site-accent); margin-top: 3px; }
+.pendingNotice p { color: var(--site-muted); font-size: 12px; line-height: 1.9; }
+.documentLinks { display: flex; flex-wrap: wrap; gap: 12px 28px; padding-top: 22px; border-top: 1px solid var(--site-line); }
+.helpLayout { display: grid; grid-template-columns: 285px minmax(0,1fr); gap: clamp(35px,6vw,90px); padding: 40px 0 65px; align-items: start; }
+.helpSidebar { position: sticky; top: 25px; min-width: 0; }
+.helpSidebar > label { font-size: 11px; font-weight: 600; display: block; margin-bottom: 12px; }
+.search { display: flex; align-items: center; gap: 10px; border: 1px solid var(--site-line); border-radius: 4px; padding: 10px 12px; }
+.search > svg { width: 17px; flex-shrink: 0; color: var(--site-muted); }
+.search input { min-width: 0; width: 100%; padding: 4px 0; font-size: 12px; background: transparent; outline: none; }
+.search:focus-within { border-color: var(--site-accent); }
+.search button { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; }
+.search input::-webkit-search-cancel-button { display: none; }
+.categoryNav { display: grid; margin-top: 25px; }
+.categoryNav button { text-align: left; display: flex; justify-content: space-between; gap: 15px; padding: 15px 12px; border-bottom: 1px solid var(--site-line); font-size: 12px; }
+.categoryNav button[aria-pressed="true"] { background: var(--site-soft); color: var(--site-accent); font-weight: 600; box-shadow: inset 2px 0 var(--site-accent); }
+.categoryNav span { color: var(--site-muted); font-size: 10px; }
+.helpContent { min-width: 0; }
+.resultCount { color: var(--site-muted); font-size: 11px; padding-bottom: 20px; }
+.faqGroup { margin-bottom: 36px; }
+.faqGroup:last-child { margin: 0; }
+.faqGroup h2, .noResults h2 { font-family: var(--site-title-font); font-size: 34px; font-weight: 400; line-height: 1.15; margin-bottom: 22px; }
+.faqGroup details { padding: 20px 0; border-bottom: 1px solid var(--site-line); }
+.faqGroup details:first-of-type { border-top: 1px solid var(--site-line); }
+.faqGroup summary { display: flex; justify-content: space-between; align-items: center; gap: 25px; list-style: none; cursor: pointer; font-size: 13px; font-weight: 500; }
+.faqGroup summary::-webkit-details-marker { display: none; }
+.faqGroup summary span { font-size: 22px; font-weight: 400; flex-shrink: 0; }
+.faqGroup details[open] summary span { transform: rotate(45deg); }
+.faqGroup details p { margin: 18px 40px 0 0; font-size: 13px; line-height: 1.9; color: var(--site-muted); }
+.noResults { border: 1px solid var(--site-line); border-radius: 4px; padding: 40px 28px; }
+.noResults > svg { margin-bottom: 20px; }
+.noResults p { color: var(--site-muted); font-size: 13px; margin-bottom: 20px; }
+.noResults button { text-decoration: underline; text-underline-offset: 4px; font-size: 12px; font-weight: 600; }
+.helpCta { display: flex; justify-content: space-between; align-items: center; gap: 30px; padding: 32px 40px; border: 1px solid var(--site-line); background: var(--site-soft); border-radius: 4px; }
+.helpCta h2 { font-family: var(--site-title-font); font-size: 36px; font-weight: 400; line-height: 1.15; margin-bottom: 10px; }
+.helpCta p { color: var(--site-muted); font-size: 12px; }
+.helpCta a { flex-shrink: 0; }
+.bookingHeader { padding: 20px 0 35px; border-bottom: 1px solid var(--site-line); }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; padding: 8px 12px; border: 1px solid var(--site-line); background: var(--site-soft); border-radius: 3px; color: var(--site-accent); }
+.status[data-status="cancelled"] { color: #8a4437; background: #fcf4f1; border-color: #ecd8d0; }
+.reference { margin-top: 20px; color: var(--site-muted); font-size: 11px; overflow-wrap: anywhere; }
+.bookingLayout { display: grid; grid-template-columns: minmax(0,1fr) 350px; gap: clamp(30px,5vw,75px); align-items: start; padding: 40px 0; }
+.bookingSummary h2 { font-family: var(--site-title-font); font-size: 40px; font-weight: 400; line-height: 1.15; letter-spacing: -.025em; margin: 15px 0 28px; overflow-wrap: anywhere; }
+.bookingFields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; }
+.bookingFields > div { padding: 20px 0; border-top: 1px solid var(--site-line); min-width: 0; }
+.bookingFields dt { font-size: 10px; color: var(--site-muted); margin-bottom: 8px; }
+.bookingFields dd { font-size: 14px; overflow-wrap: anywhere; }
+.bookingCompany { grid-column: 1/-1; }
+.bookingTotals { padding: 26px; border: 1px solid var(--site-line); border-radius: 4px; background: var(--site-soft); }
+.bookingTotals h2 { font-size: 11px; font-weight: 600; letter-spacing: .06em; margin-bottom: 22px; }
+.bookingTotals dl > div { padding: 17px 0; border-top: 1px solid var(--site-line); }
+.bookingTotals dt { color: var(--site-muted); font-size: 11px; margin-bottom: 8px; }
+.bookingTotals dd { font-family: var(--site-title-font); font-size: 36px; line-height: 1.2; }
+.bookingTotals p { color: var(--site-muted); font-size: 11px; line-height: 1.8; margin-top: 15px; }
+.bookingNext { padding: 30px 0; border-block: 1px solid var(--site-line); }
+.bookingNext h2 { font-family: var(--site-title-font); font-size: 32px; font-weight: 400; margin-bottom: 12px; }
+.bookingNext p { color: var(--site-muted); font-size: 13px; line-height: 1.9; max-width: 800px; }
+.bookingActions { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 28px; }
+.secondaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 13px 20px; font-size: 12px; font-weight: 600; border: 1px solid var(--site-line); border-radius: 4px; background: white; color: var(--site-ink); }
+.secondaryButton:hover { background: var(--site-soft); }
+.notFound { position: relative; padding: 55px 0 70px; max-width: 950px; }
+.notFoundNumber { position: absolute; right: 0; top: 30px; font-family: var(--site-title-font); font-size: clamp(150px,24vw,290px); line-height: 1; color: var(--site-soft); pointer-events: none; z-index: 0; }
+.notFound > :not(.notFoundNumber) { position: relative; z-index: 1; }
+.notFound .bookingActions { margin-top: 10px; }
+
+@media (max-width: 950px) {
+  .helpLayout { grid-template-columns: 245px minmax(0,1fr); gap: 35px; }
+  .articleLayout, .documentLayout { grid-template-columns: 210px minmax(0,1fr); gap: 35px; }
+  .journalGrid { gap: 25px; }
+  .bookingLayout { grid-template-columns: minmax(0,1fr) 290px; gap: 30px; }
+}
+@media (max-width: 700px) {
+  .heading { padding: 5px 0 30px; }
+  .journalFeature, .journalGrid, .articleLayout, .documentLayout, .helpLayout, .bookingLayout { grid-template-columns: 1fr; }
+  .journalFeature { padding: 30px 0; gap: 25px; }
+  .featureImage { height: 270px; }
+  .journalGrid { gap: 28px; margin: 30px 0 40px; }
+  .journalCard h2 { margin: 14px 0; }
+  .articleLayout, .documentLayout { padding: 30px 0 40px; gap: 35px; }
+  .contents, .helpSidebar { position: static; }
+  .contents nav { grid-template-columns: 1fr; }
+  .reading p { font-size: 13px; }
+  .helpLayout { padding: 30px 0 40px; gap: 28px; }
+  .categoryNav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .categoryNav button { border: 1px solid var(--site-line); border-radius: 3px; padding: 10px; font-size: 11px; gap: 10px; }
+  .categoryNav button[aria-pressed="true"] { box-shadow: none; border-color: var(--site-accent); }
+  .faqGroup details p { margin-right: 0; }
+  .helpCta { flex-direction: column; align-items: start; padding: 28px 24px; gap: 22px; }
+  .bookingHeader { padding-top: 5px; }
+  .bookingLayout { padding: 30px 0; }
+  .bookingSummary h2 { font-size: 34px; }
+  .bookingFields { gap: 0 22px; }
+  .bookingActions { flex-direction: column; align-items: stretch; }
+  .notFound { padding: 45px 0; }
+  .notFoundNumber { top: 0; }
+}

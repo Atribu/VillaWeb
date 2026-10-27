@@ -15,6 +15,8 @@ export type DemoIcalSourceRecord = {
   active: boolean;
   status: DemoCalendarSourceStatus;
   lastSyncedAt: string;
+  lastAttemptAt?: string;
+  nextSyncAt?: string;
 };
 
 export type DemoChannelMappingRecord = {

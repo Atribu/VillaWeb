@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export function SiteIcon({ name, className }: { name: "arrow" | "home" | "search" | "pin" | "people" | "bed" | "sun" | "menu" | "close" | "check" | "grid" | "filter" | "bath" | "calendar"; className?: string }) {
+export function SiteIcon({ name, className }: { name: "arrow" | "home" | "search" | "pin" | "people" | "bed" | "sun" | "menu" | "close" | "check" | "grid" | "filter" | "bath" | "calendar" | "phone" | "mail" | "message"; className?: string }) {
   const paths: Record<typeof name, ReactNode> = {
     arrow: <path d="M4 12h15M13 5l7 7-7 7" />,
     home: <><path d="M2 16c4-6 6 6 10 0s6 6 10 0M2 21c4-6 6 6 10 0s6 6 10 0M5 11l7-8 7 8M8 10v4M16 10v4" /></>,
@@ -16,6 +16,9 @@ export function SiteIcon({ name, className }: { name: "arrow" | "home" | "search
     filter: <><path d="M3 6h7m4 0h7M3 18h11m4 0h3M10 3v6M14 15v6M3 12h3m4 0h11M6 9v6" /></>,
     bath: <><path d="M3 12h18v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM5 12V5a2 2 0 0 1 4 0M6 19v2M18 19v2" /></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M7 14h3M14 14h3" /></>,
+    phone: <path d="m8 3 2 5-3 2a15 15 0 0 0 7 7l2-3 5 2v4a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1z" />,
+    mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" /></>,
+    message: <path d="M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5A9 9 0 1 1 21 11.5ZM8 10h8M8 14h5" />,
   };
   return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

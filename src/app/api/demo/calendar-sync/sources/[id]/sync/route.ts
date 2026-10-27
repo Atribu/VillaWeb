@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import {
   DemoCalendarSyncStoreError,
@@ -13,11 +14,15 @@ type RouteContext = {
 };
 
 export async function POST(_request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(_request, "calendar");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const result = await runDemoCalendarSync(id);
     return NextResponse.json(result);
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoCalendarSyncStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

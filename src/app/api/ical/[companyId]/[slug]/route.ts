@@ -29,7 +29,8 @@ async function getFallbackCalendarVilla(companyId: string, slug: string) {
 
   return {
     title: villa.title,
-    events: villa.availabilityRanges.map((range) => ({
+    // Do not echo imported stays back to their provider: that prevents stuck mirror loops.
+    events: villa.availabilityRanges.filter((range) => !range.calendarSourceId).map((range) => ({
       id: range.id,
       startDate: range.startDate,
       endDate: range.endDate,
@@ -57,6 +58,7 @@ export async function GET(request: Request, context: RouteContext) {
         select: {
           title: true,
           availabilityBlocks: {
+            where: { calendarSourceId: null },
             orderBy: { startsAt: "asc" },
             select: {
               id: true,

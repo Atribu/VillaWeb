@@ -1,4 +1,5 @@
 import "server-only";
+import { readLocalCalendarState, invalidateLocalCalendarSync } from "@/lib/server/calendar-local-state";
 
 import { randomUUID } from "node:crypto";
 import {
@@ -16,7 +17,6 @@ import {
   type DemoIcalSourceRecord,
   type DemoSyncMode,
   type DemoSyncLogRecord,
-  type DemoSyncOutcome,
 } from "@/lib/demo-calendar-sync";
 import {
   seedDemoRegionAirportRecords,
@@ -258,9 +258,13 @@ export async function getFallbackDefaultCompanyId() {
 }
 
 export async function getFallbackVillas(companyId?: string | null) {
+  const imported = Object.values((await readLocalCalendarState()).sources);
   const fileData = await readDevelopmentDataFile("demo-villas.json", seedVillaCatalog);
   const normalized = fileData.map((record) =>
-    normalizeVillaRecord(record as CatalogVilla),
+    normalizeVillaRecord({ ...record, availabilityRanges: [
+      ...(record.availabilityRanges ?? []).filter((range) => !range.calendarSourceId),
+      ...imported.filter((source) => source.villaId === record.id && source.companyId === normalizeDevelopmentCompanyId(record.companyId, record.slug)).flatMap((source) => source.blocks),
+    ] } as CatalogVilla),
   );
 
   return filterDevelopmentRecordsByCompany(normalized, companyId, (record) => record.companyId);
@@ -271,7 +275,7 @@ export async function saveFallbackVilla(record: CatalogVilla) {
   const existingRecords = fileData as CatalogVilla[];
   const normalizedRecord = normalizeVillaRecord(record);
   const nextRecords = [
-    normalizedRecord,
+    { ...normalizedRecord, availabilityRanges: normalizedRecord.availabilityRanges.filter((range) => !range.calendarSourceId) },
     ...existingRecords.filter(
       (villa) =>
         !(
@@ -657,9 +661,9 @@ export async function getFallbackCacheGroups(companyId?: string | null) {
   return filterDevelopmentRecordsByCompany(normalized, companyId, (record) => record.companyId);
 }
 
-export async function getFallbackSystemDefaults(_inputCompanyId?: string | null) {
-  void _inputCompanyId;
-  return clone(seedDemoSystemDefaults);
+export async function getFallbackSystemDefaults(inputCompanyId?: string | null) {
+  const values = await readDevelopmentDataFile<Record<string, typeof seedDemoSystemDefaults>>("demo-system-defaults.json", {});
+  return values[normalizeDevelopmentCompanyId(inputCompanyId)] ?? clone(seedDemoSystemDefaults);
 }
 
 export async function getFallbackDocuments(companyId?: string | null) {
@@ -815,9 +819,16 @@ export async function getFallbackDocumentLinks(companyId?: string | null) {
 }
 
 export async function getFallbackIcalSources(companyId?: string | null) {
+  const state = await readLocalCalendarState();
   const fileData = await readDevelopmentDataFile("demo-ical-sources.json", seedDemoIcalSources);
   const normalized = (fileData as DemoIcalSourceRecord[]).map((record) => ({
     ...record,
+    ...(state.sources[record.id] ? {
+      status: state.sources[record.id].status,
+      lastSyncedAt: state.sources[record.id].lastSyncedAt ?? record.lastSyncedAt,
+      lastAttemptAt: state.sources[record.id].lastAttemptAt,
+      nextSyncAt: state.sources[record.id].nextSyncAt,
+    } : {}),
     companyId:
       record.companyId ?? normalizeDevelopmentCompanyId(undefined, record.villaSlug),
   }));
@@ -840,8 +851,9 @@ export async function getFallbackChannelMappings(companyId?: string | null) {
 }
 
 export async function getFallbackSyncLogs(companyId?: string | null) {
+  const state = await readLocalCalendarState();
   const fileData = await readDevelopmentDataFile("demo-sync-logs.json", seedDemoSyncLogs);
-  const normalized = (fileData as DemoSyncLogRecord[]).map((record) => ({
+  const normalized = [...fileData as DemoSyncLogRecord[], ...state.logs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((record) => ({
     ...record,
     companyId:
       record.companyId ?? normalizeDevelopmentCompanyId(undefined, record.villaSlug),
@@ -882,9 +894,6 @@ async function saveFallbackChannelMappings(records: DemoChannelMappingRecord[]) 
   await writeDevelopmentDataFile("demo-channel-mappings.json", records);
 }
 
-async function saveFallbackSyncLogs(records: DemoSyncLogRecord[]) {
-  await writeDevelopmentDataFile("demo-sync-logs.json", records);
-}
 
 export async function createFallbackTeamUser(input: {
   companyId?: string | null;
@@ -1317,7 +1326,7 @@ export async function createFallbackIcalSource(input: {
     sourceUrl: input.sourceUrl,
     direction: input.direction,
     active: true,
-    status: "HEALTHY",
+    status: "WARNING",
     lastSyncedAt: "",
   };
 
@@ -1351,55 +1360,10 @@ export async function updateFallbackIcalSource(
   const nextSources = [...sources];
   nextSources[index] = updated;
   await saveFallbackIcalSources(nextSources);
+  await invalidateLocalCalendarSync(sourceId);
   return updated;
 }
 
-export async function runFallbackCalendarSync(sourceId: string) {
-  const [sources, logs] = await Promise.all([getFallbackIcalSources(), getFallbackSyncLogs()]);
-  const index = sources.findIndex((item) => item.id === sourceId);
-
-  if (index === -1) {
-    throw new Error("Senkron baslatilacak kaynak bulunamadi.");
-  }
-
-  const current = sources[index]!;
-  const createdAt = new Date().toISOString();
-  const outcome: DemoSyncOutcome = current.status === "ERROR" ? "WARNING" : "SUCCESS";
-  const nextStatus: DemoCalendarSourceStatus = outcome === "SUCCESS" ? "HEALTHY" : "WARNING";
-  const eventCount = current.direction === "IMPORT" ? 2 : 1;
-  const message =
-    current.direction === "IMPORT"
-      ? "Kanal takvimindeki yeni bloklar iceri aktariildi ve kontrol tamamlandi."
-      : "Dis kanal icin guncel export linki tekrar yayinlandi.";
-
-  const updatedSource = {
-    ...current,
-    companyId: normalizeDevelopmentCompanyId(current.companyId, current.villaSlug),
-    status: nextStatus,
-    lastSyncedAt: createdAt,
-  } satisfies DemoIcalSourceRecord & { companyId: string };
-  const log = {
-    id: `sync-log-${randomUUID().slice(0, 8)}`,
-    companyId: normalizeDevelopmentCompanyId(current.companyId, current.villaSlug),
-    sourceId: current.id,
-    villaSlug: current.villaSlug,
-    villaTitle: current.villaTitle,
-    channelName: current.channelName,
-    outcome,
-    eventCount,
-    message,
-    createdAt,
-  } satisfies DemoSyncLogRecord & { companyId: string };
-
-  const nextSources = [...sources];
-  nextSources[index] = updatedSource;
-  await Promise.all([saveFallbackIcalSources(nextSources), saveFallbackSyncLogs([log, ...logs])]);
-
-  return {
-    source: updatedSource,
-    log,
-  };
-}
 
 export async function createFallbackChannelMapping(input: {
   villaId: string;

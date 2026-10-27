@@ -34,7 +34,13 @@ export async function authenticateUser(
     };
   }
 
-  const result = await validateUser(username, password, companyName);
+  let result;
+  try {
+    result = await validateUser(username, password, companyName);
+  } catch (error) {
+    console.error("Login verification unavailable", error instanceof Error ? error.name : "UnknownError");
+    return { error: pickLocalized(locale, "Giris servisine su anda ulasilamiyor. Lutfen tekrar deneyin.", "Sign-in is temporarily unavailable. Please try again."), companyName, username };
+  }
 
   if (!result.ok) {
     const error =
@@ -69,7 +75,12 @@ export async function authenticateUser(
     };
   }
 
-  await setUserSession(result.user);
+  try {
+    await setUserSession(result.user);
+  } catch (error) {
+    console.error("Session registration failed", error instanceof Error ? error.name : "UnknownError");
+    return { error: pickLocalized(locale, "Guvenli oturum olusturulamadi. Lutfen yoneticiyle iletisime gecin.", "A secure session could not be created. Please contact your administrator."), companyName, username };
+  }
   redirect(getPanelHomePath(result.user.role));
 }
 

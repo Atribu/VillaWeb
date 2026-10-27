@@ -1,10 +1,12 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME, createSessionToken, readSessionToken } from "@/lib/auth/session";
+import { cache } from "react";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { registerSession, resolveSession, revokeSession } from "@/lib/auth/session-store";
 import type { SessionUser } from "@/lib/auth/session";
 
-export async function getUserSession() {
+export const getUserSession = cache(async () => {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
@@ -12,25 +14,26 @@ export async function getUserSession() {
     return null;
   }
 
-  return readSessionToken(token);
-}
+  return resolveSession(token);
+});
 
 export async function setUserSession(user: SessionUser) {
-  const token = await createSessionToken(user);
+  const { token, expiresAt } = await registerSession(user);
   const cookieStore = await cookies();
-  const payload = await readSessionToken(token);
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    expires: payload ? new Date(payload.expiresAt) : undefined,
+    expires: new Date(expiresAt),
   });
 }
 
 export async function clearUserSession() {
   const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (token) await revokeSession(token);
 
   cookieStore.set(SESSION_COOKIE_NAME, "", {
     httpOnly: true,

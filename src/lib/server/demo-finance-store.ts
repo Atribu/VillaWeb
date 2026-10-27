@@ -20,7 +20,9 @@ import {
   getFallbackInvoices,
   getFallbackPayments,
 } from "@/lib/server/development-fallback-data";
-import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import { withDevelopmentFallback, writeDevelopmentDataFile } from "@/lib/server/development-fallback";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import { isDateKey } from "@/lib/booking-dates";
 import { BookingWorkflowError, syncInvoiceConfirmation } from "@/lib/server/booking-workflow";
 import { updateFallbackFinance, withFallbackBookingMutation } from "@/lib/server/fallback-booking-workflow";
 
@@ -305,7 +307,7 @@ export async function createManualCashEntry(input: {
     throw new DemoFinanceStoreError("Tutar sifirdan buyuk olmalidir.");
   }
 
-  if (!input.date) {
+  if (!isDateKey(input.date)) {
     throw new DemoFinanceStoreError("Tarih zorunludur.");
   }
 
@@ -318,6 +320,7 @@ export async function createManualCashEntry(input: {
 
   await assertPanelCompanyAccess(companyId);
 
+  return withDevelopmentFallback<DemoCashEntry>(async () => {
   const entry = await db.cashLedgerEntry.create({
     data: {
       id: `cash-manual-${randomUUID().slice(0, 8)}`,
@@ -345,9 +348,17 @@ export async function createManualCashEntry(input: {
     note: entry.note ?? undefined,
     createdAt: entry.createdAt.toISOString(),
   } satisfies DemoCashEntry;
+  }, async () => {
+    const entry: DemoCashEntry = { id: `cash-manual-${randomUUID()}`, companyId, direction: input.direction,
+      category: input.category.trim(), title: input.title.trim(), amount: input.amount, date: input.date,
+      source: "MANUAL", note: input.note?.trim() || undefined, createdAt: new Date().toISOString() };
+    await writeDevelopmentDataFile("demo-cashbook.json", [...await getFallbackCashEntries(), entry]);
+    return entry;
+  });
 }
 
 export async function deleteManualCashEntry(entryId: string) {
+  return withDevelopmentFallback(async () => {
   const entry = await db.cashLedgerEntry.findUnique({
     where: { id: entryId },
     select: { id: true, companyId: true, source: true },
@@ -363,6 +374,12 @@ export async function deleteManualCashEntry(entryId: string) {
 
   await assertPanelCompanyAccess(entry.companyId);
   await db.cashLedgerEntry.delete({ where: { id: entryId } });
+  }, async () => {
+    await mutateFallbackRecord("demo-cashbook.json", getFallbackCashEntries, entryId, (record) => {
+      if (record.source !== "MANUAL") throw new DemoFinanceStoreError("Otomatik uretildigi icin bu kayit silinemez.");
+      return null;
+    });
+  });
 }
 
 export function getDemoFinanceStatusOptions() {

@@ -1,4 +1,6 @@
 import "server-only";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
 import { db } from "@/lib/db";
 import type { DemoDefinitionStatus } from "@/lib/demo-definitions";
@@ -111,87 +113,97 @@ export async function updateDemoRegionAirportStatus(
   regionId: string,
   status: DemoDefinitionStatus,
 ) {
-  const region = await db.region.findUnique({
-    where: { id: regionId },
-  });
+  return withDevelopmentFallback(async () => {
+    const region = await db.region.findUnique({
+      where: { id: regionId },
+    });
 
-  if (!region) {
-    throw new DemoDefinitionsStoreError("Bolge kaydi bulunamadi.");
-  }
+    if (!region) {
+      throw new DemoDefinitionsStoreError("Bolge kaydi bulunamadi.");
+    }
 
-  await assertPanelCompanyAccess(region.companyId);
+    await assertPanelCompanyAccess(region.companyId);
 
-  const updated = await db.region.update({
-    where: { id: regionId },
-    data: {
-      status: mapDemoDefinitionStatusToPrisma(status),
-    },
-    include: {
-      airports: {
-        orderBy: { createdAt: "asc" },
+    const updated = await db.region.update({
+      where: { id: regionId },
+      data: {
+        status: mapDemoDefinitionStatusToPrisma(status),
       },
-    },
+      include: {
+        airports: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    const airport = updated.airports[0] ?? null;
+    const villas = await getDemoVillas({ companyId: updated.companyId ?? undefined });
+    const villaCount = villas.filter((villa) => {
+      if (villa.city.toLowerCase() !== updated.city.toLowerCase()) {
+        return false;
+      }
+
+      if (updated.districtScope.length === 0) {
+        return true;
+      }
+
+      return updated.districtScope.some(
+        (district) => district.toLowerCase() === (villa.district ?? "").toLowerCase(),
+      );
+    }).length;
+
+    return {
+      id: updated.id,
+      regionLabel: updated.name,
+      city: updated.city,
+      districtScope: updated.districtScope,
+      airportCode: airport?.code ?? "-",
+      airportName: airport?.name ?? "Bagli havalimani yok",
+      driveMinutes: airport?.driveMinutes ?? 0,
+      status: mapDefinitionStatusToDemo(updated.status),
+      villaCount,
+      updatedAt: iso(updated.updatedAt),
+    };
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-region-airports.json", fallbackRecords.getFallbackRegionAirportRecords, regionId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  const airport = updated.airports[0] ?? null;
-  const villas = await getDemoVillas({ companyId: updated.companyId ?? undefined });
-  const villaCount = villas.filter((villa) => {
-    if (villa.city.toLowerCase() !== updated.city.toLowerCase()) {
-      return false;
-    }
-
-    if (updated.districtScope.length === 0) {
-      return true;
-    }
-
-    return updated.districtScope.some(
-      (district) => district.toLowerCase() === (villa.district ?? "").toLowerCase(),
-    );
-  }).length;
-
-  return {
-    id: updated.id,
-    regionLabel: updated.name,
-    city: updated.city,
-    districtScope: updated.districtScope,
-    airportCode: airport?.code ?? "-",
-    airportName: airport?.name ?? "Bagli havalimani yok",
-    driveMinutes: airport?.driveMinutes ?? 0,
-    status: mapDefinitionStatusToDemo(updated.status),
-    villaCount,
-    updatedAt: iso(updated.updatedAt),
-  };
 }
 
 export async function updateDemoParameterGroupStatus(
   groupId: string,
   status: DemoDefinitionStatus,
 ) {
-  const group = await db.parameterGroup.findUnique({
-    where: { id: groupId },
+  return withDevelopmentFallback(async () => {
+    const group = await db.parameterGroup.findUnique({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new DemoDefinitionsStoreError("Parametre grubu bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(group.companyId);
+
+    const updated = await db.parameterGroup.update({
+      where: { id: groupId },
+      data: {
+        status: mapDemoDefinitionStatusToPrisma(status),
+      },
+    });
+
+    return {
+      id: updated.id,
+      label: updated.label,
+      scope: updated.scope,
+      itemCount: updated.itemCount,
+      sampleItems: updated.sampleItems,
+      status: mapDefinitionStatusToDemo(updated.status),
+      note: updated.note ?? "",
+      updatedAt: iso(updated.updatedAt),
+    };
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-parameter-groups.json", fallbackRecords.getFallbackParameterGroups, groupId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!group) {
-    throw new DemoDefinitionsStoreError("Parametre grubu bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(group.companyId);
-
-  const updated = await db.parameterGroup.update({
-    where: { id: groupId },
-    data: {
-      status: mapDemoDefinitionStatusToPrisma(status),
-    },
-  });
-
-  return {
-    id: updated.id,
-    label: updated.label,
-    scope: updated.scope,
-    itemCount: updated.itemCount,
-    sampleItems: updated.sampleItems,
-    status: mapDefinitionStatusToDemo(updated.status),
-    note: updated.note ?? "",
-    updatedAt: iso(updated.updatedAt),
-  };
 }

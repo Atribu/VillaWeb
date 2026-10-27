@@ -26,6 +26,6 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function HomePage() {
   const locale = await getCurrentLocale();
   const { company, themeKey } = await getCurrentPublicSiteTemplate();
-  const villas = await getDemoVillas({ companyId: company.id, includeMetrics: false, includeInactive: false });
+  const villas = await getDemoVillas({ publicSite: true, companyId: company.id, includeMetrics: false, includeInactive: false });
   return <TemplateHome company={company} villas={villas} theme={themeKey} locale={locale} />;
 }

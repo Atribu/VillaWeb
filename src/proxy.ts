@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { DEMO_COMPANY_COOKIE_NAME } from "@/lib/demo-companies";
 import { canAccessPanelPath, getPanelHomePath } from "@/lib/auth/panel-access";
-import { SESSION_COOKIE_NAME, readSessionToken } from "@/lib/auth/session";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { resolveSession } from "@/lib/auth/session-store";
 import { APP_LOCALE_COOKIE_NAME, normalizeAppLocale } from "@/lib/i18n";
 
 export async function proxy(request: NextRequest) {
@@ -54,7 +55,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const session = token ? await readSessionToken(token) : null;
+  const session = token ? await resolveSession(token).catch(() => null) : null;
 
   if (pathname === "/panel/giris") {
     if (session) {

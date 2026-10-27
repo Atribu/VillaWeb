@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   getCalendarSourceStatusLabel,
   getCalendarSourceStatusTone,
-  type DemoCalendarSourceStatus,
   type DemoIcalSourceRecord,
 } from "@/lib/demo-calendar-sync";
 import type { CatalogVilla } from "@/lib/villa-catalog";
-import { formatShortDate } from "@/lib/villa-catalog";
 
 type CalendarSourcesManagerProps = {
   sources: DemoIcalSourceRecord[];
@@ -18,10 +16,7 @@ type CalendarSourcesManagerProps = {
 
 type SourceDraft = {
   sourceUrl: string;
-  status: DemoCalendarSourceStatus;
 };
-
-const SOURCE_STATUSES: DemoCalendarSourceStatus[] = ["HEALTHY", "WARNING", "ERROR"];
 
 function buildDrafts(sources: DemoIcalSourceRecord[]) {
   return Object.fromEntries(
@@ -29,7 +24,6 @@ function buildDrafts(sources: DemoIcalSourceRecord[]) {
       source.id,
       {
         sourceUrl: source.sourceUrl,
-        status: source.status,
       } satisfies SourceDraft,
     ]),
   ) as Record<string, SourceDraft>;
@@ -41,7 +35,7 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
   const [isCreating, setIsCreating] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, SourceDraft>>(buildDrafts(sources));
   const [message, setMessage] = useState("");
-  const [messageTone, setMessageTone] = useState<"success" | "error">("success");
+  const [messageTone, setMessageTone] = useState<"success" | "warning" | "error">("success");
   const [createForm, setCreateForm] = useState({
     villaId: villas[0]?.id ?? "",
     channelName: "",
@@ -116,15 +110,16 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
         method: "POST",
       });
 
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as { error?: string; message?: string; outcome?: string };
       if (!response.ok) {
         setMessageTone("error");
-        setMessage(payload.error ?? "Senkron baslatilamadi.");
+        setMessage(payload.error ?? "Senkron tamamlanamadi; onceki doluluk korundu.");
+        router.refresh();
         return;
       }
 
-      setMessageTone("success");
-      setMessage("Manuel senkron baslatildi ve log kaydi olusturuldu.");
+      setMessageTone(payload.outcome === "WARNING" ? "warning" : "success");
+      setMessage(payload.message ?? "Takvim senkronize edildi.");
       router.refresh();
     } catch {
       setMessageTone("error");
@@ -173,10 +168,12 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
     <div className="space-y-6">
       {message ? (
         <div
+          role="status"
+          aria-live="polite"
           className={`rounded-[1.2rem] border px-4 py-3 text-sm ${
             messageTone === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-rose-200 bg-rose-50 text-rose-700"
+              : messageTone === "warning" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700"
           }`}
         >
           {message}
@@ -190,8 +187,13 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
               Yeni iCal Kaynagi
             </p>
             <h3 className="mt-3 text-2xl font-semibold text-slate-900">
-              Kanal takvimini villa bazinda sisteme ekle ve senkron akisini baslat
+              Kanal takvimi baglantilarini villa bazinda yonet
             </h3>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-amber-800">
+              Kanalin iCal baglantisini ekleyin, ardindan Manuel Senkron ile dolulugu alin.
+              Sunucu zamanlayicisi kuruldugunda aktif kaynaklar 15 dakika araliklarla kontrol edilir.
+              Pasife almak mevcut bloklari silmez. Disa aktarim icin villa ekranindaki imzali baglantiyi dis platforma ekleyin.
+            </p>
           </div>
           <button
             type="button"
@@ -205,6 +207,7 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <select
+            aria-label="Takvim icin villa"
             value={createForm.villaId}
             onChange={(event) => setCreateForm((current) => ({ ...current, villaId: event.target.value }))}
             className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2b78ad] focus:bg-white"
@@ -217,12 +220,15 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
             ))}
           </select>
           <input
+            aria-label="Kanal adi"
+            maxLength={120}
             value={createForm.channelName}
             onChange={(event) => setCreateForm((current) => ({ ...current, channelName: event.target.value }))}
             placeholder="Kanal adi"
             className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2b78ad] focus:bg-white"
           />
           <select
+            aria-label="Aktarim yonu"
             value={createForm.direction}
             onChange={(event) =>
               setCreateForm((current) => ({
@@ -238,6 +244,8 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
         </div>
 
         <input
+          aria-label="Yeni iCal kaynagi URL"
+          maxLength={4096}
           value={createForm.sourceUrl}
           onChange={(event) => setCreateForm((current) => ({ ...current, sourceUrl: event.target.value }))}
           placeholder="https://ornek.com/channel.ics"
@@ -249,7 +257,6 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
         {sources.map((source) => {
           const draft = drafts[source.id] ?? {
             sourceUrl: source.sourceUrl,
-            status: source.status,
           };
 
           return (
@@ -287,15 +294,19 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
                   </div>
 
                   <div className="rounded-[1.25rem] bg-[#f8fafc] px-4 py-4 text-sm text-slate-600">
-                    Son senkron:{" "}
+                    Son basarili aktarim:{" "}
                     <span className="font-semibold text-slate-900">
-                      {source.lastSyncedAt ? formatShortDate(source.lastSyncedAt.slice(0, 10)) : "-"}
+                      {source.lastSyncedAt ? new Date(source.lastSyncedAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }) : "Henuz yapilmadi"}
                     </span>
+                    {source.lastAttemptAt ? <p className="mt-2">Son deneme: {new Date(source.lastAttemptAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })}</p> : null}
+                    {source.nextSyncAt && source.active && source.direction === "IMPORT" ? <p className="mt-2">Sonraki kontrol: {new Date(source.nextSyncAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} (zamanlayici gerektirir)</p> : null}
                   </div>
                 </div>
 
                 <div className="grid w-full max-w-[420px] gap-4 rounded-[1.5rem] bg-[#f8fafc] p-5">
                   <input
+                    aria-label={`${source.channelName} iCal URL`}
+                    maxLength={4096}
                     value={draft.sourceUrl}
                     disabled={busySourceId === source.id}
                     onChange={(event) =>
@@ -306,26 +317,7 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
                     }
                     className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2b78ad]"
                   />
-                  <select
-                    value={draft.status}
-                    disabled={busySourceId === source.id}
-                    onChange={(event) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [source.id]: {
-                          ...draft,
-                          status: event.target.value as DemoCalendarSourceStatus,
-                        },
-                      }))
-                    }
-                    className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2b78ad]"
-                  >
-                    {SOURCE_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {getCalendarSourceStatusLabel(status)}
-                      </option>
-                    ))}
-                  </select>
+                  <p className="text-xs leading-5 text-slate-500">Kaynak sagligi gercek senkron sonucuna gore otomatik guncellenir. Tekrarlayan etkinlikler yerine her konaklamayi ayri kayit olarak veren doluluk takvimini kullanin.</p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <button
                       type="button"
@@ -337,7 +329,7 @@ export function CalendarSourcesManager({ sources, villas }: CalendarSourcesManag
                     </button>
                     <button
                       type="button"
-                      disabled={busySourceId === source.id}
+                      disabled={busySourceId !== null || !source.active || source.direction !== "IMPORT"}
                       onClick={() => runSync(source.id)}
                       className="rounded-full border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                     >

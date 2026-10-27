@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoSyncMode } from "@/lib/demo-calendar-sync";
 import {
@@ -16,6 +17,8 @@ type RouteContext = {
 const ALLOWED_MODES = new Set<DemoSyncMode>(["IMPORT_ONLY", "TWO_WAY"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "calendar");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -42,6 +45,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const mapping = await updateDemoChannelMapping(id, payload);
     return NextResponse.json({ mapping });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoCalendarSyncStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

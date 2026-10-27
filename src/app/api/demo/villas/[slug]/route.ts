@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getUserSession } from "@/lib/auth/server-session";
@@ -41,6 +42,8 @@ function isVillaStatus(value: unknown): value is CatalogVilla["status"] {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "villas");
+  if (denied) return denied;
   const session = await getUserSession();
 
   if (!session) {
@@ -60,6 +63,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ villa });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoVillaStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -74,6 +79,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function PUT(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "villas");
+  if (denied) return denied;
   const session = await getUserSession();
 
   if (!session) {
@@ -96,6 +103,8 @@ export async function PUT(request: Request, context: RouteContext) {
 
     return NextResponse.json({ villa });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoVillaStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -110,6 +119,8 @@ export async function PUT(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(_request, "villas");
+  if (denied) return denied;
   const session = await getUserSession();
 
   if (!session) {
@@ -123,6 +134,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoVillaStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

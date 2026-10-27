@@ -1,11 +1,13 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
+import { CalendarImportError } from "@/lib/calendar-import";
+import { normalizeCalendarUrl } from "@/lib/server/calendar-fetch";
+import { synchronizeCalendarSource } from "@/lib/server/calendar-sync";
 import type {
   DemoCalendarSourceStatus,
+  DemoIcalSourceRecord,
   DemoSyncMode,
-  DemoSyncOutcome,
 } from "@/lib/demo-calendar-sync";
 import { assertPanelCompanyAccess, resolvePanelCompanyId } from "@/lib/server/demo-company-context";
 import {
@@ -15,7 +17,6 @@ import {
   getFallbackIcalSources,
   getFallbackSyncLogs,
   getFallbackVillas,
-  runFallbackCalendarSync,
   updateFallbackChannelMapping,
   updateFallbackIcalSource,
 } from "@/lib/server/development-fallback-data";
@@ -23,7 +24,6 @@ import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 import {
   iso,
   mapCalendarSourceStatusToDemo,
-  mapDemoCalendarSourceStatusToPrisma,
   mapDemoSyncModeToPrisma,
   mapSyncModeToDemo,
   mapSyncOutcomeToDemo,
@@ -32,22 +32,10 @@ import {
 export class DemoCalendarSyncStoreError extends Error {}
 
 function validateCalendarUrl(value: string) {
-  const normalized = value.trim();
-
-  if (!normalized) {
-    throw new DemoCalendarSyncStoreError("Takvim baglantisi bos birakilamaz.");
-  }
-
   try {
-    const url = new URL(normalized);
-
-    if (!["http:", "https:", "webcal:"].includes(url.protocol)) {
-      throw new Error("unsupported");
-    }
-
-    return normalized;
-  } catch {
-    throw new DemoCalendarSyncStoreError("Gecerli bir iCal baglantisi girilmelidir.");
+    return normalizeCalendarUrl(value);
+  } catch (error) {
+    throw new DemoCalendarSyncStoreError(error instanceof CalendarImportError ? error.message : "Gecerli bir iCal baglantisi girilmelidir.");
   }
 }
 
@@ -80,6 +68,8 @@ export async function getDemoIcalSources() {
         active: source.active,
         status: mapCalendarSourceStatusToDemo(source.status),
         lastSyncedAt: iso(source.lastSyncedAt),
+        lastAttemptAt: iso(source.lastAttemptAt),
+        nextSyncAt: iso(source.nextSyncAt),
       }));
     },
     async () => getFallbackIcalSources(await resolvePanelCompanyId()),
@@ -95,11 +85,11 @@ export async function createDemoIcalSource(input: {
   const channelName = input.channelName.trim();
   const sourceUrl = validateCalendarUrl(input.sourceUrl);
 
-  if (!input.villaId || !channelName) {
-    throw new DemoCalendarSyncStoreError("Kaynak olusturmak icin villa ve kanal bilgisi zorunludur.");
+  if (!input.villaId || !channelName || channelName.length > 120) {
+    throw new DemoCalendarSyncStoreError("Villa secin ve en fazla 120 karakterlik bir kanal adi girin.");
   }
 
-  return withDevelopmentFallback(
+  return withDevelopmentFallback<DemoIcalSourceRecord>(
     async () => {
       const villa = await db.villa.findUnique({
         where: { id: input.villaId },
@@ -141,7 +131,7 @@ export async function createDemoIcalSource(input: {
           sourceUrl,
           direction: input.direction,
           active: true,
-          status: "HEALTHY",
+          status: "WARNING",
           lastSyncedAt: null,
         },
         include: {
@@ -265,6 +255,7 @@ export async function updateDemoIcalSource(
     sourceUrl?: string;
   },
 ) {
+  if (input.status !== undefined) throw new DemoCalendarSyncStoreError("Kaynak sagligi senkron sonucundan otomatik hesaplanir; elle degistirilemez.");
   const nextSourceUrl = input.sourceUrl !== undefined ? validateCalendarUrl(input.sourceUrl) : undefined;
 
   return withDevelopmentFallback(
@@ -291,8 +282,11 @@ export async function updateDemoIcalSource(
         where: { id: sourceId },
         data: {
           ...(input.active !== undefined ? { active: input.active } : {}),
-          ...(input.status ? { status: mapDemoCalendarSourceStatusToPrisma(input.status) } : {}),
           ...(nextSourceUrl !== undefined ? { sourceUrl: nextSourceUrl } : {}),
+          status: "WARNING",
+          nextSyncAt: new Date(),
+          syncLeaseToken: null,
+          syncLeaseUntil: null,
         },
         include: {
           villa: {
@@ -335,116 +329,15 @@ export async function updateDemoIcalSource(
 }
 
 export async function runDemoCalendarSync(sourceId: string) {
-  return withDevelopmentFallback(
-    async () => {
-      const source = await db.calendarSyncSource.findUnique({
-        where: { id: sourceId },
-        include: {
-          villa: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-            },
-          },
-        },
-      });
-
-      if (!source) {
-        throw new DemoCalendarSyncStoreError("Senkron baslatilacak kaynak bulunamadi.");
-      }
-
-      await assertPanelCompanyAccess(source.companyId);
-
-      const createdAt = new Date();
-      const outcome: DemoSyncOutcome = source.status === "ERROR" ? "WARNING" : "SUCCESS";
-      const nextStatus: DemoCalendarSourceStatus = outcome === "SUCCESS" ? "HEALTHY" : "WARNING";
-      const eventCount = source.direction === "IMPORT" ? 2 : 1;
-      const message =
-        source.direction === "IMPORT"
-          ? "Kanal takvimindeki yeni bloklar iceri aktariildi ve kontrol tamamlandi."
-          : "Dis kanal icin guncel export linki tekrar yayinlandi.";
-
-      const [updatedSource, log] = await db.$transaction([
-        db.calendarSyncSource.update({
-          where: { id: sourceId },
-          data: {
-            status: mapDemoCalendarSourceStatusToPrisma(nextStatus),
-            lastSyncedAt: createdAt,
-          },
-          include: {
-            villa: {
-              select: {
-                slug: true,
-                title: true,
-              },
-            },
-          },
-        }),
-        db.calendarSyncLog.create({
-          data: {
-            id: `sync-log-${randomUUID().slice(0, 8)}`,
-            companyId: source.companyId,
-            sourceId: source.id,
-            villaId: source.villa.id,
-            channelName: source.channelName,
-            outcome,
-            eventCount,
-            message,
-            createdAt,
-          },
-          include: {
-            villa: {
-              select: {
-                slug: true,
-                title: true,
-              },
-            },
-            source: {
-              select: { id: true },
-            },
-          },
-        }),
-      ]);
-
-      return {
-        source: {
-          id: updatedSource.id,
-          companyId: updatedSource.companyId,
-          villaSlug: updatedSource.villa.slug,
-          villaTitle: updatedSource.villa.title,
-          channelName: updatedSource.channelName,
-          sourceUrl: updatedSource.sourceUrl,
-          direction: updatedSource.direction,
-          active: updatedSource.active,
-          status: mapCalendarSourceStatusToDemo(updatedSource.status),
-          lastSyncedAt: iso(updatedSource.lastSyncedAt),
-        },
-        log: {
-          id: log.id,
-          companyId: log.companyId,
-          sourceId: log.source?.id ?? "",
-          villaSlug: log.villa.slug,
-          villaTitle: log.villa.title,
-          channelName: log.channelName,
-          outcome: mapSyncOutcomeToDemo(log.outcome),
-          eventCount: log.eventCount,
-          message: log.message,
-          createdAt: iso(log.createdAt),
-        },
-      };
-    },
-    async () => {
-      const source = (await getFallbackIcalSources()).find((item) => item.id === sourceId);
-
-      if (!source) {
-        throw new DemoCalendarSyncStoreError("Senkron baslatilacak kaynak bulunamadi.");
-      }
-
-      await assertPanelCompanyAccess(source.companyId);
-      return runFallbackCalendarSync(sourceId);
-    },
-  );
+  const source = (await getDemoIcalSources()).find((item) => item.id === sourceId);
+  if (!source) throw new DemoCalendarSyncStoreError("Senkron kaynagi bulunamadi.");
+  await assertPanelCompanyAccess(source.companyId);
+  try {
+    return await synchronizeCalendarSource(sourceId);
+  } catch (error) {
+    if (error instanceof CalendarImportError) throw new DemoCalendarSyncStoreError(error.message);
+    throw error;
+  }
 }
 
 export async function updateDemoChannelMapping(

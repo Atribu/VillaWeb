@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { isDateKey } from "@/lib/booking-dates";
+import { isDateKey, todayInTurkey } from "@/lib/booking-dates";
 import { BOOKING_TERMS_VERSION } from "@/lib/booking-terms";
-import { getUserSession } from "@/lib/auth/server-session";
-import { canAccessPanelPath } from "@/lib/auth/panel-access";
+import { authorizePanelApi } from "@/lib/auth/api-access";
 import {
   getMinimumNightCountForStay,
   REQUEST_STATUS_OPTIONS,
@@ -50,10 +49,10 @@ export async function POST(request: Request) {
     const couponCode = String(payload.couponCode ?? "").trim();
     const termsAccepted = payload.termsAccepted === true;
     const termsVersion = BOOKING_TERMS_VERSION;
-    const session = await getUserSession().catch(() => null);
-    const origin = payload.origin === "MANUAL_PANEL" && session ? "MANUAL_PANEL" : "PUBLIC_FORM";
-    if (origin === "MANUAL_PANEL" && session && !canAccessPanelPath(session.role, "/panel/rezervasyonlar/yeni-rezervasyon")) {
-      return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
+    const origin = payload.origin === "MANUAL_PANEL" ? "MANUAL_PANEL" : "PUBLIC_FORM";
+    if (origin === "MANUAL_PANEL") {
+      const denied = await authorizePanelApi(request, "reservations");
+      if (denied) return denied;
     }
     const initialStatus = origin === "MANUAL_PANEL" ? payload.initialStatus ?? "NEW" : "NEW";
     const company = origin === "MANUAL_PANEL" ? null : await getCurrentPublicCompany();
@@ -64,6 +63,9 @@ export async function POST(request: Request) {
 
     if (!villaSlug || !isDateKey(checkIn) || !isDateKey(checkOut)) {
       throw new DemoOperationsStoreError("Villa ve tarih secimi olmadan talep kaydi acilamaz.");
+    }
+    if (origin === "PUBLIC_FORM" && checkIn < todayInTurkey()) {
+      throw new DemoOperationsStoreError("Gecmis tarihler icin talep olusturulamaz.");
     }
 
     if (!fullName || !phone || !email) {
@@ -89,7 +91,7 @@ export async function POST(request: Request) {
 
     const villa = await getDemoVillaBySlug(
       villaSlug,
-      company ? { companyId: company.id, includeInactive: false, includeMetrics: false } : undefined,
+      company ? { publicSite: true, companyId: company.id, includeInactive: false, includeMetrics: false } : undefined,
     );
 
     if (!villa) {

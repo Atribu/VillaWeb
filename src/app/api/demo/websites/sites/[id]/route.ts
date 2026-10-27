@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getUserSession } from "@/lib/auth/server-session";
@@ -18,6 +19,8 @@ type RouteContext = {
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "websites");
+  if (denied) return denied;
   const session = await getUserSession().catch(() => null);
   if (!session) return NextResponse.json({ error: "Oturum bulunamadı." }, { status: 401 });
   if (!["SUPER_ADMIN", "ADMIN"].includes(session.role)) return NextResponse.json({ error: "Site yönetimi yetkiniz bulunmuyor." }, { status: 403 });
@@ -34,6 +37,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     revalidatePath("/panel/web-siteleri/site-yonetimi");
     return NextResponse.json({ website });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof WebsiteAccessError) return NextResponse.json({ error: error.message }, { status: 403 });
     if (error instanceof WebsiteNotFoundError) return NextResponse.json({ error: error.message }, { status: 404 });
     if (error instanceof DemoWebsitesStoreError) {

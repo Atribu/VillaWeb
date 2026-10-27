@@ -320,13 +320,13 @@ export function VillaAvailabilityManager({ villa }: VillaAvailabilityManagerProp
 
                   <button
                     type="button"
-                    disabled={isSubmitting || deletingRangeId !== null || Boolean(range.sourceRequestId)}
+                    disabled={isSubmitting || deletingRangeId !== null || Boolean(range.sourceRequestId) || Boolean(range.calendarSourceId)}
                     onClick={() => {
                       void handleDelete(range.id);
                     }}
                     className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                   >
-                    {range.sourceRequestId ? "Rezervasyona bagli" : deletingRangeId === range.id ? "Siliniyor..." : "Bloku Sil"}
+                    {range.calendarSourceId ? "iCal kaynagina bagli" : range.sourceRequestId ? "Rezervasyona bagli" : deletingRangeId === range.id ? "Siliniyor..." : "Bloku Sil"}
                   </button>
                 </div>
               </article>

@@ -1,4 +1,4 @@
-import { DEMO_REFERENCE_DATE } from "@/lib/demo-operations";
+import { todayInTurkey } from "@/lib/booking-dates";
 import { formatCurrency } from "@/lib/villa-catalog";
 
 export type DemoInvoiceStatus = "DRAFT" | "SENT" | "PAID" | "CANCELLED";
@@ -148,7 +148,7 @@ export function getPaymentTypeLabel(type: DemoPaymentType) {
 
 export function getPaymentDisplayStatus(
   payment: Pick<DemoPaymentRecord, "status" | "dueDate">,
-  referenceDate = DEMO_REFERENCE_DATE,
+  referenceDate = todayInTurkey(),
 ): DemoPaymentDisplayStatus {
   if (payment.status === "PAID" || payment.status === "CANCELLED") {
     return payment.status;
@@ -200,7 +200,7 @@ export function buildDemoFinanceBalances(input: {
   payments: DemoPaymentRecord[];
   referenceDate?: string;
 }) {
-  const referenceDate = input.referenceDate ?? DEMO_REFERENCE_DATE;
+  const referenceDate = input.referenceDate ?? todayInTurkey();
 
   return input.invoices
     .map((invoice) => {
@@ -251,7 +251,7 @@ export function buildDemoFinanceOverview(input: {
   cashEntries: DemoCashEntry[];
   referenceDate?: string;
 }) {
-  const referenceDate = input.referenceDate ?? DEMO_REFERENCE_DATE;
+  const referenceDate = input.referenceDate ?? todayInTurkey();
   const totalContracted = input.invoices
     .filter((invoice) => invoice.status !== "CANCELLED")
     .reduce((sum, invoice) => sum + invoice.totalAmount, 0);

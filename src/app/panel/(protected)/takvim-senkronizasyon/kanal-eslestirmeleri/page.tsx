@@ -17,8 +17,9 @@ export default async function PanelChannelMappingsPage() {
           Villa takvimini kanal isimleriyle net sekilde eslestir
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Cift yonlu veya sadece ice aktarim modu burada belirlenir. Eslestirme durumu aktif veya
-          pasif olarak panelden degistirilebilir.
+          Bu ekran kanal adi ve kullanim amaci icin referans kaydi tutar; tek basina aktarim baslatmaz.
+          Gercek ice aktarimi iCal Kaynaklari ekranindan yonetin. Cift yonlu kullanim icin ayrica
+          villanin imzali disa aktarim baglantisini karsi platforma ekleyin.
         </p>
       </div>
 

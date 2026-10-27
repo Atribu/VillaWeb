@@ -1,24 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Container } from "@/components/ui/container";
-import { PublicPageHero } from "@/components/public/public-page-hero";
-import { SectionHeading } from "@/components/ui/section-heading";
+import { EditorialBreadcrumbs, EditorialPhoto, PlanningCta } from "@/components/site-templates/editorial-parts";
+import { SiteIcon } from "@/components/site-templates/site-icon";
+import s from "@/components/site-templates/editorial-pages.module.css";
 import { getDemoCompanySiteHref } from "@/lib/demo-companies";
 import { pickLocalized } from "@/lib/i18n";
 import { buildPublicMetadata } from "@/lib/public-metadata";
-import { getCompanyHeroImage } from "@/lib/public-gallery";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
+import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getCurrentLocale();
-
+  const company = await getCurrentPublicCompany();
   return buildPublicMetadata({
     locale,
-    title: { tr: "Hakkimizda", en: "About" },
+    title: { tr: "Hakkımızda", en: "About us" },
     description: {
-      tr: "VillaVera'nin hizmet anlayisini, operasyon modelini ve neden tercih edildigini anlatan kurumsal sayfa.",
-      en: "A corporate page explaining VillaVera's service approach, operating model and why it is preferred.",
+      tr: `${company.shortName} ile kendi ritminizde bir villa tatili. Koleksiyonumuzu, tatil anlayışımızı ve rezervasyon sürecini keşfedin.`,
+      en: `A villa holiday at your own pace with ${company.shortName}. Discover our collection, approach to travel and booking process.`,
     },
     canonical: "/hakkimizda",
   });
@@ -27,141 +27,48 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AboutPage() {
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const heroImage = getCompanyHeroImage(company.slug);
-  const valueCards = [
-    {
-      title: pickLocalized(locale, "Secili portfoy anlayisi", "Curated portfolio approach"),
-      text: pickLocalized(
-        locale,
-        "Her villa vitrinde yer almadan once icerik, fiyat, gorsel kalite ve talep akisina uygunluk acisindan degerlendirilir.",
-        "Before any villa appears in the showcase, it is reviewed in terms of content, pricing, visual quality and suitability for the inquiry flow.",
-      ),
-    },
-    {
-      title: pickLocalized(locale, "Hizli geri donus sureci", "Fast response process"),
-      text: pickLocalized(
-        locale,
-        "Talep gonderen kullaniciya hizli donus saglayacak panel ve operasyon mantigi ile donusum odakli bir akis kurulur.",
-        "A conversion-oriented flow is built with panel and operations logic that enables quick responses to users who submit inquiries.",
-      ),
-    },
-    {
-      title: pickLocalized(locale, "Panel destekli yonetim", "Panel-backed management"),
-      text: pickLocalized(
-        locale,
-        "Fiyat, kampanya, kupon ve doluluk takvimi tek panelden yonetilerek vitrine anlik sekilde yansitilir.",
-        "Pricing, campaigns, coupons and availability calendars are managed from a single panel and reflected instantly on the public site.",
-      ),
-    },
+  const villas = await getDemoVillas({ publicSite: true, companyId: company.id, includeMetrics: false, includeInactive: false });
+  const photo = villas.find((villa) => villa.companyId === company.id && villa.coverImageUrl);
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
+  const href = (path: string) => getDemoCompanySiteHref(company.slug, path);
+  const values = [
+    { icon: "home" as const, title: t("Size ait bir alan.", "A space of your own."), text: t("Ortak bir lobi yerine kendi salonunuz. Sevdiklerinizle aynı çatı altında, günün akışını sizin belirlediğiniz bir konaklama.", "Your own living room instead of a shared lobby. Stay under one roof with your favourite people and let the day follow your rhythm.") },
+    { icon: "sun" as const, title: t("Kendi ritminizde.", "At your own pace."), text: t("Uzun bir kahvaltı, denize ayrılan bir öğleden sonra ya da hiçbir şey yapmadığınız bir gün. Tatilin programı size kalsın.", "A slow breakfast, an afternoon by the sea or a day with nothing planned. Leave room for the kind of holiday you need.") },
+    { icon: "people" as const, title: t("Birlikte planlayalım.", "Let’s plan together."), text: t("Konum, tarihler ve sizin için önemli ayrıntıları paylaşın. Villa seçiminiz ve konaklama koşulları hakkında ekibimizden bilgi alın.", "Tell us your destination, dates and what matters to you. Talk to our team about your villa choice and the details of your stay.") },
   ];
-  const processSteps = [
-    pickLocalized(locale, "Personel villayi ekler, gorselleri ve SEO alanlarini doldurur.", "Staff adds the villa and completes the images and SEO fields."),
-    pickLocalized(locale, "Admin fiyatlari, kampanyalari ve doluluk takvimini yonetir.", "The admin manages pricing, campaigns and the availability calendar."),
-    pickLocalized(locale, "Kullanici vitrine girer, villayi inceler, tarihi secer ve talep gonderir.", "The user enters the showcase, reviews the villa, selects dates and sends an inquiry."),
-    pickLocalized(locale, "Operasyon ekibi talebi hizli sekilde dogru villaya yonlendirir.", "The operations team routes the inquiry quickly to the correct villa."),
+  const steps = [
+    { title: t("Kendinize göre bir villa bulun", "Find your kind of villa"), text: t("Konum ve misafir sayısıyla koleksiyonu daraltın. Fotoğrafları, olanakları ve ev kurallarını inceleyin.", "Narrow the collection by destination and guest count. Explore the photos, amenities and house rules.") },
+    { title: t("Tarihlerinizi seçin", "Choose your dates"), text: t("Villa takviminden uygun günleri seçerek konaklama tutarını ve varsa ek ücretleri görün.", "Choose available dates in the villa calendar to see the stay price and any additional charges.") },
+    { title: t("Detayları birlikte netleştirelim", "Let’s work out the details"), text: t("Talebinizi gönderin. Ekibimiz sizinle iletişime geçerek uygunluğu, ödeme ve onay koşullarını paylaşsın.", "Send your inquiry. Our team will contact you to discuss availability, payment and confirmation terms.") },
   ];
 
-  return (
-    <Container className="py-14 sm:py-16">
-      <PublicPageHero
-        eyebrow={pickLocalized(locale, "Marka Hikayesi", "Brand Story")}
-        title={pickLocalized(
-          locale,
-          "Kurumsal guven ve modern deneyim ayni cizgide bulusuyor",
-          "Corporate trust and modern experience meet on the same line",
-        )}
-        description={pickLocalized(
-          locale,
-          "VillaVera; secili villa portfoyu, hizli talep akisi ve panel destekli yonetim mantigiyle sadece guzel gorunen degil, gercekten calisan bir kiralama sistemi kurmak icin tasarlandi.",
-          "VillaVera was designed to build a rental system that not only looks good, but truly works with a curated villa portfolio, fast inquiry flow and panel-driven management.",
-        )}
-        backgroundImage={heroImage}
-        actions={[
-          {
-            href: getDemoCompanySiteHref(company.slug, "/villalar"),
-            label: pickLocalized(locale, "Villa koleksiyonunu incele", "Explore the villa collection"),
-          },
-          {
-            href: getDemoCompanySiteHref(company.slug, "/iletisim"),
-            label: pickLocalized(locale, "Bize ulas", "Contact us"),
-            variant: "secondary",
-          },
-        ]}
-      />
-
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
-        {valueCards.map((item) => (
-          <div
-            key={item.title}
-            className="serene-card p-6"
-          >
-            <h2 className="font-display text-2xl font-semibold text-[var(--serene-on-surface)]">{item.title}</h2>
-            <p className="mt-4 text-sm leading-7 text-[var(--serene-on-surface-variant)]">{item.text}</p>
-          </div>
-        ))}
+  return <div className={s.page}>
+    <EditorialBreadcrumbs companySlug={company.slug} locale={locale} label={t("Hakkımızda", "About us")} />
+    <section className={s.hero}>
+      <div className={s.heroCopy}>
+        <p className={s.eyebrow}>{company.shortName} / {t("TATİLE BAKIŞIMIZ", "OUR APPROACH TO TRAVEL")}</p>
+        <h1 className={s.title}>{t("Bir yerden", "More than")}<br /><em>{t("daha fazlası.", "a place.")}</em></h1>
+        <p className={s.intro}>{t(`${company.shortName} olarak tatilin yalnızca bir adres seçmek olmadığını düşünüyoruz. Kendinize zaman ayırmak, sevdiklerinizle bir araya gelmek ve bir süreliğine kendi ritminizde yaşamak.`, `At ${company.shortName}, we believe a holiday is more than choosing an address. It is time for yourself, moments with the people you love and a chance to live at your own pace.`)}</p>
+        <Link className={s.textLink} href={href("/villalar")}>{t("Koleksiyonumuzu keşfedin", "Discover our collection")}<SiteIcon name="arrow" /></Link>
       </div>
-
-      <div className="mt-10 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="serene-card p-8">
-          <SectionHeading
-            eyebrow={pickLocalized(locale, "Operasyon Akisi", "Operational Flow")}
-            title={pickLocalized(
-              locale,
-              "Sistem panelden vitrine tek bir duzende baglanir",
-              "The system connects the panel and showcase in a single structure",
-            )}
-            description={pickLocalized(
-              locale,
-              "Bu platform sadece bir tasarim vitrini degil; personel, admin ve public tarafin ayni veri yapisi ustunde birlikte calistigi bir operasyon kurgusudur.",
-              "This platform is not just a visual showcase; it is an operational setup where staff, admins and the public site work together on the same data structure.",
-            )}
-          />
-        </div>
-
-        <div className="space-y-4">
-          {processSteps.map((step, index) => (
-            <div
-              key={step}
-              className="serene-card flex gap-4 p-6"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--serene-primary)] text-sm font-semibold text-white">
-                {index + 1}
-              </div>
-              <p className="text-sm leading-7 text-[var(--serene-on-surface-variant)]">{step}</p>
-            </div>
-          ))}
-        </div>
+      <figure className={s.heroFigure}>
+        <EditorialPhoto src={photo?.coverImageUrl} alt={t(`${company.shortName} villa koleksiyonundan bir görünüm`, `A view from the ${company.shortName} villa collection`)} />
+        <figcaption><span>{t("DAHA YAVAŞ. DAHA SİZ.", "A SLOWER PACE. A LITTLE MORE YOU.")}</span><span>{photo?.locationLabel}</span></figcaption>
+      </figure>
+    </section>
+    <div className={s.values}>{values.map((item) => <article key={item.icon}>
+      <SiteIcon name={item.icon} /><h2>{item.title}</h2><p>{item.text}</p>
+    </article>)}</div>
+    <section className={s.story}>
+      <div><p className={s.eyebrow}>{t("İLK HAYALDEN İLK GÜNE", "FROM YOUR FIRST IDEA TO YOUR FIRST DAY")}</p>
+        <h2 className={s.sectionTitle}>{t("Tatil başlarken", "A clear path to")}<br /><em>{t("aklınız rahat olsun.", "your next holiday.")}</em></h2>
+        <p className={s.body}>{t("Güzel bir tatil, ne bekleyeceğinizi bilmekle başlar. Villa özelliklerinden tarih seçimine, ilk talebinizden rezervasyon onayına kadar her adımda ihtiyacınız olan bilgiyi bulmanızı istiyoruz.", "A good holiday starts with knowing what to expect. From villa details and choosing dates to your first inquiry and booking confirmation, we want you to find the information you need.")}</p>
+        <Link className={s.textLink} href={href("/iletisim")}>{t("Bize bir merhaba deyin", "Say hello to our team")}<SiteIcon name="arrow" /></Link>
       </div>
-
-      <div className="serene-card mt-10 p-8">
-        <SectionHeading
-          eyebrow={pickLocalized(locale, "Kurumsal Not", "Corporate Note")}
-          title={pickLocalized(
-            locale,
-            "Marka dili, destek hizi ve guven hissi bu sayfada gucleniyor",
-            "Brand tone, support speed and trust perception grow stronger on this page",
-          )}
-          description={pickLocalized(
-            locale,
-            "Hakkimizda sayfasi sadece resmi bir tanitim alani degil; kullanicinin dogru yerden hizmet aldigina ikna oldugu guven katmanidir.",
-            "The about page is not only a formal introduction. It is also the layer of trust where users feel convinced they are receiving service from the right place.",
-          )}
-        />
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href={getDemoCompanySiteHref(company.slug, "/villalar")}
-            className="serene-button-primary px-5 py-3 text-sm font-semibold"
-          >
-            {pickLocalized(locale, "Villa Koleksiyonunu Incele", "Explore the Villa Collection")}
-          </Link>
-          <Link
-            href={getDemoCompanySiteHref(company.slug, "/iletisim")}
-            className="serene-button-secondary px-5 py-3 text-sm font-semibold"
-          >
-            {pickLocalized(locale, "Bize Ulas", "Contact Us")}
-          </Link>
-        </div>
-      </div>
-    </Container>
-  );
+      <ol className={s.steps}>{steps.map((step, index) => <li key={step.title}>
+        <span className={s.stepNumber} aria-hidden="true">0{index + 1}</span><div><h3>{step.title}</h3><p>{step.text}</p></div>
+      </li>)}</ol>
+    </section>
+    <PlanningCta companySlug={company.slug} locale={locale} />
+  </div>;
 }

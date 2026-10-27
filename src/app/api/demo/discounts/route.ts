@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import {
   createDemoDiscountCampaign,
@@ -8,6 +9,8 @@ import { revalidateDemoExperience } from "@/lib/server/demo-revalidate";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const denied = await authorizePanelApi(request, "crm");
+  if (denied) return denied;
   try {
     const payload = (await request.json()) as {
       title?: string;
@@ -34,6 +37,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ discount });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoOperationsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Container } from "@/components/ui/container";
 import { PrintBookingButton } from "@/components/public/print-booking-button";
+import { SiteIcon } from "@/components/site-templates/site-icon";
+import e from "@/components/site-templates/editorial-pages.module.css";
+import s from "@/components/site-templates/support-pages.module.css";
+import { getDemoCompanySiteHref } from "@/lib/demo-companies";
 import { pickLocalized } from "@/lib/i18n";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { getPublicBookingConfirmation } from "@/lib/server/demo-operations-store";
@@ -11,106 +14,57 @@ import "./print.css";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Rezervasyon Durumu",
-  referrer: "no-referrer",
-  robots: {
-    index: false,
-    follow: false,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getCurrentLocale();
+  return { title: pickLocalized(locale, "Rezervasyon durumu", "Booking status"), referrer: "no-referrer", robots: { index: false, follow: false } };
+}
 
-type BookingConfirmationPageProps = {
-  params: Promise<{ token: string }>;
-};
+type Props = { params: Promise<{ token: string }> };
 
-export default async function BookingConfirmationPage({ params }: BookingConfirmationPageProps) {
+export default async function BookingConfirmationPage({ params }: Props) {
   const { token } = await params;
-  const [locale, confirmation] = await Promise.all([
-    getCurrentLocale(),
-    getPublicBookingConfirmation(token),
-  ]);
-
-  if (!confirmation) {
-    notFound();
-  }
-
+  const locale = await getCurrentLocale();
+  const confirmation = await getPublicBookingConfirmation(token);
+  if (!confirmation) notFound();
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
   const isConfirmed = confirmation.isPaid;
   const isCancelled = confirmation.status === "CANCELLED";
+  const status = isCancelled ? "cancelled" : isConfirmed ? "confirmed" : "pending";
+  const villaTitle = locale === "en" ? confirmation.villa.titleEn || confirmation.villa.title : confirmation.villa.title;
+  const href = (path: string) => getDemoCompanySiteHref(confirmation.companySlug ?? "", path);
 
-  return (
-    <Container className="booking-document py-14 sm:py-20">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <section className="serene-card overflow-hidden">
-          <div className={isConfirmed ? "bg-emerald-700 px-8 py-10 text-white" : "bg-ocean-panel px-8 py-10 text-white"}>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
-              {pickLocalized(locale, "Rezervasyon durumu", "Booking status")}
-            </p>
-            <h1 className="mt-4 font-display text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
-              {isCancelled ? pickLocalized(locale, "Rezervasyon iptal edildi", "Booking cancelled") : isConfirmed
-                ? pickLocalized(locale, "Odeme alindi, rezervasyonun onaylandi", "Payment received, your booking is confirmed")
-                : pickLocalized(locale, "Talebin alindi, odeme onayi bekleniyor", "Inquiry received, awaiting payment confirmation")}
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
-              {pickLocalized(
-                locale,
-                `Referans kodu ${confirmation.id}. Bu baglantiyi rezervasyon durumunu takip etmek icin saklayabilirsin.`,
-                `Reference code ${confirmation.id}. Keep this link to track your booking status.`,
-              )}
-            </p>
-          </div>
-
-          <div className="grid gap-4 p-8 sm:grid-cols-2">
-            {[
-              [pickLocalized(locale, "Villa", "Villa"), confirmation.villa.title],
-              [pickLocalized(locale, "Misafir", "Guest"), confirmation.fullName],
-              [pickLocalized(locale, "Giris", "Check-in"), `${formatShortDate(confirmation.checkIn, locale)} ${confirmation.villa.checkInTime ?? ""}`],
-              [pickLocalized(locale, "Cikis", "Check-out"), `${formatShortDate(confirmation.checkOut, locale)} ${confirmation.villa.checkOutTime ?? ""}`],
-              [pickLocalized(locale, "Misafir sayisi", "Guests"), String(confirmation.guestCount)],
-              [pickLocalized(locale, "Toplam", "Total"), formatCurrency(confirmation.totalAmount, locale)],
-              [pickLocalized(locale, "Odenen", "Paid"), formatCurrency(confirmation.paidTotal, locale)],
-              [pickLocalized(locale, "Firma", "Company"), confirmation.companyName],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-[8px] bg-[var(--serene-surface-low)] px-5 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--serene-outline)]">
-                  {label}
-                </p>
-                <p className="mt-2 font-semibold text-[var(--serene-on-surface)]">{value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="serene-card p-8">
-          <h2 className="font-display text-3xl font-semibold tracking-[-0.04em] text-[var(--serene-on-surface)]">
-            {isCancelled ? pickLocalized(locale, "Iptal bilgisi", "Cancellation") : isConfirmed
-              ? pickLocalized(locale, "Siradaki adim", "Next step")
-              : pickLocalized(locale, "Onay sureci", "Confirmation process")}
-          </h2>
-          <p className="mt-4 text-sm leading-8 text-[var(--serene-on-surface-variant)]">
-            {isCancelled ? pickLocalized(locale, "Bu rezervasyon aktif degildir. Odeme ve iade bilgisi icin firma ile iletisime gecebilirsiniz.", "This booking is no longer active. Contact the company for payment and refund information.") : isConfirmed
-              ? pickLocalized(
-                  locale,
-                  "Odemeniz firma tarafindan teyit edildi. Ekibimiz giris bilgileri ve konaklama detaylari icin sizinle iletisime gececek.",
-                  "Your payment has been confirmed by the company. Our team will contact you with check-in and stay details.",
-                )
-              : pickLocalized(
-                  locale,
-                  "Talebiniz alindi. Bu belge tek basina kesin rezervasyon anlamina gelmez. Firma rezervasyonunuzu ve odemenizi teyit ettiginde bu sayfadan guncel durumu gorebilirsiniz.",
-                  "Your inquiry has been received. This document alone is not a confirmed reservation. Check this page for updates once the company has verified your booking and payment.",
-                )}
-          </p>
-          <div className="booking-document-actions mt-6 flex flex-wrap gap-3">
-            <PrintBookingButton locale={locale} />
-            <Link href={`/villalar/${confirmation.villa.slug}`} className="serene-button-primary px-5 py-3 text-sm font-semibold">
-              {pickLocalized(locale, "Villa detayina don", "Back to villa")}
-            </Link>
-            <Link href="/iletisim" className="serene-button-secondary px-5 py-3 text-sm font-semibold">
-              {pickLocalized(locale, "Iletisime gec", "Contact us")}
-            </Link>
-          </div>
-        </section>
-      </div>
-    </Container>
-  );
+  return <div className={`${e.page} booking-document`}>
+    <header className={s.bookingHeader}>
+      <p className={e.eyebrow}>{t("REZERVASYON DURUMUNUZ", "YOUR BOOKING STATUS")}</p>
+      <h1 className={e.title}>{isCancelled ? t("Planınız", "Your plans") : isConfirmed ? t("Tatiliniz", "Your stay") : t("Tatilinize", "One step")}<br /><em>{isCancelled ? t("iptal edildi.", "have been cancelled.") : isConfirmed ? t("kesinleşti.", "is confirmed.") : t("bir adım daha.", "closer to your stay.")}</em></h1>
+      <div className={s.status} data-status={status}><SiteIcon name={isCancelled ? "close" : isConfirmed ? "check" : "calendar"} />{isCancelled ? t("Rezervasyon iptal edildi", "Booking cancelled") : isConfirmed ? t("Ödeme ve rezervasyon onaylandı", "Payment and booking confirmed") : t("Ödeme onayı bekleniyor", "Awaiting payment confirmation")}</div>
+      <p className={s.reference}>{t("Talep referansı", "Inquiry reference")}: {confirmation.id}</p>
+    </header>
+    <div className={s.bookingLayout}>
+      <section className={s.bookingSummary}>
+        <p className={e.eyebrow}>{t("KONAKLAMANIZ", "YOUR STAY")}</p><h2>{villaTitle}</h2>
+        <dl className={s.bookingFields}>
+          <div><dt>{t("Giriş", "Check-in")}</dt><dd><time dateTime={confirmation.checkIn}>{formatShortDate(confirmation.checkIn, locale)}</time>{confirmation.villa.checkInTime && <><br />{confirmation.villa.checkInTime}</>}</dd></div>
+          <div><dt>{t("Çıkış", "Check-out")}</dt><dd><time dateTime={confirmation.checkOut}>{formatShortDate(confirmation.checkOut, locale)}</time>{confirmation.villa.checkOutTime && <><br />{confirmation.villa.checkOutTime}</>}</dd></div>
+          <div><dt>{t("Misafir", "Guest")}</dt><dd>{confirmation.fullName}</dd></div>
+          <div><dt>{t("Misafir sayısı", "Guests")}</dt><dd>{confirmation.guestCount}</dd></div>
+          <div className={s.bookingCompany}><dt>{t("Firma", "Company")}</dt><dd>{confirmation.companyName}</dd></div>
+        </dl>
+      </section>
+      <aside className={s.bookingTotals}>
+        <h2>{t("TUTAR ÖZETİ", "PAYMENT SUMMARY")}</h2>
+        <dl><div><dt>{t("Toplam konaklama tutarı", "Total stay amount")}</dt><dd>{formatCurrency(confirmation.totalAmount, locale)}</dd></div><div><dt>{t("Teyit edilen ödeme", "Verified payment")}</dt><dd>{formatCurrency(confirmation.paidTotal, locale)}</dd></div></dl>
+        <p>{isCancelled ? t("İptal sonrası ödeme ve iade durumunu firma ile görüşün.", "Contact the company about payments and refunds after cancellation.") : t("Ödeme bilgileri firma tarafından teyit edildikçe güncellenir.", "Payment information is updated as it is verified by the company.")}</p>
+      </aside>
+    </div>
+    <section className={s.bookingNext}>
+      <h2>{isCancelled ? t("Bundan sonrası", "What happens next") : isConfirmed ? t("Şimdi tatili hayal edin.", "Now picture your holiday.") : t("Detayları netleştiriyoruz.", "Working out the details.")}</h2>
+      <p>{isCancelled ? t("Bu rezervasyon aktif değildir. Ödeme ve iade bilgisi için firma ile iletişime geçebilirsiniz.", "This booking is no longer active. Contact the company for payment and refund information.") : isConfirmed ? t("Ödemeniz firma tarafından teyit edildi. Ekibimiz giriş bilgileri ve konaklama detayları için sizinle iletişime geçecek.", "Your payment has been confirmed by the company. Our team will contact you with check-in and stay details.") : t("Talebiniz alındı. Bu belge tek başına kesin rezervasyon anlamına gelmez. Firma rezervasyonunuzu ve ödemenizi teyit ettiğinde bu sayfadan güncel durumu görebilirsiniz.", "Your inquiry has been received. This document alone is not a confirmed reservation. Check this page for updates once the company has verified your booking and payment.")}</p>
+    </section>
+    <div className={`${s.bookingActions} booking-document-actions`}>
+      <PrintBookingButton locale={locale} />
+      {confirmation.companySlug && <><Link className={e.button} href={href(`/villalar/${encodeURIComponent(confirmation.villa.slug)}`)}>{t("Villayı incele", "View the villa")}<SiteIcon name="arrow" /></Link><Link className={s.secondaryButton} href={href("/iletisim")}>{t("Bize ulaşın", "Contact us")}</Link></>}
+    </div>
+    <p className={s.reference}>{t("Bu bağlantı misafir ve rezervasyon bilgilerinizi içerir. Yalnızca ilgili kişilerle paylaşın.", "This link contains your guest and booking details. Share it only with the people concerned.")}</p>
+  </div>;
 }

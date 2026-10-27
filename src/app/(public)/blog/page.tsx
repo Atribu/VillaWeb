@@ -1,104 +1,51 @@
 import type { Metadata } from "next";
-import { Container } from "@/components/ui/container";
-import { PublicPageHero } from "@/components/public/public-page-hero";
-import { SectionHeading } from "@/components/ui/section-heading";
-import { getBlogPreview } from "@/lib/site-data";
+import Link from "next/link";
+import { EditorialBreadcrumbs, EditorialPhoto, PlanningCta } from "@/components/site-templates/editorial-parts";
+import { SiteIcon } from "@/components/site-templates/site-icon";
+import e from "@/components/site-templates/editorial-pages.module.css";
+import s from "@/components/site-templates/support-pages.module.css";
 import { getDemoCompanySiteHref } from "@/lib/demo-companies";
 import { pickLocalized } from "@/lib/i18n";
+import { travelGuides } from "@/lib/travel-journal";
 import { buildPublicMetadata } from "@/lib/public-metadata";
-import { getCompanyHeroImage } from "@/lib/public-gallery";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
+import { getDemoVillas } from "@/lib/server/demo-villa-store";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getCurrentLocale();
-
-  return buildPublicMetadata({
-    locale,
-    title: { tr: "Blog", en: "Blog" },
-    description: {
-      tr: "Bolge rehberleri, villa secim ipuclari ve organik buyume odakli tatil icerikleri.",
-      en: "Destination guides, villa selection tips and travel content built for organic growth.",
-    },
-    canonical: "/blog",
-  });
+  return buildPublicMetadata({ locale, title: { tr: "Tatil rehberi", en: "Travel journal" },
+    description: { tr: "Villa seçimi, tarih planlama ve birlikte tatil için kısa rehberler. Kendi tatilinizi planlarken ayrıntılara yer açın.", en: "Short guides to choosing a villa, planning dates and travelling together. Make room for the details of your next stay." }, canonical: "/blog" });
 }
 
 export default async function BlogPage() {
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const heroImage = getCompanyHeroImage(company.slug);
-  const blogPreview = getBlogPreview(locale);
-
-  return (
-    <Container className="py-14 sm:py-16">
-      <PublicPageHero
-        eyebrow={pickLocalized(locale, "Blog ve Rehber", "Blog & Guides")}
-        title={pickLocalized(
-          locale,
-          "Organik trafik ureten, guven ve karar kalitesini artiran icerik merkezi",
-          "A content hub that drives organic traffic and improves trust and decision quality",
-        )}
-        description={pickLocalized(
-          locale,
-          "Blog modulu; bolge rehberleri, tatil planlama icerikleri ve villa secim tavsiyeleriyle sitenin SEO omurgasini besleyen ana alanlardan biridir.",
-          "The blog module is one of the main areas that feeds the SEO foundation of the site with destination guides, travel planning content and villa selection advice.",
-        )}
-        backgroundImage={heroImage}
-        actions={[
-          { href: getDemoCompanySiteHref(company.slug, "/villalar"), label: pickLocalized(locale, "Villalari incele", "Browse villas") },
-          { href: getDemoCompanySiteHref(company.slug, "/kampanyalar"), label: pickLocalized(locale, "Kampanyalari gor", "View campaigns"), variant: "secondary" },
-        ]}
-      />
-
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
-        {blogPreview.map((post) => (
-          <article
-            key={post.title}
-            className="serene-card p-6"
-          >
-            <p className="serene-eyebrow">
-              {post.category}
-            </p>
-            <h2 className="mt-4 font-display text-2xl font-semibold leading-tight text-[var(--serene-on-surface)]">{post.title}</h2>
-            <p className="mt-4 text-sm leading-7 text-[var(--serene-on-surface-variant)]">
-              {pickLocalized(
-                locale,
-                "Arama motorlarindan trafik cekecek, detay sayfalarina ic link verecek ve kullaniciyi karar asamasina tasiyacak uzun formlu rehber icerik iskeleti.",
-                "A long-form guide content structure designed to attract search traffic, connect to detail pages and move the user toward a decision.",
-              )}
-            </p>
-          </article>
-        ))}
+  const villas = await getDemoVillas({ publicSite: true, companyId: company.id, includeInactive: false, includeMetrics: false });
+  const photo = villas.find(villa => villa.companyId === company.id && villa.coverImageUrl);
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
+  const href = (path: string) => getDemoCompanySiteHref(company.slug, path);
+  const featured = travelGuides[0];
+  return <div className={e.page}>
+    <EditorialBreadcrumbs companySlug={company.slug} locale={locale} label={t("Tatil rehberi", "Travel journal")} />
+    <header className={s.heading}>
+      <p className={e.eyebrow}>{company.shortName} / {t("TATİLDEN ÖNCE", "BEFORE YOU GO")}</p>
+      <h1 className={e.title}>{t("Güzel bir tatil,", "A good holiday,")} <em>{t("küçük ayrıntılar.", "little details.")}</em></h1>
+      <p className={e.intro}>{t("Bir sonraki konaklamanız için notlar, fikirler ve küçük kontrol listeleri. Tatilinizi kendi ritminizde planlayın.", "Notes, ideas and little checklists for your next stay. Plan a holiday at your own pace.")}</p>
+    </header>
+    <section className={s.journalFeature}>
+      <div className={s.featureImage}><EditorialPhoto src={photo?.coverImageUrl} alt={t("Villa koleksiyonumuzdan bir görünüm", "A view from our villa collection")} /></div>
+      <div className={s.featureCopy}>
+        <p className={e.eyebrow}>{t("BAŞLAMAK İÇİN", "A PLACE TO START")} / {featured.category[locale]}</p>
+        <h2>{featured.title[locale]}</h2><p>{featured.intro[locale]}</p>
+        <Link className={e.textLink} href={href(`/blog/${featured.slug}`)}>{t("Rehberi okuyun", "Read the guide")}<SiteIcon name="arrow" /></Link>
       </div>
-
-      <div className="serene-card mt-10 p-8">
-        <SectionHeading
-          eyebrow={pickLocalized(locale, "Editoryal Omurga", "Editorial Structure")}
-          title={pickLocalized(
-            locale,
-            "Her yazı bir sonraki sayfaya trafik tasiyacak sekilde planlanir",
-            "Every article is planned to pass traffic to the next relevant page",
-          )}
-          description={pickLocalized(
-            locale,
-            "Blog icerikleri; bolge sayfalari, villa detaylari ve kampanya sayfalariyla birbirine baglanarak sitede guclu bir ic link yapisi kurar.",
-            "Blog content links region pages, villa details and campaign pages together to create a strong internal linking structure.",
-          )}
-        />
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-3">
-          {[
-            pickLocalized(locale, "Bolge rehberleri", "Destination guides"),
-            pickLocalized(locale, "Villa secim kilavuzlari", "Villa selection guides"),
-            pickLocalized(locale, "Mevsimsel tatil icerikleri", "Seasonal travel content"),
-          ].map((item) => (
-            <div key={item} className="rounded-[16px] border border-[var(--serene-outline-variant)]/60 bg-[var(--serene-surface-low)] px-5 py-5 text-sm font-semibold text-[var(--serene-on-surface)]">
-              {item}
-            </div>
-          ))}
-        </div>
-      </div>
-    </Container>
-  );
+    </section>
+    <div className={s.journalGrid}>{travelGuides.map((guide, index) => <article key={guide.slug} className={s.journalCard}>
+      <span className={e.eyebrow}>0{index + 1} / {guide.category[locale]}</span>
+      <h2><Link href={href(`/blog/${guide.slug}`)}>{guide.title[locale]}</Link></h2><p>{guide.intro[locale]}</p>
+      <Link className={e.textLink} href={href(`/blog/${guide.slug}`)} aria-label={t(`Rehberi oku: ${guide.title.tr}`, `Read the guide: ${guide.title.en}`)}>{t("Okumaya devam et", "Continue reading")}<SiteIcon name="arrow" /></Link>
+    </article>)}</div>
+    <PlanningCta companySlug={company.slug} locale={locale} />
+  </div>;
 }

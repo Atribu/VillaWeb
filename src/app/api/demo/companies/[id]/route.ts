@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoCompanyStatus } from "@/lib/demo-companies";
 import {
@@ -16,6 +17,8 @@ type RouteContext = {
 const ALLOWED_STATUSES = new Set<DemoCompanyStatus>(["ACTIVE", "PAUSED", "ARCHIVED"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "companies");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -54,6 +57,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ company });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoCompanyStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

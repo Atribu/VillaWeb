@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const villa = await getDemoVillaBySlug(slug, { companyId: company.id, includeMetrics: false, includeInactive: false });
+  const villa = await getDemoVillaBySlug(slug, { publicSite: true, companyId: company.id, includeMetrics: false, includeInactive: false });
 
   if (!villa) {
     return {
@@ -70,7 +70,7 @@ export default async function VillaDetailPage({ params, searchParams }: PageProp
   const selectedDates = (await searchParams) ?? {};
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const rawVilla = await getDemoVillaBySlug(slug, {
+  const rawVilla = await getDemoVillaBySlug(slug, { publicSite: true,
     companyId: company.id,
     includeMetrics: false,
     includeInactive: false,
@@ -82,7 +82,7 @@ export default async function VillaDetailPage({ params, searchParams }: PageProp
 
   const villa = getLocalizedVilla(rawVilla, locale);
 
-  const allVillas = await getDemoVillas({
+  const allVillas = await getDemoVillas({ publicSite: true,
     companyId: company.id,
     includeMetrics: false,
     includeInactive: false,

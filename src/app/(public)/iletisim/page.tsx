@@ -1,24 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Container } from "@/components/ui/container";
-import { PublicPageHero } from "@/components/public/public-page-hero";
-import { SectionHeading } from "@/components/ui/section-heading";
-import { getDemoCompanySiteHref } from "@/lib/demo-companies";
+import { EditorialBreadcrumbs, PlanningCta } from "@/components/site-templates/editorial-parts";
+import { SiteIcon } from "@/components/site-templates/site-icon";
+import s from "@/components/site-templates/editorial-pages.module.css";
+import { demoCompanies, getDemoCompanySiteHref, getLocalizedDemoCompanyRecord } from "@/lib/demo-companies";
 import { pickLocalized } from "@/lib/i18n";
 import { buildPublicMetadata } from "@/lib/public-metadata";
-import { getCompanyHeroImage } from "@/lib/public-gallery";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getCurrentLocale();
-
+  const company = await getCurrentPublicCompany();
   return buildPublicMetadata({
     locale,
-    title: { tr: "Iletisim", en: "Contact" },
+    title: { tr: "İletişim", en: "Contact" },
     description: {
-      tr: "Telefon, e-posta, WhatsApp ve destek akisi ile VillaVera ekibine hizli sekilde ulasin.",
-      en: "Reach the VillaVera team quickly through phone, email, WhatsApp and the support flow.",
+      tr: `Villa seçimi ve tatil planınız için ${company.shortName} ekibiyle iletişime geçin. Telefon, e-posta ve WhatsApp iletişim bilgileri.`,
+      en: `Contact the ${company.shortName} team to discuss your villa choice and holiday plans. Find our phone, email and WhatsApp details.`,
     },
     canonical: "/iletisim",
   });
@@ -27,101 +26,53 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ContactPage() {
   const locale = await getCurrentLocale();
   const company = await getCurrentPublicCompany();
-  const heroImage = getCompanyHeroImage(company.slug);
-  const contactBlocks = [
-    { key: "phone", title: pickLocalized(locale, "Telefon", "Phone"), value: company.phone },
-    { key: "email", title: pickLocalized(locale, "E-posta", "Email"), value: company.email },
-    { key: "whatsapp", title: "WhatsApp", value: company.whatsapp },
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
+  const href = (path: string) => getDemoCompanySiteHref(company.slug, path);
+  const phone = company.phone.replace(/[^\d+]/g, "");
+  const whatsapp = company.whatsapp.replace(/\D/g, "");
+  const email = company.email.trim();
+  // Translate seeded hours only; never replace a company's customized schedule.
+  const seededHours = demoCompanies.find((item) => item.slug === company.slug)?.supportHours;
+  const supportHours = company.supportHours === seededHours
+    ? getLocalizedDemoCompanyRecord(company, locale).supportHours
+    : company.supportHours;
+  const contacts = [
+    { icon: "phone" as const, label: t("BİZİ ARAYIN", "GIVE US A CALL"), value: company.phone, href: /\d/.test(phone) ? `tel:${phone}` : "", description: t("Villa seçiminizi ve tatil planınızı konuşalım.", "Let’s talk about your villa and holiday plans.") },
+    { icon: "message" as const, label: "WHATSAPP", value: company.whatsapp, href: whatsapp ? `https://wa.me/${whatsapp}` : "", description: t("Tarihlerinizi ve merak ettiklerinizi bize yazın.", "Send us your dates and any questions.") },
+    { icon: "mail" as const, label: t("BİZE YAZIN", "SEND US AN EMAIL"), value: email, href: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "", description: t("Detaylı sorularınız için e-posta ile ulaşın.", "Get in touch by email for detailed questions.") },
+  ].filter((contact) => contact.href);
+  const questions = [
+    { question: t("Hangi villanın bana uygun olduğunu bilmiyorum.", "I’m not sure which villa is right for me."), answer: t("Gitmek istediğiniz bölgeyi, tarihleri, misafir sayısını ve sizin için önemli olan özellikleri paylaşın. Seçenekleri değerlendirmenize yardımcı olalım.", "Tell us your preferred destination, dates, guest count and what matters to you. We can help you explore the options.") },
+    { question: t("Talep göndermek rezervasyonumu kesinleştirir mi?", "Does sending an inquiry confirm my booking?"), answer: t("Hayır. Talebinizden sonra uygunluk ve konaklama detayları kontrol edilir. Rezervasyonunuz, size iletilen teklifin onay ve ödeme koşulları tamamlandığında kesinleşir.", "No. Availability and stay details are checked after your inquiry. Your booking is confirmed once the confirmation and payment terms in your offer are completed.") },
+    { question: t("Mevcut talebim hakkında nasıl bilgi alabilirim?", "How can I ask about an existing inquiry?"), answer: t("Bizimle iletişime geçerken adınızı, villa adını veya kısa kodunu ve konaklama tarihlerinizi paylaşmanız yeterli. Talebinizin detaylarını birlikte kontrol edelim.", "When contacting us, share your name, villa name or short code and stay dates. We can then look into your inquiry together.") },
   ];
 
-  return (
-    <Container className="py-14 sm:py-16">
-      <PublicPageHero
-        eyebrow={pickLocalized(locale, "Iletisim", "Contact")}
-        title={pickLocalized(
-          locale,
-          "Kullanici talebini dogru ekibe, hizli sekilde yonlendiren iletisim alani",
-          "A contact space that routes user inquiries to the right team quickly",
-        )}
-        description={pickLocalized(
-          locale,
-          "Telefon, WhatsApp ve e-posta bilgileriyle iletisim kolaylastirilir; destek yapisi kullaniciyi bir sonraki dogru aksiyona yonlendirir.",
-          "Phone, WhatsApp and email make contact easy, while the support structure guides users to the next right action.",
-        )}
-        backgroundImage={heroImage}
-        actions={[
-          { href: getDemoCompanySiteHref(company.slug, "/talep"), label: pickLocalized(locale, "Talep ekranina git", "Go to inquiry page") },
-          { href: getDemoCompanySiteHref(company.slug, "/villalar"), label: pickLocalized(locale, "Villalari incele", "Browse villas"), variant: "secondary" },
-        ]}
-      />
-
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
-        {contactBlocks.map((item) => (
-          <div
-            key={item.key}
-            className="serene-card p-6"
-          >
-            <p className="serene-eyebrow">
-              {item.title}
-            </p>
-            <p className="mt-4 font-display text-2xl font-semibold text-[var(--serene-on-surface)]">{item.value}</p>
-            <p className="mt-3 text-sm leading-7 text-[var(--serene-on-surface-variant)]">
-              {item.key === "phone"
-                ? pickLocalized(locale, "Dogrudan cagri merkeziyle baglanti kurmak icin kullanilir.", "Use this to connect directly with the call center.")
-                : item.key === "whatsapp"
-                  ? pickLocalized(locale, "Hizli mesajlasma ve bilgi paylasimi icin tercih edilir.", "Preferred for quick messaging and information sharing.")
-                  : pickLocalized(locale, "Detayli bilgi ve resmi iletisim sureci icin kullanilir.", "Used for detailed information and formal communication.")}
-            </p>
-          </div>
-        ))}
+  return <div className={s.page}>
+    <EditorialBreadcrumbs companySlug={company.slug} locale={locale} label={t("İletişim", "Contact")} />
+    <section className={s.contactHero}>
+      <div>
+        <p className={s.eyebrow}>{company.shortName} / {t("BİR MERHABA İLE BAŞLAR", "IT STARTS WITH HELLO")}</p>
+        <h1 className={s.title}>{t("Birlikte", "Let’s plan")}<br /><em>{t("planlayalım.", "your escape.")}</em></h1>
+        <p className={s.intro}>{t("Aklınızda bir villa, bir tarih ya da sadece bir tatil hayali mi var? Sorularınızı dinlemek ve detayları birlikte netleştirmek için buradayız.", "A villa in mind, a date on the calendar or simply a holiday you’re dreaming of? We’re here to listen and help work out the details.")}</p>
+        <div className={s.contactNote}><SiteIcon name="calendar" /><p>{t("Villanızı seçtiyseniz tarihlerinizi belirleyerek doğrudan konaklama talebi gönderebilirsiniz.", "Already found your villa? Choose your dates and send a stay inquiry directly.")}</p></div>
+        <Link className={s.textLink} href={href("/talep")}>{t("Konaklama talebi oluştur", "Send a stay inquiry")}<SiteIcon name="arrow" /></Link>
       </div>
-
-      <div className="serene-card mt-10 p-8">
-        <SectionHeading
-          eyebrow={pickLocalized(locale, "Iletisim Formu Yapisi", "Contact Form Structure")}
-          title={pickLocalized(
-            locale,
-            "Talep oncesi veya talep sonrasi destek icin form alani da bu kurguya uyumlu olacak",
-            "The support form before or after an inquiry will follow the same structure",
-          )}
-          description={pickLocalized(
-            locale,
-            "Kisa, net ve donusum odakli bir form; kullanicidan sadece gerekli bilgileri alip dogru aksiyona yonlendirecek sekilde tasarlanir.",
-            "A short, clear and conversion-focused form designed to collect only the necessary information and move users toward the right action.",
-          )}
-        />
-
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            pickLocalized(locale, "Ad Soyad", "Full Name"),
-            pickLocalized(locale, "Telefon", "Phone"),
-            pickLocalized(locale, "E-posta", "Email"),
-            pickLocalized(locale, "Mesajiniz", "Your Message"),
-          ].map((field) => (
-            <div
-              key={field}
-              className="rounded-[8px] border border-[var(--serene-outline-variant)]/60 bg-[var(--serene-surface-low)] px-4 py-4 text-sm text-[var(--serene-on-surface-variant)]"
-            >
-              {field}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href={getDemoCompanySiteHref(company.slug, "/talep")}
-            className="serene-button-primary px-5 py-3 text-sm font-semibold"
-          >
-            {pickLocalized(locale, "Talep Ekranina Git", "Go to Inquiry Page")}
-          </Link>
-          <Link
-            href={getDemoCompanySiteHref(company.slug, "/villalar")}
-            className="serene-button-secondary px-5 py-3 text-sm font-semibold"
-          >
-            {pickLocalized(locale, "Villalari Incele", "Browse Villas")}
-          </Link>
+      <div>
+        <div className={s.contactList}>{contacts.map((contact) => <a key={contact.icon} className={s.contactLink} href={contact.href} {...(contact.icon === "message" ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+          <SiteIcon name={contact.icon} /><div><small>{contact.label}</small><strong>{contact.value}</strong><p>{contact.description}</p></div><SiteIcon name="arrow" />
+        </a>)}</div>
+        {!contacts.length && <p className={s.body}>{t("İletişim bilgilerimiz güncelleniyor. Konaklama talep sayfasından bize ulaşabilirsiniz.", "Our contact details are being updated. You can reach us through the stay inquiry page.")}</p>}
+        <div className={s.contactDetails}>
+          {company.address && <div><h2>{t("Adres", "Address")}</h2><address>{company.address}</address></div>}
+          {supportHours && supportHours !== "-" && <div><h2>{t("İletişim saatleri", "Contact hours")}</h2><p>{supportHours}</p></div>}
+          {company.legalName && <div><h2>{t("Firma bilgisi", "Company")}</h2><p>{company.legalName}</p></div>}
         </div>
       </div>
-    </Container>
-  );
+    </section>
+    <PlanningCta companySlug={company.slug} locale={locale} />
+    <section className={s.faq}>
+      <div><p className={s.eyebrow}>{t("AKLINIZDA KALMASIN", "GOOD TO KNOW")}</p><h2 className={s.sectionTitle}>{t("Sormadan", "Before you")}<br /><em>{t("geçmeyin.", "say hello.")}</em></h2></div>
+      <div>{questions.map((item) => <details key={item.question}><summary>{item.question}<span aria-hidden="true">+</span></summary><p>{item.answer}</p></details>)}</div>
+    </section>
+  </div>;
 }

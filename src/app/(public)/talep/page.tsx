@@ -49,7 +49,7 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
   const checkIn = params.checkIn ?? "";
   const checkOut = params.checkOut ?? "";
   const villa = params.villa
-    ? await getDemoVillaBySlug(params.villa, {
+    ? await getDemoVillaBySlug(params.villa, { publicSite: true,
         companyId: company.id,
         includeMetrics: false,
         includeInactive: false,
@@ -71,9 +71,9 @@ export default async function RequestPage({ searchParams }: RequestPageProps) {
   );
   const pricingDependencies = isValidSelection
     ? await Promise.all([
-        getDemoPricingRecords({ companyId: company.id }),
-        getDemoDiscountCampaigns({ companyId: company.id }),
-        getDemoCoupons({ companyId: company.id }),
+        getDemoPricingRecords({ publicSite: true, companyId: company.id }),
+        getDemoDiscountCampaigns({ publicSite: true, companyId: company.id }),
+        getDemoCoupons({ publicSite: true, companyId: company.id }),
       ])
     : null;
   const resolvedPricing =

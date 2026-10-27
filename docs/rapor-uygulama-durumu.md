@@ -96,6 +96,65 @@ ayrica dogrulanmalidir; fallback testinin gecmesi PostgreSQL testi yerine gecmez
    ve iptal akisini deneyin. Firma A kullanicisinin firma B kaydini degistiremedigini
    ve ziyaretci sayfasinda tedarikci notlari bulunmadigini kontrol edin.
 
+## 27 Ekim 2026: yetki ve oturum duzeltmeleri
+
+- 49 yonetim API isleminde govde okunmadan once ortak oturum, rol ve kaynak
+  kontrolu var. Public talep ve kupon dogrulama acik; manuel rezervasyon yetkili
+  oturum gerektirir. Firma kapsami kontrolleri bu kontrollerin yaninda korunur.
+- Oturumlar mevcut `AuthSession` tablosunda token ozetiyle kaydedilir. Her istekte
+  kullanici, uyelik, rol ve firma durumu yeniden kontrol edilir. Cikis, rol/durum
+  degisikligi ve firma durumu degisikligi eski oturumlari iptal eder.
+- Eski stateless cookie'ler artik kabul edilmez. Bu guncellemeden sonra herkes
+  tekrar giris yapmalidir. Yeni sema alani eklenmedi; sunucuda mevcut Prisma
+  semasindaki `AuthSession` tablosunun bulunmasi gerekir.
+- Uretimde `SESSION_SECRET` en az 32 karakter olmali; ornek/varsayilan deger
+  kullanilmamali. `openssl rand -hex 32` ile yeni anahtar uretilebilir. Deger
+  degisirse tum oturumlar tekrar acilmalidir.
+- Giris ekraninda sifreler ve tum firma kayitlari varsayilan olarak gonderilmez.
+  Yerel demo ipuclari sadece `SHOW_DEMO_LOGIN_HINTS=true` ile acilir; production'da
+  bu ayar dikkate alinmaz. Daha once canli giris ekraninda gosterilmis demo
+  hesaplarinin sifrelerini canli ortamda ayrica degistirin.
+- Yerel kimlik/sifre ozeti ve oturumlar `data/development-auth.json` dosyasinda
+  tutulur; dosya Git disindadir. Production bu dosyayi kullanmaz. Yerel seed
+  girisleri ilk basarili giriste kaydedilir; sonradan panelden eklenen kullanicilar
+  da kendi sifreleriyle giris yapabilir. Gelistirme sunucusunu internete acmayin.
+- Muhasebe, satis, operasyon, CRM ve icerik rolleri ortak yetki matrisiyle
+  sinirlanir. Panelde acik firma, ziyaret edilen baska firmanin public katalog,
+  fiyat, kampanya ve kupon verisini degistirmez.
+- Ayar, tanim, icerik durumu, operasyon, mesaj, yorum, fiyat, kupon, kampanya ve
+  manuel kasa yazmalari yerel fallback ile de kaydedilir. Firma varsayilanlari
+  firma bazinda ayridir. Bunlar gercek POS/harici servis baglantisi kurmaz.
+- Gecmis tarihe public talep reddedilir; vade ve guncel kampanya tarihleri
+  Istanbul gunune gore hesaplanir. Canonical adresleri kayitli site domaininden
+  uretilir; firma bazli `sitemap.xml` ve `robots.txt` eklenmistir. Firma domaini
+  olmayan ortak kurulumda `APP_URL` gercek yayin adresi olmali; canlida localhost
+  birakilmamali. Her firmanin indekslenecek kendi domainini panelde tanimlayin.
+- `npm test` oturum deposunun DB dalini mock ile de dogrular. Smoke testi tum
+  korumali endpoint'leri, gercek form giris/cikis akisini, rol yukseltme engelini,
+  oturum iptalini, firma ayrimini ve yerel kayitlari test eder. Bunlar staging
+  PostgreSQL entegrasyon testi yerine gecmez.
+- `npm run build` ardindan `npm run test:production-auth`, ayri bir production
+  sunucusunda giris HTML'inde gizli bilgi bulunmadigini, anonim yazmalarin
+  reddedildigini ve veritabani hatasinda fallback'e gecilmedigini dogrular.
+  Bu test mevcut kayitlari degistirmez; 3013 portunu kullanir.
+
+## Siradaki isler
+
+- Konaklama bazli gercek iCal ice aktarimi, kaynak bazli idempotent bloklar,
+  hata halinde dolulugu koruma, cakisma loglari ve korumali otomatik senkron
+  endpoint'i eklendi. Canlida yeni Prisma alanlari ve harici zamanlayici kurulumu
+  gereklidir; bunlar uzaktan uygulanmadi. Desteklenen profil ve sinirlar:
+  [Takvim senkronizasyonu](takvim-senkronizasyonu.md).
+- Mevcut Next.js/Sharp bagimliliklarindaki npm audit uyarilari icin framework
+  guvenlik guncellemesi oncelikli ayri bir yayin isi olarak planlanmalidir.
+- Landing/SEO panelindeki durum kaydi, otomatik yeni web sayfasi veya blog yazisi
+  uretmez. CMS yayin akisi, gercek goruntulenme metrikleri ve cache warming
+  servisi ayri islerdir; mevcut tanim ekranlari bunlarin calistigi anlamina gelmez.
+- Site PAUSED durumunun public yayin erisimine uygulanmasi ve kupon limitlerinin
+  eszamanli taleplerde atomik korunmasi ayrica ele alinmalidir.
+- Odeme saglayicisi, otomatik e-posta, giris deneme sinirlamasi ve canli
+  PostgreSQL uzerinde eszamanlilik testleri ayrica tamamlanmalidir.
+
 ## Dis bagimliliklar ve sinirlar
 
 - Bu surum odeme altyapisi/sanal POS entegrasyonu veya otomatik e-posta gonderimi

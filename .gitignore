@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local authentication contains password hashes and revocable sessions, never deploy it.
+/data/development-auth.json*
+/data/development-calendar-sync.json*

@@ -21,5 +21,5 @@ export const getCurrentPublicSiteTemplate = cache(async () => {
     async () => (await getFallbackWebsites(company.id)).map((site) => ({ ...site, companyId: company.id, isPrimary: site.default, themeKey: site.themeKey ?? null })),
   );
   const website = selectCompanyWebsite(websites, company.id, host);
-  return { company, websiteId: website?.id ?? null, themeKey: resolveSiteTemplate(website?.themeKey) };
+  return { company, websiteId: website?.id ?? null, domain: website?.domain ?? null, themeKey: resolveSiteTemplate(website?.themeKey) };
 });

@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import {
   createDemoIcalSource,
@@ -7,6 +8,8 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const denied = await authorizePanelApi(request, "calendar");
+  if (denied) return denied;
   try {
     const payload = (await request.json()) as {
       villaId?: string;
@@ -28,6 +31,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ source });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoCalendarSyncStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

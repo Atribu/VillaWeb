@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoDefinitionStatus } from "@/lib/demo-definitions";
 import {
@@ -16,6 +17,8 @@ type RouteContext = {
 const ALLOWED_STATUSES = new Set<DemoDefinitionStatus>(["ACTIVE", "DRAFT", "PASSIVE"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "definitions");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -29,6 +32,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const group = await updateDemoParameterGroupStatus(id, payload.status);
     return NextResponse.json({ group });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoDefinitionsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

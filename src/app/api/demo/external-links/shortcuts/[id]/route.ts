@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoShortcutStatus } from "@/lib/demo-external-links";
 import {
@@ -16,6 +17,8 @@ type RouteContext = {
 const ALLOWED_STATUSES = new Set<DemoShortcutStatus>(["ACTIVE", "HIDDEN"]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "external-links");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -29,6 +32,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const shortcut = await updateDemoShortcutStatus(id, payload.status);
     return NextResponse.json({ shortcut });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoExternalLinksStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

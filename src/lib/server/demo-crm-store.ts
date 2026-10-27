@@ -1,4 +1,6 @@
 import "server-only";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
 import {
   buildCrmOverview,
@@ -61,52 +63,57 @@ export async function getDemoReviews() {
 }
 
 export async function updateDemoReviewStatus(reviewId: string, status: DemoReviewStatus) {
-  const review = await db.guestReview.findUnique({
-    where: { id: reviewId },
-    select: { id: true, companyId: true },
-  });
+  return withDevelopmentFallback(async () => {
+    const review = await db.guestReview.findUnique({
+      where: { id: reviewId },
+      select: { id: true, companyId: true },
+    });
 
-  if (!review) {
-    throw new DemoOperationsStoreError("Yorum bulunamadi.");
-  }
+    if (!review) {
+      throw new DemoOperationsStoreError("Yorum bulunamadi.");
+    }
 
-  await assertPanelCompanyAccess(review.companyId);
+    await assertPanelCompanyAccess(review.companyId);
 
-  const updated = await db.guestReview.update({
-    where: { id: reviewId },
-    data: {
-      status: mapDemoReviewStatusToPrisma(status),
-      updatedAt: new Date(),
-      staffNote:
-        status === "PUBLISHED"
-          ? "Yorum yayina alindi."
-          : status === "HIDDEN"
-            ? "Yorum gizli moda alindi."
-            : "Yorum moderasyon bekliyor.",
-    },
-    include: {
-      villa: {
-        select: {
-          slug: true,
-          title: true,
+    const updated = await db.guestReview.update({
+      where: { id: reviewId },
+      data: {
+        status: mapDemoReviewStatusToPrisma(status),
+        updatedAt: new Date(),
+        staffNote:
+          status === "PUBLISHED"
+            ? "Yorum yayina alindi."
+            : status === "HIDDEN"
+              ? "Yorum gizli moda alindi."
+              : "Yorum moderasyon bekliyor.",
+      },
+      include: {
+        villa: {
+          select: {
+            slug: true,
+            title: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  return {
-    id: updated.id,
-    companyId: updated.companyId,
-    villaSlug: updated.villa.slug,
-    villaTitle: updated.villa.title,
-    guestName: updated.guestName,
-    rating: updated.rating,
-    comment: updated.comment,
-    source: updated.source,
-    status: mapReviewStatusToDemo(updated.status),
-    createdAt: updated.createdAt.toISOString(),
-    staffNote: updated.staffNote ?? undefined,
-  };
+    return {
+      id: updated.id,
+      companyId: updated.companyId,
+      villaSlug: updated.villa.slug,
+      villaTitle: updated.villa.title,
+      guestName: updated.guestName,
+      rating: updated.rating,
+      comment: updated.comment,
+      source: updated.source,
+      status: mapReviewStatusToDemo(updated.status),
+      createdAt: updated.createdAt.toISOString(),
+      staffNote: updated.staffNote ?? undefined,
+    };
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-reviews.json", fallbackRecords.getFallbackReviews, reviewId, (record) => ({ ...record, status, staffNote: status === "PUBLISHED" ? "Yorum yayina alindi." : status === "HIDDEN" ? "Yorum gizli moda alindi." : "Yorum moderasyon bekliyor.", updatedAt: new Date().toISOString() })))!;
+  });
 }
 
 export async function getDemoCrmOverview() {

@@ -1,4 +1,6 @@
 import "server-only";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
 import { db } from "@/lib/db";
 import type {
@@ -117,92 +119,107 @@ export async function getDemoDocumentLinks() {
 }
 
 export async function updateDemoShortcutStatus(shortcutId: string, status: DemoShortcutStatus) {
-  const shortcut = await db.shortcutLink.findUnique({
-    where: { id: shortcutId },
+  return withDevelopmentFallback(async () => {
+    const shortcut = await db.shortcutLink.findUnique({
+      where: { id: shortcutId },
+    });
+
+    if (!shortcut) {
+      throw new DemoExternalLinksStoreError("Kisayol bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(shortcut.companyId);
+
+    const updated = await db.shortcutLink.update({
+      where: { id: shortcutId },
+      data: {
+        status: mapDemoShortcutStatusToPrisma(status),
+      },
+    });
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      url: updated.url,
+      category: updated.category,
+      description: updated.description ?? "",
+      status: mapShortcutStatusToDemo(updated.status),
+      updatedAt: iso(updated.updatedAt),
+    };
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-shortcuts.json", fallbackRecords.getFallbackShortcuts, shortcutId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!shortcut) {
-    throw new DemoExternalLinksStoreError("Kisayol bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(shortcut.companyId);
-
-  const updated = await db.shortcutLink.update({
-    where: { id: shortcutId },
-    data: {
-      status: mapDemoShortcutStatusToPrisma(status),
-    },
-  });
-
-  return {
-    id: updated.id,
-    title: updated.title,
-    url: updated.url,
-    category: updated.category,
-    description: updated.description ?? "",
-    status: mapShortcutStatusToDemo(updated.status),
-    updatedAt: iso(updated.updatedAt),
-  };
 }
 
 export async function updateDemoExternalServiceStatus(
   serviceId: string,
   status: DemoExternalServiceStatus,
 ) {
-  const service = await db.externalService.findUnique({
-    where: { id: serviceId },
+  return withDevelopmentFallback(async () => {
+    const service = await db.externalService.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new DemoExternalLinksStoreError("Dis servis kaydi bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(service.companyId);
+
+    const updated = await db.externalService.update({
+      where: { id: serviceId },
+      data: {
+        status: mapDemoExternalServiceStatusToPrisma(status),
+      },
+    });
+
+    return {
+      id: updated.id,
+      name: updated.name,
+      url: updated.url,
+      ownerLabel: updated.ownerLabel,
+      category: updated.category,
+      status: mapExternalServiceStatusToDemo(updated.status),
+      note: updated.note ?? "",
+      updatedAt: iso(updated.updatedAt),
+    };
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-external-services.json", fallbackRecords.getFallbackExternalServices, serviceId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!service) {
-    throw new DemoExternalLinksStoreError("Dis servis kaydi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(service.companyId);
-
-  const updated = await db.externalService.update({
-    where: { id: serviceId },
-    data: {
-      status: mapDemoExternalServiceStatusToPrisma(status),
-    },
-  });
-
-  return {
-    id: updated.id,
-    name: updated.name,
-    url: updated.url,
-    ownerLabel: updated.ownerLabel,
-    category: updated.category,
-    status: mapExternalServiceStatusToDemo(updated.status),
-    note: updated.note ?? "",
-    updatedAt: iso(updated.updatedAt),
-  };
 }
 
 export async function updateDemoDocumentLinkStatus(
   documentLinkId: string,
   status: DemoDocumentLinkStatus,
 ) {
-  const link = await db.documentLink.findUnique({
-    where: { id: documentLinkId },
+  return withDevelopmentFallback(async () => {
+    const link = await db.documentLink.findUnique({
+      where: { id: documentLinkId },
+    });
+
+    if (!link) {
+      throw new DemoExternalLinksStoreError("Dokuman baglantisi bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(link.companyId);
+
+    const updated = await db.documentLink.update({
+      where: { id: documentLinkId },
+      data: { status },
+    });
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      url: updated.url,
+      category: updated.category,
+      status: mapDocumentLinkStatus(updated.status),
+      updatedAt: iso(updated.updatedAt),
+    };
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-document-links.json", fallbackRecords.getFallbackDocumentLinks, documentLinkId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!link) {
-    throw new DemoExternalLinksStoreError("Dokuman baglantisi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(link.companyId);
-
-  const updated = await db.documentLink.update({
-    where: { id: documentLinkId },
-    data: { status },
-  });
-
-  return {
-    id: updated.id,
-    title: updated.title,
-    url: updated.url,
-    category: updated.category,
-    status: mapDocumentLinkStatus(updated.status),
-    updatedAt: iso(updated.updatedAt),
-  };
 }

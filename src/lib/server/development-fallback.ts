@@ -1,6 +1,7 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs";
 import path from "node:path";
 import { getDefaultDemoCompany, getFallbackCompanyIdForVillaSlug } from "@/lib/demo-companies";
 
@@ -79,12 +80,17 @@ export async function readDevelopmentDataFile<T>(fileName: string, fallbackValue
     ? process.env.DEV_DATA_DIRECTORY : path.join(process.cwd(), "data");
   const targetPath = path.join(dataDir, fileName);
 
-  try {
-    const raw = await readFile(targetPath, "utf8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return cloneDevelopmentValue(fallbackValue);
-  }
+  let result = cloneDevelopmentValue(fallbackValue);
+  // Await a void promise so React's dev IO traces do not serialize raw JSON files.
+  await new Promise<void>((resolve) => {
+    readFile(targetPath, "utf8", (error, raw) => {
+      if (!error) {
+        try { result = JSON.parse(raw) as T; } catch { /* Keep the local seed fallback. */ }
+      }
+      resolve();
+    });
+  });
+  return result;
 }
 
 export async function writeDevelopmentDataFile<T>(fileName: string, value: T) {

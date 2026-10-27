@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getUserSession } from "@/lib/auth/server-session";
@@ -27,6 +28,8 @@ function revalidateVillaPaths(slug: string) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "villas");
+  if (denied) return denied;
   const session = await getUserSession();
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
@@ -66,6 +69,8 @@ export async function POST(request: Request, context: RouteContext) {
     revalidateVillaPaths(slug);
     return NextResponse.json({ villa });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoVillaStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -79,6 +84,8 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "villas");
+  if (denied) return denied;
   const session = await getUserSession();
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadi." }, { status: 401 });
@@ -101,6 +108,8 @@ export async function DELETE(request: Request, context: RouteContext) {
     revalidateVillaPaths(slug);
     return NextResponse.json({ villa });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoVillaStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

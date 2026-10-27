@@ -1,68 +1,29 @@
 import type { Metadata } from "next";
-import { Container } from "@/components/ui/container";
+import { LegalDocument } from "@/components/site-templates/legal-document";
 import { pickLocalized } from "@/lib/i18n";
 import { buildPublicMetadata } from "@/lib/public-metadata";
 import { getCurrentLocale } from "@/lib/server/app-locale";
+import { getCurrentPublicCompany } from "@/lib/server/demo-company-context";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getCurrentLocale();
-
-  return buildPublicMetadata({
-    locale,
-    title: { tr: "KVKK", en: "Data Protection" },
-    description: {
-      tr: "Kisisel verilerin korunmasi ve islenmesine iliskin aydinlatma metni.",
-      en: "A privacy notice about the protection and processing of personal data.",
-    },
-    canonical: "/kvkk",
-  });
+  return buildPublicMetadata({ locale, title: { tr: "Kişisel verilerin korunması", en: "Personal data protection" },
+    description: { tr: "Kişisel verilerin korunması ve işlenmesine ilişkin bilgilendirme.", en: "Information about the protection and processing of personal data." }, canonical: "/kvkk" });
 }
-
-const sections = [
-  "Veri sorumlusu bilgileri",
-  "Islenen veri kategorileri",
-  "Isleme amaclari ve hukuki sebepler",
-  "Ilgili kisi haklari ve basvuru sureci",
-];
 
 export default async function KvkkPage() {
   const locale = await getCurrentLocale();
-
-  return (
-    <Container className="py-14 sm:py-16">
-      <div className="serene-card p-8">
-        <p className="serene-eyebrow">
-          {pickLocalized(locale, "KVKK", "Data Protection")}
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-[var(--serene-on-surface)]">
-          {pickLocalized(locale, "Aydinlatma metni icin yasal sayfa iskeleti", "Legal page framework for the privacy notice")}
-        </h1>
-        <p className="mt-5 max-w-3xl text-sm leading-8 text-[var(--serene-on-surface-variant)]">
-          {pickLocalized(
-            locale,
-            "Bu sayfa, kisisel verilerin korunmasi ve islenmesine dair aydinlatma metnini tasimak uzere modern ama ciddi bir yasal icerik yapisiyla kurgulandi.",
-            "This page was designed with a modern yet serious legal structure to carry the privacy notice on the protection and processing of personal data.",
-          )}
-        </p>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {sections.map((item) => (
-            <div key={item} className="rounded-[16px] border border-[var(--serene-outline-variant)]/60 bg-[var(--serene-surface-low)] px-5 py-5 text-sm font-medium text-[var(--serene-on-surface)]">
-              {pickLocalized(
-                locale,
-                item,
-                item === "Veri sorumlusu bilgileri"
-                  ? "Data controller information"
-                  : item === "Islenen veri kategorileri"
-                    ? "Processed data categories"
-                    : item === "Isleme amaclari ve hukuki sebepler"
-                      ? "Processing purposes and legal bases"
-                      : "Data subject rights and application process",
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </Container>
-  );
+  const company = await getCurrentPublicCompany();
+  const t = (tr: string, en: string) => pickLocalized(locale, tr, en);
+  return <LegalDocument locale={locale} companySlug={company.slug} companyName={company.shortName}
+    title={t("Kişisel verilerin korunması", "Personal data protection")}
+    intro={t("Kişisel verilerin korunması ve işlenmesine ilişkin bilgilendirme.", "Information about the protection and processing of personal data.")}
+    pending
+    sections={[
+      { title: t("Veri sorumlusu bilgileri", "Data controller information") },
+      { title: t("İşlenen veri kategorileri", "Processed data categories") },
+      { title: t("İşleme amaçları ve hukuki sebepler", "Processing purposes and legal bases") },
+      { title: t("İlgili kişi hakları ve başvuru süreci", "Data subject rights and application process") },
+    ]}
+  />;
 }

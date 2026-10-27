@@ -1,4 +1,6 @@
 import "server-only";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
 import type {
   DemoLandingStatus,
@@ -154,24 +156,29 @@ export async function updateDemoLandingPage(
     status: DemoLandingStatus;
   },
 ) {
-  const landing = await db.landingPage.findUnique({
-    where: { id: landingId },
-    select: { id: true, companyId: true },
+  return withDevelopmentFallback(async () => {
+    const landing = await db.landingPage.findUnique({
+      where: { id: landingId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!landing) {
+      throw new DemoWebsitesStoreError("Landing sayfasi bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(landing.companyId);
+
+    await db.landingPage.update({
+      where: { id: landingId },
+      data: { status: input.status },
+    });
+
+    const landings = await getDemoLandingPages();
+    return landings.find((item) => item.id === landingId) ?? null;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-landing-pages.json", fallbackRecords.getFallbackLandingPages, landingId, (record) => ({ ...record, ...input, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!landing) {
-    throw new DemoWebsitesStoreError("Landing sayfasi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(landing.companyId);
-
-  await db.landingPage.update({
-    where: { id: landingId },
-    data: { status: input.status },
-  });
-
-  const landings = await getDemoLandingPages();
-  return landings.find((item) => item.id === landingId) ?? null;
 }
 
 export async function updateDemoSeoContent(
@@ -181,25 +188,30 @@ export async function updateDemoSeoContent(
     seoScore?: number;
   },
 ) {
-  const content = await db.seoContent.findUnique({
-    where: { id: contentId },
-    select: { id: true, companyId: true },
+  return withDevelopmentFallback(async () => {
+    const content = await db.seoContent.findUnique({
+      where: { id: contentId },
+      select: { id: true, companyId: true },
+    });
+
+    if (!content) {
+      throw new DemoWebsitesStoreError("SEO icerigi bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(content.companyId);
+
+    await db.seoContent.update({
+      where: { id: contentId },
+      data: {
+        status: input.status ?? undefined,
+        seoScore: input.seoScore ?? undefined,
+      },
+    });
+
+    const contents = await getDemoSeoContents();
+    return contents.find((item) => item.id === contentId) ?? null;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-seo-contents.json", fallbackRecords.getFallbackSeoContents, contentId, (record) => ({ ...record, ...input, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!content) {
-    throw new DemoWebsitesStoreError("SEO icerigi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(content.companyId);
-
-  await db.seoContent.update({
-    where: { id: contentId },
-    data: {
-      status: input.status ?? undefined,
-      seoScore: input.seoScore ?? undefined,
-    },
-  });
-
-  const contents = await getDemoSeoContents();
-  return contents.find((item) => item.id === contentId) ?? null;
 }

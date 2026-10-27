@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     const company = await getCurrentPublicCompany();
-    const villa = await getDemoVillaBySlug(villaSlug, { companyId: company.id, includeInactive: false, includeMetrics: false });
+    const villa = await getDemoVillaBySlug(villaSlug, { publicSite: true, companyId: company.id, includeInactive: false, includeMetrics: false });
 
     if (!villa) {
       throw new DemoOperationsStoreError("Kupon icin secilen villa bulunamadi.");

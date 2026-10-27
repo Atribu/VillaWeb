@@ -1,4 +1,6 @@
 import "server-only";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
 import { db } from "@/lib/db";
 import type {
@@ -19,7 +21,7 @@ import {
   getFallbackSystemDefaults,
   updateFallbackPaymentMethod,
 } from "@/lib/server/development-fallback-data";
-import { withDevelopmentFallback } from "@/lib/server/development-fallback";
+import { withDevelopmentFallback, readDevelopmentDataFile, writeDevelopmentDataFile } from "@/lib/server/development-fallback";
 
 export class DemoSettingsStoreError extends Error {}
 
@@ -286,43 +288,48 @@ export async function updateDemoCurrencyRate(
     status?: DemoCurrencyRateStatus;
   },
 ) {
-  const current = await db.currencyRate.findUnique({
-    where: { id: currencyId },
+  return withDevelopmentFallback(async () => {
+    const current = await db.currencyRate.findUnique({
+      where: { id: currencyId },
+    });
+
+    if (!current) {
+      throw new DemoSettingsStoreError("Kur kaydi bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    if (input.buyRate !== undefined && input.buyRate <= 0) {
+      throw new DemoSettingsStoreError("Alis kuru sifirdan buyuk olmalidir.");
+    }
+
+    if (input.sellRate !== undefined && input.sellRate <= 0) {
+      throw new DemoSettingsStoreError("Satis kuru sifirdan buyuk olmalidir.");
+    }
+
+    const currency = await db.currencyRate.update({
+      where: { id: currencyId },
+      data: {
+        ...(input.buyRate !== undefined ? { buyRate: input.buyRate } : {}),
+        ...(input.sellRate !== undefined ? { sellRate: input.sellRate } : {}),
+        ...(input.status ? { status: input.status } : {}),
+      },
+    });
+
+    return {
+      id: currency.id,
+      code: currency.code,
+      label: currency.label,
+      buyRate: decimalToNumber(currency.buyRate),
+      sellRate: decimalToNumber(currency.sellRate),
+      sourceLabel: currency.sourceLabel,
+      status: currency.status satisfies DemoCurrencyRateStatus,
+      updatedAt: iso(currency.updatedAt),
+    };
+  }, async () => {
+    for (const rate of [input.buyRate, input.sellRate]) if (rate !== undefined && (!Number.isFinite(rate) || rate <= 0)) throw new DemoSettingsStoreError("Kur sifirdan buyuk olmalidir.");
+    return (await mutateFallbackRecord("demo-currency-rates.json", fallbackRecords.getFallbackCurrencyRates, currencyId, (record) => ({ ...record, ...input, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!current) {
-    throw new DemoSettingsStoreError("Kur kaydi bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
-  if (input.buyRate !== undefined && input.buyRate <= 0) {
-    throw new DemoSettingsStoreError("Alis kuru sifirdan buyuk olmalidir.");
-  }
-
-  if (input.sellRate !== undefined && input.sellRate <= 0) {
-    throw new DemoSettingsStoreError("Satis kuru sifirdan buyuk olmalidir.");
-  }
-
-  const currency = await db.currencyRate.update({
-    where: { id: currencyId },
-    data: {
-      ...(input.buyRate !== undefined ? { buyRate: input.buyRate } : {}),
-      ...(input.sellRate !== undefined ? { sellRate: input.sellRate } : {}),
-      ...(input.status ? { status: input.status } : {}),
-    },
-  });
-
-  return {
-    id: currency.id,
-    code: currency.code,
-    label: currency.label,
-    buyRate: decimalToNumber(currency.buyRate),
-    sellRate: decimalToNumber(currency.sellRate),
-    sourceLabel: currency.sourceLabel,
-    status: currency.status satisfies DemoCurrencyRateStatus,
-    updatedAt: iso(currency.updatedAt),
-  };
 }
 
 export async function updateDemoPaymentMethod(
@@ -454,44 +461,49 @@ export async function updateDemoCacheGroup(
     warmNow?: boolean;
   },
 ) {
-  const current = await db.cacheGroup.findUnique({
-    where: { id: cacheGroupId },
+  return withDevelopmentFallback(async () => {
+    const current = await db.cacheGroup.findUnique({
+      where: { id: cacheGroupId },
+    });
+
+    if (!current) {
+      throw new DemoSettingsStoreError("Cache grubu bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    if (input.ttlMinutes !== undefined && input.ttlMinutes <= 0) {
+      throw new DemoSettingsStoreError("TTL sifirdan buyuk olmalidir.");
+    }
+
+    const group = await db.cacheGroup.update({
+      where: { id: cacheGroupId },
+      data: {
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.ttlMinutes !== undefined ? { ttlMinutes: input.ttlMinutes } : {}),
+        ...(input.warmNow
+          ? {
+              status: "HEALTHY",
+              lastWarmedAt: new Date(),
+            }
+          : {}),
+      },
+    });
+
+    return {
+      id: group.id,
+      label: group.label,
+      target: group.target,
+      status: group.status satisfies DemoCacheGroupStatus,
+      ttlMinutes: group.ttlMinutes,
+      warmIntervalMinutes: group.warmIntervalMinutes,
+      lastWarmedAt: iso(group.lastWarmedAt),
+      note: group.note ?? "",
+    };
+  }, async () => {
+    if (input.ttlMinutes !== undefined && (!Number.isFinite(input.ttlMinutes) || input.ttlMinutes <= 0)) throw new DemoSettingsStoreError("TTL sifirdan buyuk olmalidir.");
+    return (await mutateFallbackRecord("demo-cache-groups.json", fallbackRecords.getFallbackCacheGroups, cacheGroupId, (record) => ({ ...record, ...(input.status ? { status: input.status } : {}), ...(input.ttlMinutes !== undefined ? { ttlMinutes: input.ttlMinutes } : {}), ...(input.warmNow ? { status: "HEALTHY" as const, lastWarmedAt: new Date().toISOString() } : {}), updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!current) {
-    throw new DemoSettingsStoreError("Cache grubu bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
-  if (input.ttlMinutes !== undefined && input.ttlMinutes <= 0) {
-    throw new DemoSettingsStoreError("TTL sifirdan buyuk olmalidir.");
-  }
-
-  const group = await db.cacheGroup.update({
-    where: { id: cacheGroupId },
-    data: {
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.ttlMinutes !== undefined ? { ttlMinutes: input.ttlMinutes } : {}),
-      ...(input.warmNow
-        ? {
-            status: "HEALTHY",
-            lastWarmedAt: new Date(),
-          }
-        : {}),
-    },
-  });
-
-  return {
-    id: group.id,
-    label: group.label,
-    target: group.target,
-    status: group.status satisfies DemoCacheGroupStatus,
-    ttlMinutes: group.ttlMinutes,
-    warmIntervalMinutes: group.warmIntervalMinutes,
-    lastWarmedAt: iso(group.lastWarmedAt),
-    note: group.note ?? "",
-  };
 }
 
 export async function updateDemoSystemDefaults(input: Partial<DemoSystemDefaults>) {
@@ -500,6 +512,7 @@ export async function updateDemoSystemDefaults(input: Partial<DemoSystemDefaults
   if (!companyId) {
     throw new DemoSettingsStoreError("Varsayilanlar icin aktif firma bulunamadi.");
   }
+  await assertPanelCompanyAccess(companyId);
 
   if (input.leadResponseMinutes !== undefined && input.leadResponseMinutes <= 0) {
     throw new DemoSettingsStoreError("Talep geri donus suresi sifirdan buyuk olmalidir.");
@@ -509,6 +522,7 @@ export async function updateDemoSystemDefaults(input: Partial<DemoSystemDefaults
     throw new DemoSettingsStoreError("Minimum gece en az 1 olmalidir.");
   }
 
+  return withDevelopmentFallback(async () => {
   await db.company.update({
     where: { id: companyId },
     data: {
@@ -561,31 +575,52 @@ export async function updateDemoSystemDefaults(input: Partial<DemoSystemDefaults
     requestReminderHours: settings.requestReminderHours,
     updatedAt: iso(settings.updatedAt),
   } satisfies DemoSystemDefaults;
+  }, async () => {
+    const all = await readDevelopmentDataFile<Record<string, DemoSystemDefaults>>("demo-system-defaults.json", {});
+    const previous = await getFallbackSystemDefaults(companyId);
+    const settings: DemoSystemDefaults = {
+      leadResponseMinutes: input.leadResponseMinutes ?? previous.leadResponseMinutes,
+      defaultMinNightCount: input.defaultMinNightCount ?? previous.defaultMinNightCount,
+      defaultCleaningLeadHours: input.defaultCleaningLeadHours ?? previous.defaultCleaningLeadHours,
+      supportPhone: input.supportPhone ?? previous.supportPhone,
+      supportEmail: input.supportEmail ?? previous.supportEmail,
+      defaultCurrency: input.defaultCurrency ?? previous.defaultCurrency,
+      requestReminderHours: input.requestReminderHours ?? previous.requestReminderHours,
+      updatedAt: new Date().toISOString(),
+    };
+    await writeDevelopmentDataFile("demo-system-defaults.json", { ...all, [companyId]: settings });
+    return settings;
+  });
 }
 
 export async function updateDemoDocumentStatus(documentId: string, status: DemoDocumentStatus) {
-  const current = await db.documentAsset.findUnique({
-    where: { id: documentId },
+  return withDevelopmentFallback(async () => {
+    const current = await db.documentAsset.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!current) {
+      throw new DemoSettingsStoreError("Dokuman bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    const document = await db.documentAsset.update({
+      where: { id: documentId },
+      data: { status },
+    });
+
+    return {
+      id: document.id,
+      title: document.title,
+      category: document.category,
+      audience: document.audience,
+      status: document.status satisfies DemoDocumentStatus,
+      fileUrl: document.fileUrl,
+      updatedAt: iso(document.updatedAt),
+    };
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-documents.json", fallbackRecords.getFallbackDocuments, documentId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!current) {
-    throw new DemoSettingsStoreError("Dokuman bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
-  const document = await db.documentAsset.update({
-    where: { id: documentId },
-    data: { status },
-  });
-
-  return {
-    id: document.id,
-    title: document.title,
-    category: document.category,
-    audience: document.audience,
-    status: document.status satisfies DemoDocumentStatus,
-    fileUrl: document.fileUrl,
-    updatedAt: iso(document.updatedAt),
-  };
 }

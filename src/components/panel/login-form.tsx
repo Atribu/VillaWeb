@@ -30,7 +30,7 @@ export function LoginForm({
   companies,
 }: {
   locale: AppLocale;
-  companies: DemoCompanyRecord[];
+  companies: Array<Pick<DemoCompanyRecord, "id" | "name" | "shortName" | "slug">>;
 }) {
   const [state, formAction] = useActionState(authenticateUser, initialState);
 

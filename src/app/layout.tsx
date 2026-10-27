@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { pickLocalized } from "@/lib/i18n";
+import { publicOrigin } from "@/lib/public-origin";
 import "./globals.css";
 
 const inter = Inter({
@@ -30,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
   );
 
   return {
-    metadataBase: new URL("https://villaweb.example"),
+    metadataBase: new URL(publicOrigin(process.env.APP_URL) ?? publicOrigin(process.env.NEXT_PUBLIC_SITE_URL) ?? "http://localhost:3000"),
     title: {
       default: defaultTitle,
       template: "%s | VillaWeb",

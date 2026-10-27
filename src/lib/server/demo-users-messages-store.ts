@@ -1,6 +1,12 @@
 import "server-only";
+import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
+import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
-import { randomUUID, scryptSync } from "node:crypto";
+import { hashPassword } from "@/lib/auth/password";
+import { registerDevelopmentIdentity, updateDevelopmentAuth } from "@/lib/auth/development-auth";
+import { getUserSession } from "@/lib/auth/server-session";
+import { hasPermission } from "@/lib/auth/permissions";
+import { PanelAccessError } from "@/lib/auth/access-error";
 import { db } from "@/lib/db";
 import type {
   DemoAgencyStatus,
@@ -38,9 +44,10 @@ import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 
 export class DemoUsersMessagesStoreError extends Error {}
 
-function buildPasswordHash(password: string, saltSeed: string) {
-  const salt = `${saltSeed}:${randomUUID().slice(0, 8)}`;
-  return `scrypt:${salt}:${scryptSync(password, salt, 64).toString("hex")}`;
+async function requireUserManagement() {
+  const session = await getUserSession();
+  if (!session || !hasPermission(session.role, "users")) throw new PanelAccessError();
+  return session;
 }
 
 async function resolveUsersMessagesCompanyId() {
@@ -303,6 +310,7 @@ export async function createDemoTeamUser(input: {
   responsibility?: string;
 }) {
   const fullName = input.fullName.trim();
+  await requireUserManagement();
   const username = input.username.trim().toLowerCase();
   const email = input.email.trim().toLowerCase();
   const phone = input.phone.trim();
@@ -361,9 +369,9 @@ export async function createDemoTeamUser(input: {
             email,
             name: fullName,
             phone,
-            passwordHash: buildPasswordHash(password, username),
+            passwordHash: hashPassword(password),
             platformRole: "COMPANY_USER",
-            isActive: input.status !== "PASSIVE",
+            isActive: true,
             lastLoginAt: input.status === "ACTIVE" ? now : null,
           },
         });
@@ -400,7 +408,7 @@ export async function createDemoTeamUser(input: {
 
       await assertPanelCompanyAccess(branch.companyId);
 
-      return createFallbackTeamUser({
+      const created = await createFallbackTeamUser({
         companyId: branch.companyId ?? (await resolveUsersMessagesCompanyId()),
         fullName,
         username,
@@ -411,6 +419,8 @@ export async function createDemoTeamUser(input: {
         branchId: input.branchId,
         responsibility: responsibility || "Rol bazli erisim",
       });
+      await registerDevelopmentIdentity({ id: created.id, username, email, displayName: fullName, passwordHash: hashPassword(password), isOwner: false });
+      return created;
     },
   );
 }
@@ -483,43 +493,53 @@ export async function getDemoUsersMessagesOverview() {
 }
 
 export async function updateDemoAgencyStatus(agencyId: string, status: DemoAgencyStatus) {
-  const current = await db.agency.findUnique({
-    where: { id: agencyId },
+  return withDevelopmentFallback(async () => {
+    const current = await db.agency.findUnique({
+      where: { id: agencyId },
+    });
+
+    if (!current) {
+      throw new DemoUsersMessagesStoreError("Acenta bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    const agency = await db.agency.update({
+      where: { id: agencyId },
+      data: { status },
+    });
+
+    const [stat] = await Promise.all([getDemoAgencies()]);
+    return stat.find((item) => item.id === agency.id) ?? null;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-agencies.json", fallbackRecords.getFallbackAgencies, agencyId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!current) {
-    throw new DemoUsersMessagesStoreError("Acenta bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
-  const agency = await db.agency.update({
-    where: { id: agencyId },
-    data: { status },
-  });
-
-  const [stat] = await Promise.all([getDemoAgencies()]);
-  return stat.find((item) => item.id === agency.id) ?? null;
 }
 
 export async function updateDemoBranchStatus(branchId: string, status: DemoBranchStatus) {
-  const current = await db.branch.findUnique({
-    where: { id: branchId },
+  return withDevelopmentFallback(async () => {
+    const current = await db.branch.findUnique({
+      where: { id: branchId },
+    });
+
+    if (!current) {
+      throw new DemoUsersMessagesStoreError("Sube bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(current.companyId);
+
+    const branch = await db.branch.update({
+      where: { id: branchId },
+      data: { status },
+    });
+
+    const branches = await getDemoBranches();
+    return branches.find((item) => item.id === branch.id) ?? null;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-branches.json", fallbackRecords.getFallbackBranches, branchId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!current) {
-    throw new DemoUsersMessagesStoreError("Sube bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(current.companyId);
-
-  const branch = await db.branch.update({
-    where: { id: branchId },
-    data: { status },
-  });
-
-  const branches = await getDemoBranches();
-  return branches.find((item) => item.id === branch.id) ?? null;
 }
 
 export async function updateDemoTeamUser(
@@ -535,6 +555,7 @@ export async function updateDemoTeamUser(
     responsibility?: string;
   },
 ) {
+  const actor = await requireUserManagement();
   return withDevelopmentFallback(
     async () => {
       const membership = await db.companyMembership.findUnique({
@@ -549,6 +570,12 @@ export async function updateDemoTeamUser(
       }
 
       await assertPanelCompanyAccess(membership.companyId);
+      if (actor.role !== "SUPER_ADMIN" && membership.user.platformRole !== "COMPANY_USER") throw new PanelAccessError();
+      // Company administrators cannot edit the shared login/profile of another company's member.
+      if (actor.role !== "SUPER_ADMIN" && (input.username !== undefined || input.email !== undefined || input.fullName !== undefined || input.phone !== undefined)) {
+        const otherMembership = await db.companyMembership.findFirst({ where: { userId: membership.userId, companyId: { not: membership.companyId } }, select: { id: true } });
+        if (otherMembership) throw new PanelAccessError("Birden fazla firmaya bagli kullanicinin profilini sadece super admin duzenleyebilir.");
+      }
 
       let branchId: string | null | undefined = undefined;
 
@@ -600,6 +627,9 @@ export async function updateDemoTeamUser(
       }
 
       await db.$transaction(async (tx) => {
+        if (input.status !== undefined || input.roleId !== undefined) {
+          await tx.authSession.deleteMany({ where: { userId: membership.userId } });
+        }
         await tx.companyMembership.update({
           where: { id: userId },
           data: {
@@ -638,6 +668,9 @@ export async function updateDemoTeamUser(
 
       await assertPanelCompanyAccess(current.companyId);
 
+      if (input.status !== undefined || input.roleId !== undefined) {
+        await updateDevelopmentAuth((data) => { data.sessions = data.sessions.filter((session) => session.userId !== userId); });
+      }
       return updateFallbackTeamUser(userId, {
         ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),
         ...(input.username !== undefined ? { username: input.username } : {}),
@@ -653,26 +686,31 @@ export async function updateDemoTeamUser(
 }
 
 export async function updateDemoInternalMessageStatus(messageId: string, status: DemoMessageStatus) {
-  const message = await db.internalMessage.findUnique({
-    where: { id: messageId },
+  return withDevelopmentFallback(async () => {
+    const message = await db.internalMessage.findUnique({
+      where: { id: messageId },
+    });
+
+    if (!message) {
+      throw new DemoUsersMessagesStoreError("Mesaj bulunamadi.");
+    }
+
+    await assertPanelCompanyAccess(message.companyId);
+
+    await db.internalMessage.update({
+      where: { id: messageId },
+      data: {
+        status,
+        resolvedAt: status === "RESOLVED" ? new Date() : status === "ARCHIVED" ? new Date() : null,
+      },
+    });
+
+    const messages = await getDemoInternalMessages();
+    return messages.find((item) => item.id === messageId) ?? null;
+  }, async () => {
+
+    return (await mutateFallbackRecord("demo-internal-messages.json", fallbackRecords.getFallbackInternalMessages, messageId, (record) => ({ ...record, status, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!message) {
-    throw new DemoUsersMessagesStoreError("Mesaj bulunamadi.");
-  }
-
-  await assertPanelCompanyAccess(message.companyId);
-
-  await db.internalMessage.update({
-    where: { id: messageId },
-    data: {
-      status,
-      resolvedAt: status === "RESOLVED" ? new Date() : status === "ARCHIVED" ? new Date() : null,
-    },
-  });
-
-  const messages = await getDemoInternalMessages();
-  return messages.find((item) => item.id === messageId) ?? null;
 }
 
 export async function updateDemoCommissionRate(
@@ -682,28 +720,33 @@ export async function updateDemoCommissionRate(
     percent?: number;
   },
 ) {
-  const commission = await db.commissionRule.findUnique({
-    where: { id: commissionId },
+  return withDevelopmentFallback(async () => {
+    const commission = await db.commissionRule.findUnique({
+      where: { id: commissionId },
+    });
+
+    if (!commission) {
+      throw new DemoUsersMessagesStoreError("Komisyon kaydi bulunamadi.");
+    }
+
+    if (input.percent !== undefined && (input.percent <= 0 || input.percent >= 100)) {
+      throw new DemoUsersMessagesStoreError("Komisyon orani 1 ile 99 arasinda olmalidir.");
+    }
+
+    await assertPanelCompanyAccess(commission.companyId);
+
+    await db.commissionRule.update({
+      where: { id: commissionId },
+      data: {
+        ...(input.active !== undefined ? { active: input.active } : {}),
+        ...(input.percent !== undefined ? { percent: input.percent } : {}),
+      },
+    });
+
+    const commissions = await getDemoCommissionRates();
+    return commissions.find((item) => item.id === commissionId) ?? null;
+  }, async () => {
+    if (input.percent !== undefined && (!Number.isFinite(input.percent) || input.percent <= 0 || input.percent >= 100)) throw new DemoUsersMessagesStoreError("Komisyon orani 1 ile 99 arasinda olmalidir.");
+    return (await mutateFallbackRecord("demo-commission-rates.json", fallbackRecords.getFallbackCommissionRates, commissionId, (record) => ({ ...record, ...input, updatedAt: new Date().toISOString() })))!;
   });
-
-  if (!commission) {
-    throw new DemoUsersMessagesStoreError("Komisyon kaydi bulunamadi.");
-  }
-
-  if (input.percent !== undefined && (input.percent <= 0 || input.percent >= 100)) {
-    throw new DemoUsersMessagesStoreError("Komisyon orani 1 ile 99 arasinda olmalidir.");
-  }
-
-  await assertPanelCompanyAccess(commission.companyId);
-
-  await db.commissionRule.update({
-    where: { id: commissionId },
-    data: {
-      ...(input.active !== undefined ? { active: input.active } : {}),
-      ...(input.percent !== undefined ? { percent: input.percent } : {}),
-    },
-  });
-
-  const commissions = await getDemoCommissionRates();
-  return commissions.find((item) => item.id === commissionId) ?? null;
 }

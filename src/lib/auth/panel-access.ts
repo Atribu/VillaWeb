@@ -1,4 +1,5 @@
 import type { AppRole } from "@/lib/auth/users";
+import { hasPermission, panelPathPermission } from "@/lib/auth/permissions";
 
 export type PanelIconName =
   | "dashboard"
@@ -403,26 +404,18 @@ const allowedPlaceholderSections = new Set([
 ]);
 
 function pathMatches(href: string, pathname: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function roleCanAccess(requiredRoles: AppRole[], currentRole: AppRole) {
-  if (requiredRoles.includes(currentRole)) {
-    return true;
-  }
-
-  return currentRole === "SUPER_ADMIN" && requiredRoles.includes("ADMIN");
+  return pathname === href || (href !== "/panel" && pathname.startsWith(`${href}/`));
 }
 
 export function getPanelNavigation(role: AppRole) {
   return panelEntries
-    .filter((entry) => roleCanAccess(entry.roles, role))
+    .filter((entry) => entry.type === "group" || canAccessPanelPath(role, entry.href))
     .map((entry) => {
       if (entry.type === "link") {
         return entry;
       }
 
-      const visibleItems = entry.items.filter((item) => roleCanAccess(item.roles, role));
+      const visibleItems = entry.items.filter((item) => canAccessPanelPath(role, item.href));
 
       return {
         ...entry,
@@ -433,23 +426,17 @@ export function getPanelNavigation(role: AppRole) {
 }
 
 export function getPanelHomePath(role: AppRole) {
-  return role === "STAFF" ? "/panel/villalar" : "/panel";
+  if (role === "STAFF" || role === "CONTENT") return "/panel/villalar";
+  if (role === "SALES") return "/panel/talepler";
+  if (role === "OPERATIONS") return "/panel/takip-operasyon/ev-operasyon";
+  if (role === "FINANCE") return "/panel/muhasebe";
+  if (role === "CRM") return "/panel/crm/musteriler";
+  return "/panel";
 }
 
 export function canAccessPanelPath(role: AppRole, pathname: string) {
-  if (role === "SUPER_ADMIN") {
-    return true;
-  }
-
-  const navigation = getPanelNavigation(role);
-
-  return navigation.some((entry) => {
-    if (entry.type === "link") {
-      return pathMatches(entry.href, pathname);
-    }
-
-    return entry.items.some((item) => pathMatches(item.href, pathname));
-  });
+  const permission = panelPathPermission(pathname);
+  return permission !== null && hasPermission(role, permission);
 }
 
 export function getPanelEntryState(pathname: string, entry: PanelNavEntry) {

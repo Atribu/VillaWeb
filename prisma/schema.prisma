@@ -657,12 +657,16 @@ model VillaAvailabilityBlock {
   blockType          AvailabilityBlockType
   note               String?
   sourceRequestId    String?
+  calendarSourceId   String?
+  externalEventId    String?
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
   villa              Villa                 @relation(fields: [villaId], references: [id], onDelete: Cascade)
   createdByUser      User?                 @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  calendarSource     CalendarSyncSource?   @relation(fields: [calendarSourceId], references: [id], onDelete: Cascade)
 
   @@index([villaId, startsAt, endsAt])
+  @@unique([calendarSourceId, externalEventId])
 }
 
 model VillaPricingRule {
@@ -1128,13 +1132,19 @@ model CalendarSyncSource {
   active             Boolean              @default(true)
   status             CalendarSourceStatus @default(HEALTHY)
   lastSyncedAt       DateTime?
+  lastAttemptAt      DateTime?
+  nextSyncAt         DateTime             @default(now())
+  syncLeaseToken     String?
+  syncLeaseUntil     DateTime?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   villa              Villa                @relation(fields: [villaId], references: [id], onDelete: Cascade)
   logs               CalendarSyncLog[]
+  importedBlocks     VillaAvailabilityBlock[]
 
   @@unique([companyId, villaId, channelName, direction])
+  @@index([active, direction, nextSyncAt])
 }
 
 model CalendarSyncMapping {

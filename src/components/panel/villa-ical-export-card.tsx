@@ -33,6 +33,7 @@ export function VillaIcalExportCard({ icalPath }: VillaIcalExportCardProps) {
       <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
         Bu salt okunur baglantiyi destekleyen rezervasyon platformlarina ekleyebilirsin. Panelde
         olusturulan dolu, bakim ve kapali tarihler `.ics` olarak yayinlanir.
+        Baska kanallardan ice aktarilan bloklar, karsilikli kopyalama dongusu olusmamasi icin bu baglantiya dahil edilmez.
       </p>
 
       <div className="mt-6 flex flex-col gap-3 lg:flex-row">

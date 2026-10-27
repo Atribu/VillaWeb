@@ -1,3 +1,4 @@
+import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
 import type { DemoSeoContentStatus } from "@/lib/demo-websites";
 import {
@@ -20,6 +21,8 @@ const ALLOWED_STATUSES = new Set<DemoSeoContentStatus>([
 ]);
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const denied = await authorizePanelApi(request, "websites");
+  if (denied) return denied;
   try {
     const { id } = await context.params;
     const payload = (await request.json()) as {
@@ -34,6 +37,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const content = await updateDemoSeoContent(id, payload);
     return NextResponse.json({ content });
   } catch (error) {
+    const accessError = panelAccessErrorResponse(error);
+    if (accessError) return accessError;
     if (error instanceof DemoWebsitesStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

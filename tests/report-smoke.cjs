@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
-const { createHmac } = require('node:crypto');
+const { createHmac, createHash, randomUUID, scryptSync } = require('node:crypto');
 const http = require('node:http');
 const { loadTs } = require('./load-ts.cjs');
 
@@ -30,14 +30,35 @@ async function main() {
   const port = process.env.SMOKE_PORT || '3012';
   const base = `http://localhost:${port}`;
   const secret = 'isolated-report-smoke-secret';
+  const authData = { users: [], sessions: [] };
+  const members = [];
+  const cookies = new Map();
+  for (const role of ['SUPER_ADMIN', 'ADMIN', 'STAFF', 'FINANCE', 'SALES', 'OPERATIONS', 'CRM', 'CONTENT']) {
+    for (const id of [companyId, other.companyId]) {
+      const userId = `test-${role}-${id}`;
+      const company = role === 'SUPER_ADMIN' ? undefined : id;
+      const expiresAt = Date.now() + 3600000;
+      const body = Buffer.from(JSON.stringify({ id: userId, username: userId, displayName: 'Test Yoneticisi', role,
+        companyId: company, companyName: 'Test Firma', sessionId: randomUUID(), expiresAt })).toString('base64url');
+      const token = `${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
+      cookies.set(`${role}:${id}`, `villaweb_session=${token}`);
+      authData.users.push({ id: userId, username: userId, email: `${userId}@test.invalid`, displayName: 'Test Yoneticisi',
+        passwordHash: `scrypt:test:${scryptSync('test-password-only', 'test', 64).toString('hex')}`, isOwner: role === 'SUPER_ADMIN' });
+      authData.sessions.push({ token: createHash('sha256').update(token).digest('hex'), userId, companyId: company, expiresAt });
+      if (company) members.push({ id: userId, username: userId, email: `${userId}@test.invalid`, fullName: 'Test Yoneticisi',
+        companyId: company, status: 'ACTIVE', roleId: role, branchId: 'branch-central-desk', agencyId: 'agency-merkez-rezervasyon', phone: '5550000000' });
+    }
+  }
+  await fs.writeFile(path.join(directory, 'development-auth.json'), JSON.stringify(authData));
+  await fs.writeFile(path.join(directory, 'demo-team-users.json'), JSON.stringify(members));
   function cookie(role = 'SUPER_ADMIN', id = companyId) {
-    const body = Buffer.from(JSON.stringify({ id: 'test-user', username: 'test', displayName: 'Test Yoneticisi', role,
-      companyId: id, companyName: 'Test Firma', expiresAt: Date.now() + 3600000 })).toString('base64url');
-    return `villaweb_session=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
+    return cookies.get(`${role}:${id}`);
   }
   const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--port', port], {
     cwd: path.resolve(__dirname, '..'), env: { ...process.env, DEV_FALLBACK_MODE: 'true', DEV_DATA_DIRECTORY: directory,
-      SESSION_SECRET: secret, ICAL_SIGNING_SECRET: secret }, stdio: ['ignore', 'pipe', 'pipe'],
+      SESSION_SECRET: secret, ICAL_SIGNING_SECRET: secret,
+      CALENDAR_SYNC_SECRET: 'isolated-calendar-scheduler-secret-1234567890',
+      DATABASE_URL: 'postgresql://test:test@127.0.0.1:1/test?connect_timeout=1' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
   server.stdout.on('data', (value) => { log += value; });
@@ -66,6 +87,9 @@ async function main() {
       if (server.exitCode !== null) throw new Error(`Server exited: ${log.slice(-2000)}`);
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
+    await require('./security-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa, secret });
+    await require('./fallback-mutations-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa });
+    await require('./calendar-api-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa, secret });
     {
       const siteRoute = '/api/demo/websites/sites/test-site-a';
       assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', '')).status, 401);
@@ -92,6 +116,11 @@ async function main() {
       assert.match(hostedText, /data-site-theme="rota"/);
       assert.match(hostedText, /Sahil Collection/);
       assert.match(await hostedPage('collection.a.test'), /data-site-theme="kiyi"/);
+      assert.match(await hostedPage('a.test', '/villalar'), /rel="canonical" href="https:\/\/a.test\/villalar"/);
+      const sitemap = await hostedPage('b.test', '/sitemap.xml');
+      assert.match(sitemap, /https:\/\/b.test\/villalar\/other-company-test/);
+      assert.doesNotMatch(sitemap, new RegExp(villa.slug));
+      assert.match(await hostedPage('b.test', '/robots.txt'), /Disallow: \/panel/);
       const english = await call('/?company=villavera', undefined, 'GET', 'villaweb-locale=en');
       assert.match(english.text, /Beyond the/);
       assert.doesNotMatch(english.text, /Olağanın/);
@@ -102,6 +131,81 @@ async function main() {
       const panelMarkup = panel.text.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
       assert.doesNotMatch(panelMarkup, /Test B/);
       console.log('PASS templates: persistence, three renderers, role/tenant isolation, domain routing, English and panel picker');
+    }
+    {
+      const markup = (html) => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+      for (const route of ['/hakkimizda', '/iletisim', '/kampanyalar']) {
+        const page = await call(`${route}?company=villavera`, undefined, 'GET', '');
+        assert.equal(page.status, 200, page.text.slice(0, 300));
+        const visible = markup(page.text);
+        assert.match(visible, /data-site-theme="secki"/);
+        assert.doesNotMatch(visible, /SEO ve Donusum|Iletisim Formu Yapisi|PRIVATE_OWNER_MARKER|PRIVATE_SUPPLIER_MARKER/);
+        const english = await call(`${route}?company=villavera`, undefined, 'GET', 'villaweb-locale=en');
+        assert.equal(english.status, 200);
+        assert.match(markup(english.text), /Explore the villa collection/);
+        const otherPage = await hostedPage('b.test', `${route}?company=villavera`);
+        assert.match(markup(otherPage), /Sahil Collection/);
+        assert.doesNotMatch(markup(otherPage), /merhaba@villavera.com|VillaVera villa koleksiyonundan/);
+      }
+      const contact = markup((await call('/iletisim?company=villavera', undefined, 'GET', '')).text);
+      assert.match(contact, /href="tel:\+908500000000"/);
+      assert.match(contact, /href="mailto:merhaba@villavera.com"/);
+      assert.match(contact, /href="https:\/\/wa.me\/905550000000"/);
+      assert.match(contact, /href="\/talep\?company=villavera"/);
+      assert.match(markup((await call('/kampanyalar?company=villavera', undefined, 'GET', '')).text), /Yeni fırsatlara yer açıyoruz/);
+      const offer = { id: 'public-offer', companyId, title: 'PUBLIC_OFFER', villaScope: villa.slug,
+        percentOff: 15, startDate: '2099-06-01', endDate: '2099-06-30', active: true,
+        note: 'PRIVATE_OFFER_NOTE', createdAt: new Date().toISOString() };
+      await fs.writeFile(path.join(directory, 'demo-discounts.json'), JSON.stringify([
+        offer, { ...offer, id: 'other-offer', companyId: other.companyId, title: 'FOREIGN_OFFER', villaScope: 'ALL' },
+        { ...offer, id: 'expired-offer', title: 'EXPIRED_OFFER', startDate: '2000-01-01', endDate: '2000-01-31' },
+        { ...offer, id: 'inactive-offer', title: 'INACTIVE_OFFER', active: false },
+      ]));
+      const offers = markup((await call('/kampanyalar?company=villavera', undefined, 'GET', '')).text);
+      assert.match(offers, /PUBLIC_OFFER/);
+      assert.match(offers, /2099-06-01/);
+      assert.match(offers, new RegExp(`/villalar/${villa.slug}\\?company=villavera`));
+      assert.doesNotMatch(offers, /PRIVATE_OFFER_NOTE|FOREIGN_OFFER|EXPIRED_OFFER|INACTIVE_OFFER/);
+      const foreign = markup(await hostedPage('b.test', '/kampanyalar?company=villavera'));
+      assert.match(foreign, /FOREIGN_OFFER/);
+      assert.doesNotMatch(foreign, /PUBLIC_OFFER|PRIVATE_OFFER_NOTE/);
+      await fs.writeFile(path.join(directory, 'demo-discounts.json'), '[]');
+      console.log('PASS editorial pages: Secki, bilingual copy, contact links, live offers, empty state and tenant privacy');
+    }
+    {
+      const markup = (html) => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+      const { travelGuides } = loadTs('src/lib/travel-journal.ts');
+      const routes = ['/blog', '/sss', '/kvkk', '/gizlilik', '/kullanim-kosullari', ...travelGuides.map(guide => `/blog/${guide.slug}`)];
+      for (const route of routes) {
+        for (const locale of ['tr', 'en']) {
+          const page = await call(`${route}?company=villavera`, undefined, 'GET', `villaweb-locale=${locale}`);
+          assert.equal(page.status, 200, route);
+          const visible = markup(page.text);
+          assert.equal((visible.match(/data-site-theme="secki"/g) || []).length, 1, route);
+          assert.equal((visible.match(/<h1\b/g) || []).length, 1, route);
+          assert.doesNotMatch(visible, /Organik trafik|SEO omurgasi|SEO'yu destekleyen|ikinci fazda/);
+        }
+        assert.match(markup(await hostedPage('b.test', `${route}?company=villavera`)), /data-site-theme="rota"/);
+      }
+      const faq = await call('/sss?company=villavera', undefined, 'GET', '');
+      const structured = JSON.parse(faq.text.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+      assert.equal(structured.mainEntity.length, 9);
+      assert.match(markup(faq.text), /Sorular içinde ara/);
+      for (const route of ['/kvkk', '/gizlilik']) {
+        assert.match(markup((await call(route, undefined, 'GET', '')).text), /tam metin yayımlanmamıştır/);
+      }
+      const terms = markup((await call('/kullanim-kosullari?company=villavera', undefined, 'GET', '')).text);
+      assert.match(terms, /2026-10/);
+      assert.match(terms, /href="\/kvkk\?company=villavera"/);
+      const missing = await call('/olmayan-bir-sayfa?company=villavera', undefined, 'GET', '');
+      assert.equal(missing.status, 404);
+      assert.match(markup(missing.text), /Bu yol burada/);
+      assert.equal((markup(missing.text).match(/data-site-theme="secki"/g) || []).length, 1);
+      const missingArticle = await call('/blog/olmayan-yazi?company=villavera', undefined, 'GET', '');
+      assert.equal(missingArticle.status, 404);
+      // Next can deliver a nested not-found boundary in its streamed RSC payload.
+      assert.match(missingArticle.text, /Bu yol burada/);
+      console.log('PASS remaining public pages: bilingual guides, FAQ schema, legal notice, tenant links and themed 404');
     }
     const periodRoute = `/api/demo/villas/${villa.slug}/pricing-periods`;
     const period = { title: 'Test sezon', startDate: '2027-07-01', endDate: '2027-07-31', nightlyPrice: 2500, cleaningFee: 100, minNightCount: 2 };
@@ -199,6 +303,11 @@ async function main() {
     const booking = response.json.request;
     assert.equal(booking.pricing.grandTotal, 7600);
     assert.ok(booking.termsAcceptedAt);
+    const pendingBooking = await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '');
+    assert.equal(pendingBooking.status, 200);
+    assert.match(pendingBooking.text, /data-status="pending"/);
+    assert.match(pendingBooking.text, /name="robots" content="noindex, nofollow"/);
+    assert.match(pendingBooking.text, /name="referrer" content="no-referrer"/);
     console.log('PASS single-day closure, signed iCal, consent, tenant isolation and seasonal quote');
 
     response = await call(`/api/demo/requests/${booking.id}`, { status: 'APPROVED' }, 'PATCH');
@@ -211,15 +320,20 @@ async function main() {
     assert.equal(response.status, 200, response.text);
     const confirmation = await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '');
     assert.equal(confirmation.status, 200);
-    assert.match(confirmation.text, /rezervasyonun onaylandi/);
+    assert.match(confirmation.text, /data-status="confirmed"/);
+    assert.match(confirmation.text, /href="\/iletisim\?company=villavera"/);
+    const englishBooking = await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', 'villaweb-locale=en');
+    assert.match(englishBooking.text, /Payment and booking confirmed/);
+    assert.match(englishBooking.text, /Print \/ Save PDF/);
     const payments = JSON.parse(await fs.readFile(path.join(directory, 'demo-payments.json'), 'utf8'));
     response = await call(`/api/demo/finance/payments/${payments[0].id}`, { status: 'PENDING' }, 'PATCH');
     assert.equal(response.status, 200, response.text);
-    assert.doesNotMatch((await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '')).text, /rezervasyonun onaylandi/);
+    assert.match((await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '')).text, /data-status="pending"/);
     await call(`/api/demo/finance/invoices/${invoice.id}`, { status: 'PAID' }, 'PATCH');
     response = await call(`/api/demo/requests/${booking.id}`, { status: 'CANCELLED' }, 'PATCH');
     assert.equal(response.status, 200, response.text);
     assert.match((await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '')).text, /Rezervasyon iptal edildi/);
+    assert.match((await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '')).text, /data-status="cancelled"/);
     console.log('PASS approval -> invoice -> payment -> confirmation -> reversal -> cancellation');
 
     if (process.env.PLAYWRIGHT_MODULE) {

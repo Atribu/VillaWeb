@@ -19,3 +19,19 @@ function loadTs(file) {
   return loadedModule.exports;
 }
 module.exports = { loadTs };
+
+function loadTsWithMocks(file, mocks, modules = new Map()) {
+  const filename = path.resolve(root, file);
+  if (modules.has(filename)) return modules.get(filename).exports;
+  const loadedModule = { exports: {} };
+  modules.set(filename, loadedModule);
+  const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const localRequire = specifier => Object.hasOwn(mocks, specifier) ? mocks[specifier]
+    : specifier === 'server-only' ? {}
+    : specifier.startsWith('@/') ? loadTsWithMocks(`src/${specifier.slice(2)}.ts`, mocks, modules) : require(specifier);
+  vm.runInThisContext(`(function(require, module, exports) {${code}\n})`, { filename })(localRequire, loadedModule, loadedModule.exports);
+  return loadedModule.exports;
+}
+module.exports.loadTsWithMocks = loadTsWithMocks;

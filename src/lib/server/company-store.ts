@@ -1,4 +1,5 @@
 import "server-only";
+import { updateDevelopmentAuth } from "@/lib/auth/development-auth";
 
 import type { CompanyStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -495,6 +496,9 @@ export async function updateDemoCompany(companyId: string, input: CompanyMutatio
       const defaults = buildCompanyDefaults(normalized.publicName);
 
       await db.$transaction(async (tx) => {
+        if (current.status !== normalized.status) {
+          await tx.authSession.deleteMany({ where: { user: { memberships: { some: { companyId } } } } });
+        }
         await tx.company.update({
           where: { id: companyId },
           data: {
@@ -588,6 +592,9 @@ export async function updateDemoCompany(companyId: string, input: CompanyMutatio
         companyId,
       );
 
+      if (current.status !== normalized.status) {
+        await updateDevelopmentAuth((data) => { data.sessions = data.sessions.filter((session) => session.companyId !== companyId); });
+      }
       return updateFallbackCompany(companyId, {
         ...normalized,
         primaryEmail: normalized.primaryEmail ?? "",

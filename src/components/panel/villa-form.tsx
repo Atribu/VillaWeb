@@ -1,8 +1,16 @@
 "use client";
 
 import type { ChangeEvent, FormEvent } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useVillaDraft } from "@/components/panel/use-villa-draft";
+import { moveItem } from "@/lib/panel-record-tools";
 import { useRouter } from "next/navigation";
+import { useUnsavedChanges } from "@/components/panel/use-unsaved-changes";
+import { UnsavedChangesDialog } from "@/components/panel/unsaved-changes-dialog";
+import { VillaFilePreview } from "@/components/panel/villa-file-preview";
+import { uploadVillaForm } from "@/lib/villa-form-upload";
+import { useImageUploadQueue } from "@/components/panel/use-image-upload-queue";
+import { PUBLICATION_CHECKS, publicationChecks } from "@/lib/panel-workspace";
 import type { DemoRegionAirportRecord } from "@/lib/demo-definitions";
 import {
   VILLA_AMENITY_OPTIONS,
@@ -120,6 +128,9 @@ type VillaApiPayload = {
 };
 
 type VillaFormProps = {
+  companyId: string;
+  publicationRequired?: string[];
+  draftKey: string;
   mode?: "create" | "edit";
   initialVilla?: CatalogVilla;
   regions?: DemoRegionAirportRecord[];
@@ -222,14 +233,31 @@ function getInitialFieldValue(villa: CatalogVilla | undefined, fieldName: string
   return values[fieldName] ?? "";
 }
 
-export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
+export function VillaForm({ mode = "create", initialVilla, draftKey, companyId, publicationRequired = [] }: VillaFormProps) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const isEditMode = mode === "edit";
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const imageQueue = useImageUploadQueue(companyId);
   const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [submitMessage, setSubmitMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const readyImageCount = selectedFiles.filter(file => imageQueue.states.get(file)?.status === "ready").length;
+  const preparingImages = isSubmitting && readyImageCount < selectedFiles.length;
+  const preparationProgress = selectedFiles.length ? Math.round(selectedFiles.reduce((sum, file) => sum + (imageQueue.states.get(file)?.percent ?? 0), 0) / selectedFiles.length) : 0;
+  const [isDirty, setIsDirty] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { allowNavigation, resetNavigationGuard, pendingDestination, cancelNavigation, confirmNavigation } = useUnsavedChanges(isDirty, isSubmitting);
+  function markDirty() { resetNavigationGuard(); setIsDirty(true); draft.schedule(); }
+  function errorProps(name: string) {
+    return { "aria-invalid": Boolean(fieldErrors[name]), "aria-describedby": fieldErrors[name] ? `${name}-error` : undefined };
+  }
+  function fieldError(name: string) {
+    return fieldErrors[name] ? <p id={`${name}-error`} className="mt-2 text-xs text-rose-700">{fieldErrors[name]}</p> : null;
+  }
   const [seoPreview, setSeoPreview] = useState({
     title: initialVilla?.title ?? "",
     slug: initialVilla?.slug ?? "",
@@ -237,8 +265,13 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
     seoDescription: initialVilla?.seoDescription ?? "",
     focusKeyword: initialVilla?.focusKeyword ?? "",
   });
-  function handleImageSelection(event: ChangeEvent<HTMLInputElement>) {
-    const incomingFiles = Array.from(event.target.files ?? []);
+  const draft = useVillaDraft(formRef, draftKey, selectedFiles.length > 0 || Boolean(selectedPdf), () => {
+    resetNavigationGuard(); setIsDirty(true); setFieldErrors({});
+    const fields = new FormData(formRef.current!);
+    setSeoPreview({ title: String(fields.get("title") ?? ""), slug: String(fields.get("slug") ?? ""),
+      seoTitle: String(fields.get("seoTitle") ?? ""), seoDescription: String(fields.get("seoDescription") ?? ""), focusKeyword: String(fields.get("focusKeyword") ?? "") });
+  });
+  function addImages(incomingFiles: File[]) {
     const nextFiles = [...selectedFiles];
     const nextErrors: string[] = [];
 
@@ -272,12 +305,19 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
     }
 
     setSelectedFiles(nextFiles);
+    if (nextFiles.length !== selectedFiles.length) markDirty();
     setUploadErrors(nextErrors);
     setSubmitMessage("");
+  }
+
+  function handleImageSelection(event: ChangeEvent<HTMLInputElement>) {
+    addImages(Array.from(event.target.files ?? []));
     event.target.value = "";
   }
 
   function removeImage(fileToRemove: File) {
+    imageQueue.forget(fileToRemove);
+    markDirty();
     setSelectedFiles((current) =>
       current.filter(
         (file) =>
@@ -310,6 +350,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
     }
 
     setSelectedPdf(file);
+    markDirty();
     setUploadErrors([]);
     setSubmitMessage("");
     event.target.value = "";
@@ -334,21 +375,41 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
+    const formElement = event.currentTarget;
+    const errors: Record<string, string> = {};
+    for (const field of Array.from(formElement.elements)) {
+      if ((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) && field.willValidate && !field.validity.valid) {
+        errors[field.id] = `${field.labels?.[0]?.textContent?.trim() ?? field.name}: ${field.validationMessage}`;
+      }
+    }
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      document.getElementById(Object.keys(errors)[0])?.focus();
+      return;
+    }
 
-    if (!isEditMode && selectedFiles.length === 0) {
+    const fields = new FormData(formElement);
+    const checks = publicationChecks({ imageCount: (initialVilla?.imageCount ?? 0) + selectedFiles.length, nightlyPrice: Number(String(fields.get("nightlyPrice") ?? "0").replace(",", ".")), city: String(fields.get("city") ?? ""), district: String(fields.get("district") ?? ""), tourismLicenseNumber: String(fields.get("tourismLicenseNumber") ?? ""), tourismLicensePdfUrl: selectedPdf ? "pending.pdf" : initialVilla?.tourismLicensePdfUrl, titleEn: String(fields.get("titleEn") ?? ""), descriptionEn: String(fields.get("descriptionEn") ?? "") }, publicationRequired);
+    if (fields.get("status") === "ACTIVE" && checks.some(check => check.required && !check.passed)) {
+      setSubmitMessage(`Yayın için eksik: ${checks.filter(check => check.required && !check.passed).map(check => check.label).join(", ")}. Taslak olarak kaydedebilirsiniz.`); return;
+    }
+    if (!isEditMode && selectedFiles.length === 0 && fields.get("status") === "ACTIVE") {
       setSubmitMessage("En az 1 adet gorsel eklemeden villa kaydi tamamlanamaz.");
+      document.getElementById("villa-image-files")?.focus();
       return;
     }
 
     setIsSubmitting(true);
     setSubmitMessage("");
+    setUploadProgress(0);
 
     try {
-      const formElement = event.currentTarget;
       const formData = new FormData(formElement);
       formData.delete("images");
       formData.delete("tourismLicensePdf");
-      selectedFiles.forEach((file) => formData.append("images", file));
+      const tokens = await imageQueue.prepare(selectedFiles);
+      tokens.forEach(token => formData.append("stagedImages", token));
       if (selectedPdf) {
         formData.append("tourismLicensePdf", selectedPdf);
       }
@@ -357,10 +418,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         isEditMode && initialVilla
           ? `/api/demo/villas/${encodeURIComponent(initialVilla.slug)}`
           : "/api/demo/villas";
-      const response = await fetch(endpoint, {
-        method: isEditMode ? "PUT" : "POST",
-        body: formData,
-      });
+      const response = await uploadVillaForm(endpoint, isEditMode ? "PUT" : "POST", formData, setUploadProgress);
 
       const payload = await readVillaApiPayload(response);
 
@@ -380,7 +438,11 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         return;
       }
 
+      draft.clear();
+      imageQueue.clear();
       formElement.reset();
+      allowNavigation();
+      setIsDirty(false);
       setSelectedFiles([]);
       setSelectedPdf(null);
       setUploadErrors([]);
@@ -394,20 +456,37 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
       setSubmitMessage(
         isEditMode
           ? `${payload.villa?.title ?? "Villa"} guncellendi. Liste ekrani yenileniyor.`
-          : `${payload.villa?.title ?? "Villa"} demo kaydina eklendi. Liste ekrani yenileniyor.`,
+          : `${payload.villa?.title ?? "Villa"} kaydedildi. Liste ekrani yenileniyor.`,
       );
       router.push("/panel/villalar");
       router.refresh();
     } catch (error) {
       console.error("Villa upload request failed", error);
-      setSubmitMessage("Villa kaydi sirasinda baglanti hatasi olustu.");
+      setSubmitMessage(error instanceof Error ? error.message : "Villa kaydı sırasında bağlantı hatası oluştu.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6" id="villa-form">
+    <form ref={formRef} onSubmit={handleSubmit} noValidate onChange={(event) => {
+      markDirty();
+      const field = event.target;
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+        setFieldErrors((current) => { const next = { ...current }; delete next[field.id]; return next; });
+      }
+    }} className="panel-villa-form space-y-6" id="villa-form" aria-busy={isSubmitting}>
+      <UnsavedChangesDialog open={Boolean(pendingDestination)} saving={isSubmitting} onCancel={cancelNavigation} onLeave={confirmNavigation} />
+      {draft.available ? <aside className="panel-draft-notice" aria-label="Kurtarılabilir taslak">
+        <h2 className="font-semibold">Tamamlanmamış bir taslağınız var</h2>
+        <p className="mt-2 text-sm">{new Date(draft.available.savedAt).toLocaleString("tr-TR")} tarihinde bu tarayıcıda saklandı. Fotoğraf ve PDF dosyalarını yeniden seçmeniz gerekir.</p>
+        {draft.baselineChanged ? <p className="mt-2 text-sm font-semibold">Kayıt taslaktan sonra değişmiş olabilir. Geri yükledikten sonra alanları karşılaştırarak kontrol edin.</p> : null}
+        <div className="mt-4 flex flex-wrap gap-3"><button type="button" className="panel-button" onClick={draft.restore}>Taslağı geri yükle</button><button type="button" className="panel-button-secondary" onClick={draft.clear}>Taslağı sil</button></div>
+      </aside> : null}
+      <p className="text-xs leading-5 text-slate-500" role="status">{draft.message || "Metin alanları bu kullanıcı ve firma için yalnızca bu tarayıcıda 7 gün saklanır. Dosyalar taslağa dahil değildir."}</p>
+      <p className="text-xs text-slate-500">* işaretli alanlar zorunludur. Bölüm menüsünden istediğiniz alana geçebilirsiniz.</p>
+      {Object.keys(fieldErrors).length ? <div className="panel-form-feedback" role="alert"><p className="font-semibold">Kaydetmeden önce {Object.keys(fieldErrors).length} alanı kontrol edin.</p><ul className="mt-2 space-y-1">{Object.entries(fieldErrors).map(([id, message]) => <li key={id}><button type="button" className="text-left underline underline-offset-2" onClick={() => document.getElementById(id)?.focus()}>{message}</button></li>)}</ul></div> : null}
+      <fieldset disabled={isSubmitting} className="space-y-6">
       <section id="villa-basics" className="panel-section rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -433,6 +512,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             <input
               id="city"
               name="city"
+              {...errorProps("city")}
               required
               defaultValue={getInitialFieldValue(initialVilla, "city")}
               placeholder="Bodrum"
@@ -441,6 +521,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             <p className="mt-2 text-xs leading-6 text-slate-500">
               Yeni lokasyon yazarsan sistem kayit sirasinda otomatik tanimlar.
             </p>
+            {fieldError("city")}
           </div>
           <div>
             <label htmlFor="district" className="text-sm font-medium text-slate-700">
@@ -449,6 +530,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             <input
               id="district"
               name="district"
+              {...errorProps("district")}
               required
               defaultValue={getInitialFieldValue(initialVilla, "district")}
               placeholder="Yalikavak"
@@ -457,6 +539,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             <p className="mt-2 text-xs leading-6 text-slate-500">
               Bu bolge secili lokasyonun altina otomatik eklenir.
             </p>
+            {fieldError("district")}
           </div>
 
           {baseFields.map((field) => (
@@ -468,11 +551,14 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                 id={field.name}
                 name={field.name}
                 required={field.required}
+                aria-invalid={Boolean(fieldErrors[field.name])}
+                aria-describedby={fieldErrors[field.name] ? `${field.name}-error` : undefined}
                 defaultValue={getInitialFieldValue(initialVilla, field.name)}
                 placeholder={field.placeholder}
                 onChange={handleSeoFieldChange}
                 className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
               />
+              {fieldErrors[field.name] ? <p id={`${field.name}-error`} className="mt-2 text-xs text-rose-700">{fieldErrors[field.name]}</p> : null}
             </div>
           ))}
 
@@ -503,7 +589,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             One cikan villa olarak vitrinde goster
           </label>
 
-          <div className="md:col-span-2 rounded-[1.5rem] border border-slate-200 bg-[var(--color-soft-white)] p-5">
+          <div id="villa-documents" className="panel-section md:col-span-2 rounded-[1.5rem] border border-slate-200 bg-[var(--color-soft-white)] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
               Yasal Belge Bilgileri
             </p>
@@ -554,7 +640,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                   {selectedPdf ? (
                     <button
                       type="button"
-                      onClick={() => setSelectedPdf(null)}
+                      onClick={() => { setSelectedPdf(null); markDirty(); }}
                       className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 transition hover:border-rose-300 hover:text-rose-600"
                     >
                       PDF&apos;i kaldır
@@ -582,12 +668,14 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             <textarea
               id="shortDescription"
               name="shortDescription"
+              {...errorProps("shortDescription")}
               rows={3}
               required
               defaultValue={getInitialFieldValue(initialVilla, "shortDescription")}
               placeholder="Panoramik manzarali, ozel havuzlu premium villa."
               className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
             />
+            {fieldError("shortDescription")}
           </div>
 
           <div className="md:col-span-2">
@@ -597,15 +685,17 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             <textarea
               id="description"
               name="description"
+              {...errorProps("description")}
               rows={5}
               required
               defaultValue={getInitialFieldValue(initialVilla, "description")}
               placeholder="Villa detay sayfasinda yer alacak uzun aciklama metni."
               className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
             />
+            {fieldError("description")}
           </div>
 
-          <div className="md:col-span-2 mt-2 rounded-[1.5rem] border border-slate-200 bg-[var(--color-soft-white)] p-5">
+          <div id="villa-content-en" className="panel-section md:col-span-2 mt-2 rounded-[1.5rem] border border-slate-200 bg-[var(--color-soft-white)] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
               Ingilizce Icerik
             </p>
@@ -622,11 +712,13 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                   <input
                     id={field.name}
                     name={field.name}
-                    required
+                    required={false}
+                    {...errorProps(field.name)}
                     defaultValue={getInitialFieldValue(initialVilla, field.name)}
                     placeholder={field.placeholder}
                     className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                   />
+                  {fieldError(field.name)}
                 </div>
               ))}
 
@@ -637,12 +729,13 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                 <textarea
                   id="shortDescriptionEn"
                   name="shortDescriptionEn"
+                  {...errorProps("shortDescriptionEn")}
                   rows={3}
-                  required
                   defaultValue={getInitialFieldValue(initialVilla, "shortDescriptionEn")}
                   placeholder="Panoramic sea views, an infinity pool and a premium stay for up to 8 guests."
                   className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                 />
+                {fieldError("shortDescriptionEn")}
               </div>
 
               <div className="md:col-span-2">
@@ -652,12 +745,13 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                 <textarea
                   id="descriptionEn"
                   name="descriptionEn"
+                  {...errorProps("descriptionEn")}
                   rows={5}
-                  required
                   defaultValue={getInitialFieldValue(initialVilla, "descriptionEn")}
                   placeholder="Long English copy for the villa detail page."
                   className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                 />
+                {fieldError("descriptionEn")}
               </div>
             </div>
           </div>
@@ -854,12 +948,14 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                   <input
                     id="minNightCount"
                     name="minNightCount"
+                    {...errorProps("minNightCount")}
                     type="number"
                     min="1"
                     required
                     defaultValue={getInitialFieldValue(initialVilla, "minNightCount") || 1}
                     className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                   />
+                  {fieldError("minNightCount")}
                 </div>
               </div>
             </div>
@@ -1036,7 +1132,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                   Mevcut Galeri
                 </p>
                 <p className="mt-2 text-sm text-slate-600">
-                  Bu gorseller kayitli kalir; yeni secilenler listenin sonuna eklenir.
+                  Yeni seçilenler listenin sonuna eklenir. Sıralama, kapak ve kaldırma için <a href="#villa-gallery-manage" className="underline">Galeri yönetimine geçin</a>.
                 </p>
               </div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1050,7 +1146,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                   className="relative min-h-36 overflow-hidden rounded-[1.25rem] bg-slate-200 bg-cover bg-center"
                   style={{ backgroundImage: `url(${imageUrl})` }}
                 >
-                  {imageUrl === initialVilla.coverImageUrl || index === 0 ? (
+                  {imageUrl === (initialVilla.coverImageUrl ?? initialVilla.imageUrls[0]) ? (
                     <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">
                       Kapak
                     </span>
@@ -1061,13 +1157,16 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
           </div>
         ) : null}
 
-        <div className="mt-8 rounded-[1.75rem] border border-dashed border-[var(--color-aqua)] bg-[var(--color-soft-white)] p-6">
+        <div className="panel-dropzone mt-6" data-dragging={dragging}
+          onDragOver={(event) => { event.preventDefault(); if (!isSubmitting) setDragging(true); }}
+          onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+          onDrop={(event) => { event.preventDefault(); setDragging(false); if (!isSubmitting) addImages(Array.from(event.dataTransfer.files)); }}>
           <label
-            htmlFor="villa-images"
-            className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[1.5rem] bg-white px-6 py-10 text-center shadow-sm shadow-slate-200/50"
+            htmlFor="villa-image-files"
+            className="flex w-full cursor-pointer flex-col items-center justify-center gap-3"
           >
-            <span className="rounded-full bg-[var(--color-sand)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-700">
-              Gorsel Yukle
+            <span className="panel-button-secondary">
+              Fotoğraf seç
             </span>
             <span className="text-lg font-semibold text-[var(--color-ink)]">
               Gorselleri sec veya buraya surukle
@@ -1077,7 +1176,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
             </span>
           </label>
           <input
-            id="villa-images"
+            id="villa-image-files"
             name="images"
             type="file"
             accept="image/*"
@@ -1088,38 +1187,19 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
         </div>
 
         {uploadErrors.length > 0 ? (
-          <div className="mt-6 rounded-[1.5rem] border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div role="alert" className="mt-6 rounded-[1.5rem] border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
             <ul className="space-y-2">
-              {uploadErrors.map((error) => (
-                <li key={error}>{error}</li>
+              {uploadErrors.map((error, index) => (
+                <li key={`${index}-${error}`}>{error}</li>
               ))}
             </ul>
           </div>
         ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {selectedFiles.map((file) => (
-            <div
-              key={`${file.name}-${file.lastModified}`}
-              className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--color-ink)]">{file.name}</p>
-                  <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">
-                    {file.type || "image"} {"- WEBP'e cevrilecek"}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeImage(file)}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 transition hover:border-rose-300 hover:text-rose-600"
-                >
-                  Sil
-                </button>
-              </div>
-            </div>
-          ))}
+          {selectedFiles.map((file, index) => <div key={`${file.name}-${file.size}-${file.lastModified}`}><VillaFilePreview file={file} index={index} disabled={isSubmitting} onRemove={() => removeImage(file)}
+            onMove={direction => { markDirty(); setSelectedFiles(current => moveItem(current, index, index + direction)); }} first={index === 0} last={index === selectedFiles.length - 1} />
+            <div className="mt-2 text-xs" role="status">{imageQueue.states.get(file)?.status === "ready" ? "Hazır · WebP ve filigran uygulandı" : imageQueue.states.get(file)?.status === "uploading" ? `Yükleniyor / işleniyor · %${imageQueue.states.get(file)?.percent ?? 0}` : imageQueue.states.get(file)?.status === "error" ? <><p className="text-rose-700">{imageQueue.states.get(file)?.error}</p><button type="button" disabled={isSubmitting} className="panel-button-secondary mt-2" onClick={async () => { setIsSubmitting(true); try { await imageQueue.prepare([file]); } catch { /* Error shown next to the file. */ } finally { setIsSubmitting(false); } }}>Bu fotoğrafı yeniden dene</button></> : "Yükleme sırasında bekliyor"}</div></div>)}
         </div>
       </section>
 
@@ -1144,6 +1224,7 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                     name={field.name}
                     required
                     rows={4}
+                    {...errorProps(field.name)}
                     defaultValue={getInitialFieldValue(initialVilla, field.name)}
                     placeholder={field.placeholder}
                     onChange={handleSeoFieldChange}
@@ -1157,9 +1238,11 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                     defaultValue={getInitialFieldValue(initialVilla, field.name)}
                     placeholder={field.placeholder}
                     onChange={handleSeoFieldChange}
+                    {...errorProps(field.name)}
                     className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                   />
                 )}
+                {fieldError(field.name)}
                 <p className="mt-2 text-xs leading-6 text-slate-500">{field.helper}</p>
               </div>
             ))}
@@ -1178,8 +1261,8 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                       <textarea
                         id={field.name}
                         name={field.name}
-                        required
                         rows={4}
+                        {...errorProps(field.name)}
                         defaultValue={getInitialFieldValue(initialVilla, field.name)}
                         placeholder={field.placeholder}
                         className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
@@ -1188,12 +1271,14 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
                       <input
                         id={field.name}
                         name={field.name}
-                        required
+                        required={false}
                         defaultValue={getInitialFieldValue(initialVilla, field.name)}
                         placeholder={field.placeholder}
+                        {...errorProps(field.name)}
                         className="mt-2 w-full rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
                       />
                     )}
+                    {fieldError(field.name)}
                     <p className="mt-2 text-xs leading-6 text-slate-500">{field.helper}</p>
                   </div>
                 ))}
@@ -1202,47 +1287,45 @@ export function VillaForm({ mode = "create", initialVilla }: VillaFormProps) {
           </div>
         </div>
 
-        <div className="rounded-[2rem] bg-ocean-panel p-8 text-white shadow-xl shadow-teal-950/20">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-100">
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <p className="panel-eyebrow">
             SEO Onizleme
           </p>
-          <div className="mt-8 rounded-[1.75rem] bg-white/10 p-6 backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.28em] text-teal-100">Google benzeri gorunum</p>
-            <p className="mt-4 text-lg font-semibold text-white">
+          <div className="mt-6 rounded-lg border border-slate-100 bg-slate-50 p-5">
+            <p className="text-xs text-slate-500">Örnek arama sonucu</p>
+            <p className="mt-4 text-lg font-medium text-[#173c64]">
               {seoPreview.seoTitle || seoPreview.title || "Villa SEO basligi burada gorunecek"}
             </p>
-            <p className="mt-2 break-all text-sm text-teal-100/90">
-              villavera.com/villalar/{seoPreview.slug || "seo-uyumlu-slug"}
+            <p className="mt-2 break-all text-xs text-slate-500">
+              /villalar/{seoPreview.slug || "seo-uyumlu-slug"}
             </p>
-            <p className="mt-3 text-sm leading-7 text-teal-50/80">
+            <p className="mt-3 text-sm leading-6 text-slate-600">
               {seoPreview.seoDescription ||
                 "Meta aciklama burada gorunecek. Kisa, net ve tiklanma artiran bir metin yazmak SEO performansini guclendirir."}
             </p>
           </div>
 
-          <div className="mt-6 rounded-[1.75rem] bg-white/10 p-6 backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.28em] text-teal-100">Odak anahtar kelime</p>
-            <p className="mt-3 text-2xl font-semibold text-white">
+          <div className="mt-6 border-t border-slate-100 pt-5">
+            <p className="text-xs text-slate-500">Odak anahtar kelime</p>
+            <p className="mt-2 text-sm font-semibold text-slate-700">
               {seoPreview.focusKeyword || "anahtar kelime bekleniyor"}
             </p>
           </div>
 
-          {submitMessage ? (
-            <div className="mt-6 rounded-[1.75rem] border border-white/12 bg-white/10 p-5 text-sm leading-7 text-teal-50">
-              {submitMessage}
-            </div>
-          ) : null}
         </div>
       </section>
-
+      </fieldset>
+      <section className="work-card"><h2>Yayın kontrolü</h2><p className="work-muted">Kaydederken sunucuda tekrar kontrol edilir. Kurallar firma ayarlarından yönetilir.</p><ul className="work-checklist">{PUBLICATION_CHECKS.map(check => <li key={check.key}>{check.label} <span className="work-badge">{check.required || publicationRequired.includes(check.key) ? "Yayında zorunlu" : "Önerilir"}</span></li>)}</ul></section>
+      {submitMessage ? <div className="panel-form-feedback" role="status">{submitMessage}</div> : null}
       <div className="panel-savebar flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm leading-7 text-slate-500">
-          {submitMessage || "Degisiklikleri tamamladiginizda kaydetmeyi unutmayin."}
-        </p>
+        <div className="min-w-0 flex-1" role="status" aria-live="polite">
+          <p className="text-sm font-medium text-slate-700">{preparingImages ? `Fotoğraflar hazırlanıyor · ${readyImageCount}/${selectedFiles.length} hazır` : isSubmitting ? (uploadProgress === 100 ? "Dosyalar alındı, villa kaydediliyor…" : `Villa bilgileri gönderiliyor${uploadProgress !== null ? ` · %${uploadProgress}` : "…"}`) : isDirty ? "Kaydedilmemiş değişiklikler var" : "Düzenlemeye hazır"}</p>
+          {isSubmitting ? <progress className="panel-upload-progress mt-2" max={100} value={preparingImages ? preparationProgress : uploadProgress ?? undefined} aria-label="Dosya gönderim ilerlemesi" /> : <p className="mt-1 text-xs text-slate-500">{selectedFiles.length ? `${selectedFiles.length} yeni fotoğraf kayıtla birlikte yüklenecek.` : "Değişiklikler yalnızca kaydettiğinizde uygulanır."}</p>}
+        </div>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-full bg-[var(--color-teal)] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[color:rgba(15,118,110,0.9)] disabled:cursor-not-allowed disabled:opacity-70"
+          className="panel-button shrink-0"
         >
           {isSubmitting
             ? isEditMode

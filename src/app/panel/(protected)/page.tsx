@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { PanelPageHeader } from "@/components/panel/panel-page-header";
+import { getVillaPublicationWarnings } from "@/lib/panel-villa-list";
 import {
   getCustomerSegmentLabel,
   getCustomerSegmentTone,
@@ -542,7 +544,7 @@ function PanelSection({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-sm bg-white shadow-[0_6px_20px_rgba(15,23,42,0.08)]">
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-[15px] font-semibold text-[#4f6074]">{title}</h2>
@@ -1123,7 +1125,10 @@ export default async function PanelDashboardPage({
     getDemoCacheGroups(),
   ]);
 
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const arrivals = requests.filter((request) => request.status === "APPROVED" && request.checkIn.slice(0, 10) === todayKey);
+  const departures = requests.filter((request) => request.status === "APPROVED" && request.checkOut.slice(0, 10) === todayKey);
+  const villasToReview = villas.filter((villa) => getVillaPublicationWarnings(villa).length);
   const actionableRequestStatuses = new Set<DemoRequest["status"]>(["NEW", "CONTACTED", "QUOTE_SENT"]);
   const filteredRequests = requests.filter((request) => {
     const matchesStatus = !requestStatus || request.status === requestStatus;
@@ -1448,17 +1453,25 @@ export default async function PanelDashboardPage({
 
   return (
     <div className="space-y-7">
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-sky-700">Genel bakis</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Operasyon merkezi</h1>
-            <p className="text-sm text-slate-500">
-              Rezervasyon, operasyon, muhasebe, CRM ve dijital kanallar ayni panelden takip ediliyor.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">
+      <PanelPageHeader eyebrow="Günlük çalışma alanı" title="Genel bakış" description="Bugünün planını görün, bekleyen taleplere dönün ve portföyünüzü güncel tutun."
+        actions={<Link href="/panel/rezervasyonlar/yeni-rezervasyon" className="panel-button">+ Rezervasyon oluştur</Link>} />
+      <section aria-label="Günlük ajanda" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-800">Öncelikleriniz</h2><p className="text-xs text-slate-500">Bugün · Türkiye saati · Aşağıdaki filtrelerden bağımsız</p></div>
+        <div className="panel-agenda">
+          <a href="#today-stays"><span>Bugünkü girişler</span><strong>{arrivals.length}</strong><small>Onaylı rezervasyonlar</small></a>
+          <a href="#today-stays"><span>Bugünkü çıkışlar</span><strong>{departures.length}</strong><small>Onaylı rezervasyonlar</small></a>
+          <Link href="/panel/talepler?status=NEW"><span>Yanıt bekleyen talepler</span><strong>{requests.filter((request) => request.status === "NEW").length}</strong><small>Yeni gelen talepleri inceleyin</small></Link>
+          <Link href="/panel/villalar?review=1"><span>Villa bilgi kontrolü</span><strong>{villasToReview.length}</strong><small>Fotoğraf, fiyat, içerik ve belge</small></Link>
+        </div>
+      </section>
+      <details id="today-stays" className="panel-section rounded-lg border border-slate-200 bg-white p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-700">Bugünün giriş / çıkış listesi <span className="ml-2 text-xs font-normal text-slate-500">{arrivals.length + departures.length} kayıt</span></summary>
+        <div className="mt-4 grid gap-5 sm:grid-cols-2">{[{ label: "Giriş yapacak misafirler", records: arrivals }, { label: "Çıkış yapacak misafirler", records: departures }].map(({ label, records }) => <div key={label}>
+          <h3 className="text-xs font-semibold text-slate-500">{label}</h3>
+          {records.length ? <ul className="mt-3 divide-y divide-slate-100">{records.map((request) => <li key={request.id} className="py-3 text-sm"><Link href={`/panel/talepler?q=${encodeURIComponent(request.id)}`} className="font-semibold text-[#173c64]">{request.fullName}</Link><p className="mt-1 text-xs text-slate-500">{request.villaTitle} · {request.guestCount} misafir</p></li>)}</ul> : <p className="mt-3 text-sm text-slate-500">Bugün için onaylı kayıt yok.</p>}
+        </div>)}</div>
+      </details>
+          <div className="flex flex-wrap gap-2">
             <QuickActionTile
               href="/panel/rezervasyonlar/yeni-rezervasyon"
               label="Yeni Rezervasyon"
@@ -1478,15 +1491,17 @@ export default async function PanelDashboardPage({
               icon=""
             />
           </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <details className="rounded-lg border border-slate-200 bg-white p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-700">İşletme özeti <span className="ml-2 text-xs font-normal text-slate-500">Portföy, finans ve ekip göstergeleri</span></summary>
+      <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metricCards.map((item) => (
           <MetricCard key={item.label} {...item} />
         ))}
       </section>
-
+      </details>
+      <details key={activeFilterLabels.join("|")} open={activeFilterLabels.length > 0} className="rounded-lg border border-slate-200 bg-white p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-700">Detaylı arama ve filtreler <span className="ml-2 text-xs font-normal text-slate-500">{activeFilterLabels.length ? `${activeFilterLabels.length} etkin filtre` : "Tarih, talep, operasyon ve finans"}</span></summary>
+        <div className="mt-4">
       <DashboardFilterBar
         reservationSearch={reservationSearch}
         operationSearch={operationSearch}
@@ -1498,7 +1513,8 @@ export default async function PanelDashboardPage({
         financeStatus={financeStatus}
         crmFocus={crmFocus}
       />
-
+        </div>
+      </details>
       <ActiveFiltersBar items={activeFilterLabels} />
 
       <section className="grid gap-5 xl:grid-cols-2">

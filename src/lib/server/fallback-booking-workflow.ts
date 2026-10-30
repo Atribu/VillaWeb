@@ -1,4 +1,5 @@
 import "server-only";
+import { writePanelAudit } from "@/lib/server/panel-audit";
 
 import { randomUUID } from "node:crypto";
 import type { DemoRequest, RequestStatus } from "@/lib/demo-operations";
@@ -64,10 +65,13 @@ export async function transitionFallbackBooking(request: DemoRequest, status: Re
     .reduce((total, item) => total + Math.round(item.amount * 100), 0);
   const fullyPaid = invoice && invoice.status !== "CANCELLED" && invoice.totalAmount > 0
     && paid >= Math.round(invoice.totalAmount * 100);
-  return saveFallbackRequest({ ...request, status,
+  const updated = await saveFallbackRequest({ ...request, status,
     confirmedAt: status === "APPROVED" && fullyPaid ? request.confirmedAt ?? now : undefined,
     confirmationToken: request.confirmationToken ?? randomUUID().replaceAll("-", ""),
   });
+  if (request.status !== status) await writePanelAudit({ companyId: request.companyId, entityType: "REQUEST", entityId: request.id,
+    action: "STATUS_CHANGED", summary: `Talep durumu: ${request.status} → ${status}.` });
+  return updated;
 }
 
 export async function updateFallbackFinance(input:

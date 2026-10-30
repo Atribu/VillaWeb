@@ -1,4 +1,5 @@
 import "server-only";
+import { writePanelAudit } from "@/lib/server/panel-audit";
 
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
@@ -81,6 +82,8 @@ export async function applyBookingStatus(tx: Prisma.TransactionClient, request: 
     confirmationToken: current.confirmationToken ?? randomUUID().replaceAll("-", ""),
   } });
   if (current.status !== nextStatus) {
+    await writePanelAudit({ companyId: current.companyId, entityType: "REQUEST", entityId: request.id,
+      action: "STATUS_CHANGED", summary: `Talep durumu: ${current.status} → ${nextStatus}.` }, tx);
     await tx.bookingRequestStatusHistory.create({ data: {
       bookingRequestId: request.id, oldStatus: current.status, newStatus: nextStatus,
       note: "Panelden rezervasyon durumu guncellendi.",

@@ -1,0 +1,10 @@
+"use client";
+import Link from "next/link";
+import { PUBLICATION_CHECKS } from "@/lib/panel-workspace";
+import { useWorkspaceAction, WorkMessage } from "@/components/panel/workspace-controls";
+export function PublicationManager({ companyId, required, version, villas }: { companyId: string; required: string[]; version: number; villas: { id: string; title: string; slug: string; status: string; missing: { label: string; required: boolean }[] }[] }) {
+  const action = useWorkspaceAction();
+  return <div className="work-stack"><section className="work-card"><h2>Yayına çıkış kuralları</h2><p className="work-muted">İşaretli alanlar tamamlanmadan yeni yayınlama veya aktif kayıt güncellemesi yapılamaz. Mevcut villalar kendiliğinden pasife alınmaz.</p>
+    <form key={`${companyId}:${version}`} className="work-form" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); void action.run("publication", { companyId, version, required: f.getAll("required") }); }}>{PUBLICATION_CHECKS.map(check => <label key={check.key} className="work-check"><input type="checkbox" name="required" value={check.key} disabled={check.required} defaultChecked={check.required || required.includes(check.key)} />{check.label}{check.required && <span className="work-muted"> · Temel kural</span>}</label>)}<WorkMessage>{action.message}</WorkMessage><button className="panel-button-primary" disabled={action.busy}>Kuralları kaydet</button></form>
+    </section><section className="work-card"><h2>Portföy kontrolü</h2>{villas.map(villa => <div className="work-row" key={villa.id}><div><h3>{villa.title}</h3><p>{villa.missing.length ? villa.missing.map(check => `${check.label}${check.required ? " (zorunlu)" : " (öneri)"}`).join(" · ") : "Tüm kontroller tamam"}</p><span className="work-badge">{villa.status}</span></div><Link className="panel-button-secondary" href={`/panel/villalar/${encodeURIComponent(villa.slug)}/duzenle`}>Düzenle</Link></div>)}{!villas.length && <p className="work-empty">Bu firmada villa yok.</p>}</section></div>;
+}

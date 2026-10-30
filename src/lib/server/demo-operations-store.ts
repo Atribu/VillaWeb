@@ -1,4 +1,5 @@
 import "server-only";
+import { writePanelAudit } from "@/lib/server/panel-audit";
 import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
 import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
@@ -707,7 +708,10 @@ export async function upsertDemoPricingRecord(
 
     await assertPanelCompanyAccess(villa.companyId);
 
-    await db.villa.update({
+    await db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${villa.id} FOR UPDATE`;
+    const previous = await tx.villa.findUniqueOrThrow({ where: { id: villa.id } });
+    await tx.villa.update({
       where: { id: villa.id },
       data: {
         nightlyBasePrice: input.baseNightlyPrice,
@@ -716,11 +720,10 @@ export async function upsertDemoPricingRecord(
       },
     });
 
-    return {
-      ...input,
-      companyId: villa.companyId,
-      updatedAt: new Date().toISOString(),
-    } satisfies DemoPricingRecord;
+    await writePanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id, action: "PRICE_CHANGED",
+      summary: `Gecelik fiyat: ${previous.nightlyBasePrice} → ${input.baseNightlyPrice} TL. Temizlik: ${previous.cleaningFee} → ${input.cleaningFee} TL. Minimum gece: ${previous.minNightCount} → ${input.minNightCount}.` }, tx);
+    });
+    return { ...input, companyId: villa.companyId, updatedAt: new Date().toISOString() } satisfies DemoPricingRecord;
   }, async () => {
     const villa = (await getFallbackVillas(scopedCompanyId)).find((item) => item.slug === input.villaSlug);
     if (!villa) throw new DemoOperationsStoreError("Fiyat guncellenecek villa bulunamadi.");
@@ -728,6 +731,9 @@ export async function upsertDemoPricingRecord(
     const record = { ...input, companyId: villa.companyId, updatedAt: new Date().toISOString() };
     const records = await getFallbackPricingRecords();
     await writeDevelopmentDataFile("demo-pricing.json", [...records.filter((item) => !(item.companyId === villa.companyId && item.villaSlug === villa.slug)), record]);
+    const previous = records.find(item => item.companyId === villa.companyId && item.villaSlug === villa.slug);
+    await writePanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id, action: "PRICE_CHANGED",
+      summary: `Gecelik fiyat: ${previous?.baseNightlyPrice ?? villa.nightlyPrice} → ${input.baseNightlyPrice} TL. Temizlik: ${previous?.cleaningFee ?? villa.cleaningFee ?? 0} → ${input.cleaningFee} TL. Minimum gece: ${previous?.minNightCount ?? villa.minNightCount ?? 1} → ${input.minNightCount}.` });
     return record;
   });
 }

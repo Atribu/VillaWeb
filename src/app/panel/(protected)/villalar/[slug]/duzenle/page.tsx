@@ -1,5 +1,12 @@
 import Link from "next/link";
+import { getUserSession } from "@/lib/auth/server-session";
+import { villaDraftKey } from "@/lib/villa-draft";
+import { getPublicationPolicy } from "@/lib/server/publication-policy";
+import { VillaGalleryManager } from "@/components/panel/villa-gallery-manager";
+import { RecordActivity } from "@/components/panel/record-activity";
+import { readPanelAudit } from "@/lib/server/panel-audit";
 import { notFound } from "next/navigation";
+import { PanelPageHeader } from "@/components/panel/panel-page-header";
 import { VillaForm } from "@/components/panel/villa-form";
 import { VillaPricingPeriodsManager } from "@/components/panel/villa-pricing-periods-manager";
 import { VillaIcalExportCard } from "@/components/panel/villa-ical-export-card";
@@ -27,38 +34,28 @@ export default async function PanelEditVillaPage({ params }: PanelEditVillaPageP
   if (!villa) {
     notFound();
   }
+  const session = await getUserSession();
+  if (!session) return null;
+  const activity = await readPanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id });
+  const policy = await getPublicationPolicy(villa.companyId);
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm shadow-slate-200/60">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-teal)]">
-              Villa Duzenle
-            </p>
-            <h2 className="mt-4 text-3xl font-semibold text-[var(--color-ink)]">
-              {villa.title}
-            </h2>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-              Temel bilgiler, fiyat, SEO metinleri, dil alanlari ve yayin durumu bu ekrandan
-              guncellenir. Gorsel secmezsen mevcut galeri korunur.
-            </p>
-          </div>
-
-          <Link
-            href="/panel/villalar"
-            className="rounded-full border border-slate-200 px-5 py-3 text-center text-sm font-semibold text-slate-600 transition hover:border-[var(--color-aqua)] hover:text-[var(--color-teal)]"
-          >
-            Villa Listesine Don
-          </Link>
+      <PanelPageHeader eyebrow={`Portföy / ${villa.shortCode || "Villa düzenle"}`} title={villa.title}
+        description="İçerik, fotoğraf ve yayın bilgilerini yönetin. Yeni fotoğraf seçmezseniz mevcut galeri korunur."
+        actions={<Link href="/panel/villalar" className="panel-button-secondary">Listeye dön</Link>} />
+      <div className="panel-editor-layout">
+        <VillaEditorNavigation editing />
+        <div className="min-w-0 space-y-6">
+          <VillaForm key={villa.id} mode="edit" initialVilla={villa} regions={regions} companyId={villa.companyId} publicationRequired={policy.required} draftKey={villaDraftKey(session.id, villa.companyId, villa.id)} />
+          <VillaGalleryManager key={`${villa.id}:${JSON.stringify(villa.imageUrls)}:${villa.coverImageUrl}`} villaId={villa.id} initial={{ urls: villa.imageUrls, cover: villa.coverImageUrl ?? villa.imageUrls[0] ?? null }} />
+          <p className="border-t border-slate-200 pt-6 text-xs leading-6 text-slate-500">Fiyat dönemleri ve müsaitlik değişiklikleri aşağıdaki bölümlerin kendi düğmeleriyle ayrı kaydedilir.</p>
+          <div id="villa-periods" className="panel-section"><VillaPricingPeriodsManager villa={villa} /></div>
+          <div id="villa-calendar" className="panel-section"><VillaAvailabilityManager key={JSON.stringify(villa.availabilityRanges)} villa={villa} /></div>
+          <div id="villa-ical" className="panel-section"><VillaIcalExportCard icalPath={getVillaIcalPath(villa.companyId, villa.slug)} /></div>
+          <section id="villa-history" className="panel-section rounded-xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Değişiklik geçmişi</h2><RecordActivity activity={activity} /></section>
         </div>
       </div>
-
-      <VillaEditorNavigation editing />
-      <VillaForm key={villa.id} mode="edit" initialVilla={villa} regions={regions} />
-      <div id="villa-periods" className="panel-section"><VillaPricingPeriodsManager villa={villa} /></div>
-      <div id="villa-calendar" className="panel-section"><VillaAvailabilityManager key={JSON.stringify(villa.availabilityRanges)} villa={villa} /></div>
-      <div id="villa-ical" className="panel-section"><VillaIcalExportCard icalPath={getVillaIcalPath(villa.companyId, villa.slug)} /></div>
     </div>
   );
 }

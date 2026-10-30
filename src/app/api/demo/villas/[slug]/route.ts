@@ -9,6 +9,7 @@ import {
   updateDemoVillaStatus,
 } from "@/lib/server/demo-villa-store";
 import type { CatalogVilla } from "@/lib/villa-catalog";
+import { recordSystemEvent } from "@/lib/server/system-health";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -91,7 +92,8 @@ export async function PUT(request: Request, context: RouteContext) {
 
   try {
     formData = await request.formData();
-  } catch {
+  } catch (error) {
+    await recordSystemEvent("VILLA_FORM_PARSE_FAILED", error);
     return NextResponse.json({ error: "Villa form verisi okunamadi." }, { status: 400 });
   }
 
@@ -110,6 +112,7 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     console.error(error);
+    await recordSystemEvent("VILLA_UPDATE_FAILED", error);
 
     return NextResponse.json(
       { error: "Villa guncellenirken beklenmeyen bir hata olustu." },

@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly VillaWeb backup (server timezone)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=villaweb-backup.service
+
+[Install]
+WantedBy=timers.target

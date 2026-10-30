@@ -1,0 +1,62 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+
+module.exports = async function ({ call, cookie, base, directory, companyId, other, villa, booking }) {
+  const readVillas = async () => JSON.parse(await fs.readFile(path.join(directory, 'demo-villas.json'), 'utf8'));
+  let original = (await readVillas()).find(item => item.id === villa.id);
+  // Isolated fixtures only; gallery tests need three distinct existing images.
+  original = { ...original, imageUrls: ['/test/a.webp', '/test/b.webp', '/test/c.webp'], coverImageUrl: '/test/a.webp', imageCount: 3 };
+  await fs.writeFile(path.join(directory, 'demo-villas.json'), JSON.stringify((await readVillas()).map(item => item.id === villa.id ? original : item)));
+  const route = `/api/panel/villas/${villa.id}/gallery`;
+  const version = JSON.stringify([original.imageUrls, original.coverImageUrl]);
+  const gallery = { urls: ['/test/c.webp', '/test/b.webp'], cover: '/test/b.webp', version };
+  assert.equal((await call(route, gallery, 'PUT', '')).status, 401);
+  assert.equal((await call(route, gallery, 'PUT', cookie('SALES'))).status, 403);
+  assert.equal((await call(route, gallery, 'PUT', cookie('ADMIN', other.companyId))).status, 404);
+  assert.equal((await call(route, { ...gallery, urls: ['/foreign.webp'] }, 'PUT', cookie('STAFF'))).status, 400);
+  assert.equal((await call(route, { ...gallery, urls: [] }, 'PUT')).status, 400);
+  const csrf = await fetch(base + route, { method: 'PUT', headers: { Cookie: cookie(), Origin: 'https://untrusted.invalid', 'Content-Type': 'application/json' }, body: JSON.stringify(gallery) });
+  assert.equal(csrf.status, 403);
+  let response = await call(route, gallery, 'PUT', cookie('STAFF'));
+  assert.equal(response.status, 200, response.text);
+  let stored = (await readVillas()).find(item => item.id === villa.id);
+  assert.deepEqual(stored.imageUrls, gallery.urls); assert.equal(stored.coverImageUrl, gallery.cover);
+  assert.equal((await call(route, gallery, 'PUT')).status, 409);
+
+  const bulk = '/api/panel/villas/bulk';
+  const selection = [{ id: villa.id, status: stored.status }];
+  assert.equal((await call(bulk, { selection, status: 'PAUSED' }, 'PATCH', '')).status, 401);
+  assert.equal((await call(bulk, { selection, status: 'PAUSED' }, 'PATCH', cookie('SALES'))).status, 403);
+  const outsider = (await readVillas()).find(item => item.id === other.id);
+  assert.equal((await call(bulk, { selection: [...selection, { id: other.id, status: outsider.status }], status: 'PAUSED' }, 'PATCH', cookie('ADMIN'))).status, 403);
+  assert.equal((await readVillas()).find(item => item.id === villa.id).status, stored.status, 'Mixed-scope batch must not partially write');
+  assert.equal((await call(bulk, { selection: [{ id: villa.id, status: 'STALE' }], status: 'PAUSED' }, 'PATCH')).status, 409);
+  response = await call(bulk, { selection, status: 'PAUSED' }, 'PATCH', cookie('ADMIN'));
+  assert.equal(response.status, 200, response.text);
+  assert.equal((await readVillas()).find(item => item.id === villa.id).status, 'PAUSED');
+  response = await call(bulk, { selection: [{ id: villa.id, status: 'PAUSED' }], status: 'ARCHIVED' }, 'PATCH', cookie('ADMIN'));
+  assert.equal(response.status, 200, response.text);
+  assert.equal((await readVillas()).find(item => item.id === other.id).status, outsider.status);
+
+  const notes = `/api/panel/requests/${booking.id}/notes`;
+  const note = 'PRIVATE_TEAM_NOTE_MARKER';
+  assert.equal((await call(notes, { note }, 'POST', '')).status, 401);
+  assert.equal((await call(notes, { note }, 'POST', cookie('STAFF'))).status, 403);
+  assert.equal((await call(notes, { note }, 'POST', cookie('ADMIN', other.companyId))).status, 404);
+  assert.equal((await call(notes, { note: ' ' }, 'POST')).status, 400);
+  assert.equal((await call(notes, { note: 'x'.repeat(2001) }, 'POST')).status, 400);
+  response = await call(notes, { note }, 'POST', cookie('SALES'));
+  assert.equal(response.status, 200, response.text);
+  const detail = await call(`/panel/talepler/${booking.id}`, undefined, 'GET', cookie('SALES'));
+  assert.equal(detail.status, 200, detail.text.slice(0, 1000)); assert.match(detail.text, /PRIVATE_TEAM_NOTE_MARKER/);
+  assert.doesNotMatch((await call(`/panel/talepler/${booking.id}`, undefined, 'GET', cookie('ADMIN', other.companyId))).text, /PRIVATE_TEAM_NOTE_MARKER/);
+  assert.doesNotMatch((await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '')).text, /PRIVATE_TEAM_NOTE_MARKER/);
+  const log = JSON.parse(await fs.readFile(path.join(directory, 'panel-audit.json'), 'utf8'));
+  for (const action of ['GALLERY_UPDATED', 'BULK_STATUS_CHANGED', 'REQUEST_NOTE', 'STATUS_CHANGED', 'VILLA_UPDATED', 'PRICE_CHANGED']) assert.ok(log.some(item => item.action === action), `Missing audit: ${action}`);
+  assert.ok(log.every(item => item.actor && item.companyId));
+  const editor = await call(`/panel/villalar/${original.slug}/duzenle`, undefined, 'GET', cookie('ADMIN'));
+  assert.match(editor.text, /Galeri yönetimi/); assert.match(editor.text, /Toplu işlem/);
+  await fs.writeFile(path.join(directory, 'demo-villas.json'), JSON.stringify((await readVillas()).map(item => item.id === villa.id ? original : item)));
+  console.log('PASS panel gallery/cover/removal, stale edits, bulk atomic authorization, request notes/privacy and actor history');
+};

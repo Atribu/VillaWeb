@@ -116,6 +116,7 @@ export function mapDemoOperationStatusToPrisma(status: string): OperationTaskSta
 
 export function mapMembershipRoleToDemoRole(role: MembershipRole) {
   switch (role) {
+    case "OWNER": return "OWNER" as const;
     case "COMPANY_ADMIN":
       return "ADMIN" as const;
     case "SALES":
@@ -133,6 +134,7 @@ export function mapMembershipRoleToDemoRole(role: MembershipRole) {
 
 export function mapDemoRoleToMembershipRole(roleId: string): MembershipRole {
   switch (roleId) {
+    case "OWNER": return "OWNER";
     case "ADMIN":
       return "COMPANY_ADMIN";
     case "SALES":

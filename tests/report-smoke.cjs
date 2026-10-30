@@ -33,7 +33,7 @@ async function main() {
   const authData = { users: [], sessions: [] };
   const members = [];
   const cookies = new Map();
-  for (const role of ['SUPER_ADMIN', 'ADMIN', 'STAFF', 'FINANCE', 'SALES', 'OPERATIONS', 'CRM', 'CONTENT']) {
+  for (const role of ['SUPER_ADMIN', 'ADMIN', 'STAFF', 'FINANCE', 'SALES', 'OPERATIONS', 'CRM', 'CONTENT', 'OWNER']) {
     for (const id of [companyId, other.companyId]) {
       const userId = `test-${role}-${id}`;
       const company = role === 'SUPER_ADMIN' ? undefined : id;
@@ -55,7 +55,7 @@ async function main() {
     return cookies.get(`${role}:${id}`);
   }
   const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--port', port], {
-    cwd: path.resolve(__dirname, '..'), env: { ...process.env, DEV_FALLBACK_MODE: 'true', DEV_DATA_DIRECTORY: directory,
+    cwd: path.resolve(__dirname, '..'), env: { ...process.env, DEV_FALLBACK_MODE: 'true', DEV_DATA_DIRECTORY: directory, VILLA_RUNTIME_DIRECTORY: path.join(directory, 'runtime'),
       SESSION_SECRET: secret, ICAL_SIGNING_SECRET: secret,
       CALENDAR_SYNC_SECRET: 'isolated-calendar-scheduler-secret-1234567890',
       DATABASE_URL: 'postgresql://test:test@127.0.0.1:1/test?connect_timeout=1' }, stdio: ['ignore', 'pipe', 'pipe'],
@@ -335,6 +335,8 @@ async function main() {
     assert.match((await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '')).text, /Rezervasyon iptal edildi/);
     assert.match((await call(`/rezervasyon/${booking.confirmationToken}`, undefined, 'GET', '')).text, /data-status="cancelled"/);
     console.log('PASS approval -> invoice -> payment -> confirmation -> reversal -> cancellation');
+    await require('./panel-tools-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa, booking });
+    await require('./workspace-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa, booking });
 
     if (process.env.PLAYWRIGHT_MODULE) {
       const { chromium } = require(process.env.PLAYWRIGHT_MODULE);

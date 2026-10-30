@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily VillaWeb temporary storage cleanup
+
+[Timer]
+OnCalendar=*-*-* 05:00:00
+Persistent=true
+Unit=villaweb-storage-cleanup.service
+
+[Install]
+WantedBy=timers.target

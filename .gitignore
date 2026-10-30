@@ -43,3 +43,7 @@ next-env.d.ts
 # Local authentication contains password hashes and revocable sessions, never deploy it.
 /data/development-auth.json*
 /data/development-calendar-sync.json*
+/data/panel-audit.json*
+/data/panel-work-records.json*
+/.villa-runtime/
+/backups/

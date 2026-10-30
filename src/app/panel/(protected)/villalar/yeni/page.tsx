@@ -1,3 +1,9 @@
+import Link from "next/link";
+import { getUserSession } from "@/lib/auth/server-session";
+import { getDefaultCompanyId } from "@/lib/server/prisma-demo-shared";
+import { villaDraftKey } from "@/lib/villa-draft";
+import { getPublicationPolicy } from "@/lib/server/publication-policy";
+import { PanelPageHeader } from "@/components/panel/panel-page-header";
 import { VillaForm } from "@/components/panel/villa-form";
 import { VillaEditorNavigation } from "@/components/panel/villa-editor-navigation";
 import { getDemoRegionAirportRecords } from "@/lib/server/demo-definitions-store";
@@ -6,24 +12,21 @@ export const dynamic = "force-dynamic";
 
 export default async function PanelNewVillaPage() {
   const regions = await getDemoRegionAirportRecords();
+  const session = await getUserSession();
+  if (!session) return null;
+  const companyId = session.companyId ?? await getDefaultCompanyId();
+  if (!companyId) return null;
+  const policy = await getPublicationPolicy(companyId);
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm shadow-slate-200/60">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-teal)]">
-          Yeni Villa Ekle
-        </p>
-        <h2 className="mt-4 text-3xl font-semibold text-[var(--color-ink)]">
-          Portfoyunuze yeni bir villa ekleyin
-        </h2>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Villa bilgilerini, fotograflari ve misafirlerin gorecegi detaylari doldurun.
-          Ilk kayittan sonra fiyat donemlerini ve musaitlik takvimini yonetebilirsiniz.
-        </p>
+      <PanelPageHeader eyebrow="Portföy / Yeni kayıt" title="Villa ekle"
+        description="Bilgileri ve fotoğrafları ekleyin. İlk kayıttan sonra fiyat dönemlerini ve müsaitlik takvimini yönetebilirsiniz."
+        actions={<Link href="/panel/villalar" className="panel-button-secondary">Listeye dön</Link>} />
+      <div className="panel-editor-layout">
+        <VillaEditorNavigation />
+        <div className="min-w-0"><VillaForm regions={regions} companyId={companyId} publicationRequired={policy.required} draftKey={villaDraftKey(session.id, companyId, "new")} /></div>
       </div>
-
-      <VillaEditorNavigation />
-      <VillaForm regions={regions} />
     </div>
   );
 }

@@ -16,6 +16,7 @@ const ALLOWED_ROLES = new Set<DemoRoleId>([
   "FINANCE",
   "CRM",
   "CONTENT",
+  "OWNER",
 ]);
 
 export async function POST(request: Request) {

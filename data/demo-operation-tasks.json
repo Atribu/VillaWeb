@@ -14,7 +14,9 @@
     "scheduledTimeLabel": "Kayit sonrasi",
     "assignee": "Rezervasyon Masasi",
     "priority": "HIGH",
-    "status": "DONE"
+    "status": "DONE",
+    "companyId": "seed-company-villavera",
+    "updatedAt": "2026-10-29T10:12:07.842Z"
   },
   {
     "id": "request-003-task-02",
@@ -32,7 +34,8 @@
     "assignee": "Operasyon Koordinatoru",
     "supplierName": "Villa Hazirlik Ekibi",
     "priority": "MEDIUM",
-    "status": "DONE"
+    "status": "DONE",
+    "companyId": "seed-company-villavera"
   },
   {
     "id": "request-003-task-03",
@@ -49,7 +52,8 @@
     "scheduledTimeLabel": "18:00",
     "assignee": "Misafir Deneyimi",
     "priority": "MEDIUM",
-    "status": "DONE"
+    "status": "DONE",
+    "companyId": "seed-company-villavera"
   },
   {
     "id": "request-003-task-04",
@@ -66,7 +70,8 @@
     "scheduledTimeLabel": "15:00",
     "assignee": "Karsilama Ekibi",
     "priority": "HIGH",
-    "status": "DONE"
+    "status": "DONE",
+    "companyId": "seed-company-villavera"
   },
   {
     "id": "request-003-task-05",
@@ -83,7 +88,8 @@
     "scheduledTimeLabel": "10:00",
     "assignee": "Operasyon Ekibi",
     "priority": "MEDIUM",
-    "status": "DONE"
+    "status": "DONE",
+    "companyId": "seed-company-villavera"
   },
   {
     "id": "request-003-task-06",
@@ -101,6 +107,7 @@
     "assignee": "Temizlik Ekibi",
     "supplierName": "Housekeeping Partner",
     "priority": "HIGH",
-    "status": "DONE"
+    "status": "DONE",
+    "companyId": "seed-company-villavera"
   }
 ]

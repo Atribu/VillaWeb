@@ -1,14 +1,17 @@
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { Cormorant_Garamond, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import { getCurrentPublicSiteTemplate } from "@/lib/server/public-site-template";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { pickLocalized } from "@/lib/i18n";
 import s from "@/components/site-templates/site-templates.module.css";
 
-const sans = Manrope({ subsets: ["latin", "latin-ext"], variable: "--site-font-sans", display: "swap" });
-const serif = Cormorant_Garamond({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "600"], style: ["normal", "italic"], variable: "--site-font-serif", display: "swap" });
+const sans = localFont({ src: "../../assets/fonts/manrope.woff2", weight: "200 800", style: "normal", variable: "--site-font-sans", display: "swap" });
+const serif = localFont({ src: [
+  { path: "../../assets/fonts/cormorant-normal.woff2", weight: "400 600", style: "normal" },
+  { path: "../../assets/fonts/cormorant-italic.woff2", weight: "400 600", style: "italic" },
+], variable: "--site-font-serif", display: "swap" });
 
 export async function PublicSiteShell({ children }: { children: ReactNode }) {
   const { themeKey } = await getCurrentPublicSiteTemplate();

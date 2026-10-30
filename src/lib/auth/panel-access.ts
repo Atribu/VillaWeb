@@ -47,6 +47,8 @@ export type PanelModuleMeta = {
 };
 
 const panelEntries: PanelNavEntry[] = [
+  { type: "link", id: "workspace", label: "Bildirimler ve Görevler", href: "/panel/is-merkezi", icon: "calendar", roles: ["ADMIN"] },
+  { type: "link", id: "owner", label: "Villalarım", href: "/panel/villa-sahibi", icon: "home", roles: ["OWNER"] },
   {
     type: "link",
     id: "dashboard",
@@ -73,6 +75,7 @@ const panelEntries: PanelNavEntry[] = [
       { label: "Yeni Rezervasyon", href: "/panel/rezervasyonlar/yeni-rezervasyon", roles: ["ADMIN"] },
       { label: "Ev Rezervasyonlari", href: "/panel/rezervasyonlar/ev-rezervasyonlari", roles: ["ADMIN"] },
       { label: "Talepler", href: "/panel/talepler", roles: ["ADMIN"] },
+      { label: "Satış Takibi", href: "/panel/satis-takibi", roles: ["ADMIN"] },
       { label: "Log Analiz", href: "/panel/rezervasyonlar/log-analiz", roles: ["ADMIN"] },
     ],
   },
@@ -137,6 +140,7 @@ const panelEntries: PanelNavEntry[] = [
       { label: "Acentalar", href: "/panel/kullanicilar-mesajlar/acentalar", roles: ["ADMIN"] },
       { label: "Subeler", href: "/panel/kullanicilar-mesajlar/subeler", roles: ["ADMIN"] },
       { label: "Kullanicilar", href: "/panel/personel", roles: ["ADMIN"] },
+      { label: "Villa Sahipleri", href: "/panel/villa-sahipleri", roles: ["ADMIN"] },
       { label: "Roller", href: "/panel/kullanicilar-mesajlar/roller", roles: ["ADMIN"] },
       { label: "Mesajlar", href: "/panel/kullanicilar-mesajlar/mesajlar", roles: ["ADMIN"] },
       {
@@ -162,6 +166,8 @@ const panelEntries: PanelNavEntry[] = [
         roles: ["ADMIN"],
       },
       { label: "Dokumanlar", href: "/panel/ayarlar/dokumanlar", roles: ["ADMIN"] },
+      { label: "Yayın Kontrolü", href: "/panel/ayarlar/yayin-kontrolu", roles: ["ADMIN"] },
+      { label: "Sistem Sağlığı", href: "/panel/ayarlar/sistem-sagligi", roles: ["SUPER_ADMIN"] },
     ],
   },
   {
@@ -217,6 +223,7 @@ const panelEntries: PanelNavEntry[] = [
     icon: "sync",
     roles: ["ADMIN"],
     items: [
+      { label: "Ortak Takvim", href: "/panel/takvim", roles: ["ADMIN"] },
       {
         label: "iCal Kaynaklari",
         href: "/panel/takvim-senkronizasyon/ical-kaynaklari",
@@ -426,6 +433,7 @@ export function getPanelNavigation(role: AppRole) {
 }
 
 export function getPanelHomePath(role: AppRole) {
+  if (role === "OWNER") return "/panel/villa-sahibi";
   if (role === "STAFF" || role === "CONTENT") return "/panel/villalar";
   if (role === "SALES") return "/panel/talepler";
   if (role === "OPERATIONS") return "/panel/takip-operasyon/ev-operasyon";

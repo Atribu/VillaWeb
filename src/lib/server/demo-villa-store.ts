@@ -1,4 +1,8 @@
 import "server-only";
+import { writePanelAudit } from "@/lib/server/panel-audit";
+import { readStagedImages, StagedVillaImage } from "@/lib/server/staged-villa-images";
+import { assertPublicationReady } from "@/lib/server/publication-policy";
+import { PanelRecordError } from "@/lib/panel-record-tools";
 
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -445,7 +449,7 @@ function validatePdfFile(file: File | null) {
   }
 }
 
-async function convertImageToWebpBuffer(file: File, watermarkText: string) {
+export async function convertImageToWebpBuffer(file: File, watermarkText: string) {
   const sourceBuffer = Buffer.from(await file.arrayBuffer());
 
   try {
@@ -513,10 +517,11 @@ async function writeVillaImages(
     await mkdir(villaUploadDirectory, { recursive: true });
 
     for (const [index, file] of files.entries()) {
-      const buffer = await convertImageToWebpBuffer(file, options.watermarkText);
+      const buffer = file instanceof StagedVillaImage ? Buffer.from(await file.arrayBuffer()) : await convertImageToWebpBuffer(file, options.watermarkText);
       const imageIndex = startIndex + index + 1;
       const fileBaseName = sanitizeFileName(file.name) || `villa-gorsel-${imageIndex}`;
-      const fileName = `${String(imageIndex).padStart(2, "0")}-${fileBaseName}.webp`;
+      // Gallery removals/reordering must never let a later upload overwrite an old URL.
+      const fileName = `${String(imageIndex).padStart(2, "0")}-${fileBaseName}-${randomUUID()}.webp`;
       const targetPath = path.join(villaUploadDirectory, fileName);
       await writeFile(targetPath, buffer);
       imageUrls.push(`/uploads/villas/${slug}/${fileName}`);
@@ -763,7 +768,7 @@ async function queryVillas(input?: DemoVillaQueryInput) {
     where,
     include: {
       images: {
-        orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
       availabilityBlocks: {
         orderBy: { startsAt: "asc" },
@@ -988,59 +993,44 @@ export async function createDemoVillaFromFormData(
   const watermarkText = villaWatermarkText;
 
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
-  const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
+  const titleEn = getTextField(formData, "titleEn");
   const shortCode = validateRequiredText(normalizeShortCode(getTextField(formData, "shortCode")), "Kisa kod");
   const slugInput = getTextField(formData, "slug") || title;
   const slug = normalizeVillaSlug(slugInput);
   const city = validateRequiredText(normalizeLocationField(getTextField(formData, "city")), "Lokasyon");
   const district = validateRequiredText(normalizeLocationField(getTextField(formData, "district")), "Bolge");
   const badge = validateRequiredText(getTextField(formData, "badge"), "Vitrin etiketi");
-  const badgeEn = validateRequiredText(getTextField(formData, "badgeEn"), "Vitrin etiketi (EN)");
+  const badgeEn = getTextField(formData, "badgeEn");
   const category = validateRequiredText(getTextField(formData, "category"), "Kategori");
-  const categoryEn = validateRequiredText(getTextField(formData, "categoryEn"), "Kategori (EN)");
+  const categoryEn = getTextField(formData, "categoryEn");
   const shortDescription = validateRequiredText(
     getTextField(formData, "shortDescription"),
     "Kisa aciklama",
   );
-  const shortDescriptionEn = validateRequiredText(
-    getTextField(formData, "shortDescriptionEn"),
-    "Kisa aciklama (EN)",
-  );
+  const shortDescriptionEn = getTextField(formData, "shortDescriptionEn");
   const description = validateRequiredText(
     getTextField(formData, "description"),
     "Detayli aciklama",
   );
-  const descriptionEn = validateRequiredText(
-    getTextField(formData, "descriptionEn"),
-    "Detayli aciklama (EN)",
-  );
+  const descriptionEn = getTextField(formData, "descriptionEn");
   const seoTitle = validateRequiredText(getTextField(formData, "seoTitle"), "SEO basligi");
-  const seoTitleEn = validateRequiredText(getTextField(formData, "seoTitleEn"), "SEO basligi (EN)");
+  const seoTitleEn = getTextField(formData, "seoTitleEn");
   const seoDescription = validateRequiredText(
     getTextField(formData, "seoDescription"),
     "Meta aciklama",
   );
-  const seoDescriptionEn = validateRequiredText(
-    getTextField(formData, "seoDescriptionEn"),
-    "Meta aciklama (EN)",
-  );
+  const seoDescriptionEn = getTextField(formData, "seoDescriptionEn");
   const focusKeyword = validateRequiredText(
     getTextField(formData, "focusKeyword"),
     "Odak anahtar kelime",
   );
-  const focusKeywordEn = validateRequiredText(
-    getTextField(formData, "focusKeywordEn"),
-    "Odak anahtar kelime (EN)",
-  );
+  const focusKeywordEn = getTextField(formData, "focusKeywordEn");
   const tourismLicenseNumber = getTextField(formData, "tourismLicenseNumber") || undefined;
   const coverAlt = validateRequiredText(
     getTextField(formData, "coverAlt"),
     "Kapak gorseli alt metni",
   );
-  const coverAltEn = validateRequiredText(
-    getTextField(formData, "coverAltEn"),
-    "Kapak gorseli alt metni (EN)",
-  );
+  const coverAltEn = getTextField(formData, "coverAltEn");
   const operational = getVillaOperationalInput(formData);
 
   if (!slug) {
@@ -1061,16 +1051,21 @@ export async function createDemoVillaFromFormData(
   }
 
   const poolType = validateRequiredText(getTextField(formData, "poolType"), "Havuz tipi");
-  const poolTypeEn = validateRequiredText(getTextField(formData, "poolTypeEn"), "Havuz tipi (EN)");
+  const poolTypeEn = getTextField(formData, "poolTypeEn");
   const featured = getTextField(formData, "featured") === "on";
   const status = parseVillaStatus(getTextField(formData, "status"));
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File && value.size > 0);
+  try { files.push(...await readStagedImages(formData, companyId)); } catch (error) {
+    if (error instanceof PanelRecordError) throw new DemoVillaStoreError(error.message); throw error;
+  }
   const tourismLicensePdf = getPdfFile(formData);
 
-  validateImageFiles(files);
+  validateImageFiles(files, { requireAtLeastOne: status === "ACTIVE" });
   validatePdfFile(tourismLicensePdf);
+
+  if (status === "ACTIVE") await validatePublication(companyId, { imageCount: files.length, nightlyPrice, city, district, tourismLicenseNumber, tourismLicensePdfUrl: tourismLicensePdf ? "pending.pdf" : undefined, titleEn, descriptionEn });
 
   async function createFallbackVilla() {
     const fallbackVillas = await runVillaCreateStep("VILLA_FALLBACK_LIST", async () =>
@@ -1423,6 +1418,7 @@ async function resolveDbVillaForMutation(slug: string, input?: { companyId?: str
       id: true,
       companyId: true,
       slug: true,
+      status: true,
     },
   });
 
@@ -1440,60 +1436,48 @@ export async function updateDemoVillaFromFormData(
   formData: FormData,
   input?: { companyId?: string | null },
 ) {
+  const existing = await getDemoVillaBySlug(slug, { ...input, includeMetrics: false });
+  if (!existing) throw new DemoVillaStoreError("Villa bulunamadi.");
+  await assertPanelCompanyAccess(existing.companyId);
   const title = validateRequiredText(getTextField(formData, "title"), "Villa basligi");
-  const titleEn = validateRequiredText(getTextField(formData, "titleEn"), "Villa basligi (EN)");
+  const titleEn = getTextField(formData, "titleEn");
   const shortCode = validateRequiredText(normalizeShortCode(getTextField(formData, "shortCode")), "Kisa kod");
   const slugInput = getTextField(formData, "slug") || title;
   const nextSlug = normalizeVillaSlug(slugInput);
   const city = validateRequiredText(normalizeLocationField(getTextField(formData, "city")), "Lokasyon");
   const district = validateRequiredText(normalizeLocationField(getTextField(formData, "district")), "Bolge");
   const badge = validateRequiredText(getTextField(formData, "badge"), "Vitrin etiketi");
-  const badgeEn = validateRequiredText(getTextField(formData, "badgeEn"), "Vitrin etiketi (EN)");
+  const badgeEn = getTextField(formData, "badgeEn");
   const category = validateRequiredText(getTextField(formData, "category"), "Kategori");
-  const categoryEn = validateRequiredText(getTextField(formData, "categoryEn"), "Kategori (EN)");
+  const categoryEn = getTextField(formData, "categoryEn");
   const shortDescription = validateRequiredText(
     getTextField(formData, "shortDescription"),
     "Kisa aciklama",
   );
-  const shortDescriptionEn = validateRequiredText(
-    getTextField(formData, "shortDescriptionEn"),
-    "Kisa aciklama (EN)",
-  );
+  const shortDescriptionEn = getTextField(formData, "shortDescriptionEn");
   const description = validateRequiredText(
     getTextField(formData, "description"),
     "Detayli aciklama",
   );
-  const descriptionEn = validateRequiredText(
-    getTextField(formData, "descriptionEn"),
-    "Detayli aciklama (EN)",
-  );
+  const descriptionEn = getTextField(formData, "descriptionEn");
   const seoTitle = validateRequiredText(getTextField(formData, "seoTitle"), "SEO basligi");
-  const seoTitleEn = validateRequiredText(getTextField(formData, "seoTitleEn"), "SEO basligi (EN)");
+  const seoTitleEn = getTextField(formData, "seoTitleEn");
   const seoDescription = validateRequiredText(
     getTextField(formData, "seoDescription"),
     "Meta aciklama",
   );
-  const seoDescriptionEn = validateRequiredText(
-    getTextField(formData, "seoDescriptionEn"),
-    "Meta aciklama (EN)",
-  );
+  const seoDescriptionEn = getTextField(formData, "seoDescriptionEn");
   const focusKeyword = validateRequiredText(
     getTextField(formData, "focusKeyword"),
     "Odak anahtar kelime",
   );
-  const focusKeywordEn = validateRequiredText(
-    getTextField(formData, "focusKeywordEn"),
-    "Odak anahtar kelime (EN)",
-  );
+  const focusKeywordEn = getTextField(formData, "focusKeywordEn");
   const tourismLicenseNumber = getTextField(formData, "tourismLicenseNumber") || undefined;
   const coverAlt = validateRequiredText(
     getTextField(formData, "coverAlt"),
     "Kapak gorseli alt metni",
   );
-  const coverAltEn = validateRequiredText(
-    getTextField(formData, "coverAltEn"),
-    "Kapak gorseli alt metni (EN)",
-  );
+  const coverAltEn = getTextField(formData, "coverAltEn");
   const operational = getVillaOperationalInput(formData);
 
   if (!nextSlug) {
@@ -1514,7 +1498,7 @@ export async function updateDemoVillaFromFormData(
   }
 
   const poolType = validateRequiredText(getTextField(formData, "poolType"), "Havuz tipi");
-  const poolTypeEn = validateRequiredText(getTextField(formData, "poolTypeEn"), "Havuz tipi (EN)");
+  const poolTypeEn = getTextField(formData, "poolTypeEn");
   const featured = getTextField(formData, "featured") === "on";
   const status = parseVillaStatus(getTextField(formData, "status"));
   const files = formData
@@ -1522,8 +1506,12 @@ export async function updateDemoVillaFromFormData(
     .filter((value): value is File => value instanceof File && value.size > 0);
   const tourismLicensePdf = getPdfFile(formData);
 
+  try { files.push(...await readStagedImages(formData, existing.companyId)); } catch (error) {
+    if (error instanceof PanelRecordError) throw new DemoVillaStoreError(error.message); throw error;
+  }
   validateImageFiles(files, { requireAtLeastOne: false });
   validatePdfFile(tourismLicensePdf);
+  if (status === "ACTIVE") await validatePublication(existing.companyId, { imageCount: existing.imageCount + files.length, nightlyPrice, city, district, tourismLicenseNumber, tourismLicensePdfUrl: tourismLicensePdf ? "pending.pdf" : existing.tourismLicensePdfUrl, titleEn, descriptionEn });
 
   async function updateFallbackVillaRecord() {
     const current = await getFallbackVillaForMutation(slug, input);
@@ -1623,7 +1611,10 @@ export async function updateDemoVillaFromFormData(
       await deleteFallbackVilla(current.companyId, current.slug);
     }
 
-    return await saveFallbackVilla(updatedVilla);
+    const savedVilla = await saveFallbackVilla(updatedVilla);
+    await writePanelAudit({ companyId: current.companyId, entityType: "VILLA", entityId: current.id, action: "VILLA_UPDATED",
+      summary: `Villa bilgileri güncellendi. Gecelik fiyat: ${current.nightlyPrice} → ${nightlyPrice} TL. Yayın durumu: ${current.status} → ${status}. Eklenen fotoğraf: ${newImageUrls.length}.` });
+    return savedVilla;
   }
 
   if (isDevelopmentFallbackForced()) {
@@ -1639,7 +1630,7 @@ export async function updateDemoVillaFromFormData(
       },
       include: {
         images: {
-          orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         },
       },
     });
@@ -1681,7 +1672,10 @@ export async function updateDemoVillaFromFormData(
     const coverImageUrl = current.coverImageUrl ?? current.images[0]?.url ?? newImageUrls[0];
     const regionId = await ensureVillaRegion(current.companyId, city, district);
 
-    await db.villa.update({
+    await db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${current.id} FOR UPDATE`;
+    const previous = await tx.villa.findUniqueOrThrow({ where: { id: current.id } });
+    await tx.villa.update({
       where: { id: current.id },
       data: {
         title,
@@ -1732,7 +1726,7 @@ export async function updateDemoVillaFromFormData(
         minNightCount: operational.minNightCount,
         status,
         featured,
-        coverImageUrl,
+        coverImageUrl: previous.coverImageUrl ?? coverImageUrl,
         coverAlt,
         coverAltEn,
         seoTitle,
@@ -1777,6 +1771,9 @@ export async function updateDemoVillaFromFormData(
       },
     });
 
+    await writePanelAudit({ companyId: current.companyId, entityType: "VILLA", entityId: current.id, action: "VILLA_UPDATED",
+      summary: `Villa bilgileri güncellendi. Gecelik fiyat: ${decimalToNumber(previous.nightlyBasePrice)} → ${nightlyPrice} TL. Yayın durumu: ${previous.status} → ${status}. Eklenen fotoğraf: ${newImageUrls.length}.` }, tx);
+    }, { timeout: 60_000, maxWait: 10_000 });
     const updatedVilla = await getDemoVillaBySlug(nextSlug, {
       companyId: current.companyId,
       includeMetrics: false,
@@ -1805,6 +1802,11 @@ export async function updateDemoVillaStatus(
   status: Extract<CatalogVilla["status"], "ACTIVE" | "DRAFT" | "PAUSED" | "ARCHIVED">,
   input?: { companyId?: string | null },
 ) {
+  if (status === "ACTIVE") {
+    const existing = await getDemoVillaBySlug(slug, { ...input, includeMetrics: false });
+    if (!existing) throw new DemoVillaStoreError("Villa bulunamadi.");
+    await validatePublication(existing.companyId, existing);
+  }
   async function updateFallbackStatus() {
     const villa = await getFallbackVillaForMutation(slug, input);
     const updatedVilla = await updateFallbackVillaStatus(villa.companyId, slug, status);
@@ -1813,6 +1815,7 @@ export async function updateDemoVillaStatus(
       throw new DemoVillaStoreError("Villa bulunamadi.");
     }
 
+    await writePanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id, action: "STATUS_CHANGED", summary: `Yayın durumu: ${villa.status} → ${status}.` });
     return updatedVilla;
   }
 
@@ -1822,12 +1825,15 @@ export async function updateDemoVillaStatus(
 
   try {
     const villa = await resolveDbVillaForMutation(slug, input);
-    const updated = await db.villa.update({
+    const updated = await db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${villa.id} FOR UPDATE`;
+    const previous = await tx.villa.findUniqueOrThrow({ where: { id: villa.id } });
+    const updated = await tx.villa.update({
       where: { id: villa.id },
       data: { status },
       include: {
         images: {
-          orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         },
         availabilityBlocks: {
           orderBy: { startsAt: "asc" },
@@ -1836,6 +1842,9 @@ export async function updateDemoVillaStatus(
       },
     });
 
+    await writePanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id, action: "STATUS_CHANGED", summary: `Yayın durumu: ${previous.status} → ${status}.` }, tx);
+    return updated;
+    });
     return {
       id: updated.id,
       companyId: updated.companyId,
@@ -1911,6 +1920,11 @@ export async function updateDemoVillaStatus(
 
     throw error;
   }
+}
+
+async function validatePublication(companyId: string, villa: Parameters<typeof assertPublicationReady>[1]) {
+  try { await assertPublicationReady(companyId, villa); }
+  catch (error) { if (error instanceof PanelRecordError) throw new DemoVillaStoreError(error.message); throw error; }
 }
 
 async function removeVillaUploadDirectory(slug: string) {
@@ -2010,6 +2024,8 @@ export async function addDemoVillaPricingPeriod(input: PricingPeriodInput & { sl
         } else {
           await tx.villaPricingRule.create({ data: { ...data, villaId: villa.id, ruleType: "SEASONAL" } });
         }
+        await writePanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id, action: "SEASONAL_PRICE_CHANGED",
+          summary: `${input.id ? "Düzenlenen" : "Eklenen"} fiyat dönemi: ${input.title.trim()}, ${input.startDate} - ${input.endDate}, ${input.nightlyPrice} TL/gece.` }, tx);
       });
       const updated = await getDemoVillaBySlug(input.slug, { companyId: villa.companyId, includeMetrics: false });
       if (!updated) throw new DemoVillaStoreError("Villa tekrar okunamadi.");
@@ -2019,7 +2035,7 @@ export async function addDemoVillaPricingPeriod(input: PricingPeriodInput & { sl
       const villa = await getFallbackVillaForMutation(input.slug);
       const periods = villa.pricingPeriods ?? [];
       validate(periods);
-      return saveFallbackVilla({
+      const updated = await saveFallbackVilla({
         ...villa,
         pricingPeriods: sortPricingPeriods([
           ...periods.filter((period) => period.id !== input.id),
@@ -2035,6 +2051,9 @@ export async function addDemoVillaPricingPeriod(input: PricingPeriodInput & { sl
           },
         ]),
       });
+      await writePanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id, action: "SEASONAL_PRICE_CHANGED",
+        summary: `${input.id ? "Düzenlenen" : "Eklenen"} fiyat dönemi: ${input.title.trim()}, ${input.startDate} - ${input.endDate}, ${input.nightlyPrice} TL/gece.` });
+      return updated;
     },
   );
 }
@@ -2051,10 +2070,12 @@ export async function deleteDemoVillaPricingPeriod(input: {
       throw new DemoVillaStoreError("Silinecek fiyat donemi bulunamadi.");
     }
 
-    return saveFallbackVilla({
+    const updated = await saveFallbackVilla({
       ...villa,
       pricingPeriods: periods.filter((period) => period.id !== input.pricingPeriodId),
     });
+    await writePanelAudit({ companyId: villa.companyId, entityType: "VILLA", entityId: villa.id, action: "SEASONAL_PRICE_CHANGED", summary: `Fiyat dönemi kaldırıldı: ${periods.find(period => period.id === input.pricingPeriodId)?.title}.` });
+    return updated;
   }
 
   if (isDevelopmentFallbackForced()) {
@@ -2076,7 +2097,10 @@ export async function deleteDemoVillaPricingPeriod(input: {
     }
 
     await assertPanelCompanyAccess(period.villa.companyId);
-    await db.villaPricingRule.delete({ where: { id: period.id } });
+    await db.$transaction(async tx => {
+      await tx.villaPricingRule.delete({ where: { id: period.id } });
+      await writePanelAudit({ companyId: period.villa.companyId, entityType: "VILLA", entityId: period.villaId, action: "SEASONAL_PRICE_CHANGED", summary: `Fiyat dönemi kaldırıldı: ${period.title}.` }, tx);
+    });
 
     const updatedVilla = await getDemoVillaBySlug(input.slug, {
       companyId: period.villa.companyId,

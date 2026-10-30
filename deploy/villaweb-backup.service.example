@@ -1,0 +1,21 @@
+[Unit]
+Description=VillaWeb verified database and uploads backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=dgtl
+Group=dgtl
+WorkingDirectory=/home/dgtl/VillaWeb
+EnvironmentFile=/etc/villaweb/backup.env
+Environment=BACKUP_WRITES_PAUSED=1
+UMask=0077
+# Install only after replacing the actual app unit, user and paths.
+# Root privileges are used only to stop/restart the app service.
+ExecStartPre=+/usr/bin/systemctl stop villaweb.service
+ExecStart=/usr/bin/node /home/dgtl/VillaWeb/scripts/backup.mjs create
+ExecStopPost=+/usr/bin/systemctl start villaweb.service
+TimeoutStartSec=1h
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

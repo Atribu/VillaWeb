@@ -1,10 +1,12 @@
 import { RequestsManager } from "@/components/panel/requests-manager";
 import { getDemoRequests } from "@/lib/server/demo-operations-store";
+import { REQUEST_STATUS_OPTIONS } from "@/lib/demo-operations";
 
 export const dynamic = "force-dynamic";
 
-export default async function PanelRequestsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
+export default async function PanelRequestsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
+  const { q, status } = await searchParams;
+  const selectedStatus = REQUEST_STATUS_OPTIONS.find((option) => option.value === status)?.value ?? "ALL";
   const requests = await getDemoRequests();
 
   return (
@@ -21,7 +23,7 @@ export default async function PanelRequestsPage({ searchParams }: { searchParams
         </p>
       </div>
 
-      <RequestsManager key={q ?? ""} requests={requests} initialQuery={q} />
+      <RequestsManager key={`${q ?? ""}:${selectedStatus}`} requests={requests} initialQuery={q} initialStatus={selectedStatus} />
     </div>
   );
 }

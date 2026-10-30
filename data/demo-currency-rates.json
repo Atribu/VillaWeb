@@ -1,0 +1,35 @@
+[
+  {
+    "id": "currency-eur",
+    "code": "EUR",
+    "label": "Euro",
+    "buyRate": 53.08,
+    "sellRate": 53.23,
+    "sourceLabel": "TCMB Referans + Manuel Marj",
+    "status": "LIVE",
+    "updatedAt": "2026-10-29T10:14:40.673Z",
+    "companyId": "seed-company-villavera"
+  },
+  {
+    "id": "currency-usd",
+    "code": "USD",
+    "label": "Amerikan Dolari",
+    "buyRate": 48.42,
+    "sellRate": 48.56,
+    "sourceLabel": "TCMB Referans + Manuel Marj",
+    "status": "LIVE",
+    "updatedAt": "2026-05-18T08:05:00.000Z",
+    "companyId": "seed-company-villavera"
+  },
+  {
+    "id": "currency-gbp",
+    "code": "GBP",
+    "label": "Sterlin",
+    "buyRate": 61.15,
+    "sellRate": 61.42,
+    "sourceLabel": "Operasyon El Guncellemesi",
+    "status": "MANUAL",
+    "updatedAt": "2026-05-17T17:20:00.000Z",
+    "companyId": "seed-company-sahil"
+  }
+]

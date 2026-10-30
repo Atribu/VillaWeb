@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   formatPercent,
@@ -16,11 +17,12 @@ import { BookingConfirmationActions } from "@/components/panel/booking-confirmat
 type RequestsManagerProps = {
   requests: DemoRequest[];
   initialQuery?: string;
+  initialStatus?: RequestStatus | "ALL";
 };
 
-export function RequestsManager({ requests, initialQuery = "" }: RequestsManagerProps) {
+export function RequestsManager({ requests, initialQuery = "", initialStatus = "ALL" }: RequestsManagerProps) {
   const router = useRouter();
-  const [selectedStatus, setSelectedStatus] = useState<RequestStatus | "ALL">("ALL");
+  const [selectedStatus, setSelectedStatus] = useState<RequestStatus | "ALL">(initialStatus);
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"success" | "error">("success");
@@ -157,6 +159,7 @@ export function RequestsManager({ requests, initialQuery = "" }: RequestsManager
 
                 <div>
                   <h3 className="text-2xl font-semibold text-slate-900">{request.villaTitle}</h3>
+                  <Link href={`/panel/talepler/${encodeURIComponent(request.id)}`} className="panel-button-secondary mt-3">Talep detayı ve ekip notları</Link>
                   <p className="mt-2 text-sm text-slate-500">
                     {request.fullName} · {request.phone} · {request.email}
                   </p>

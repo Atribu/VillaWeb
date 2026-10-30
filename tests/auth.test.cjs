@@ -62,7 +62,7 @@ test('tokens reject corruption, expired/malformed claims and legacy cookies; pro
 
 test('every management API handler has an authorization guard before parsing input', () => {
   function walk(dir) { return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]); }
-  for (const file of walk(path.join(__dirname, '../src/app/api/demo')).filter(file => file.endsWith('route.ts'))) {
+  for (const file of ['demo', 'panel'].flatMap(root => walk(path.join(__dirname, '../src/app/api', root))).filter(file => file.endsWith('route.ts'))) {
     if (file.endsWith('/requests/route.ts') || file.endsWith('/coupons/validate/route.ts')) continue;
     const source = fs.readFileSync(file, 'utf8');
     const handlers = source.split(/export async function (?:POST|PUT|PATCH|DELETE)\([^\n]+\{/).slice(1);

@@ -26,13 +26,13 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
   }).format(new Date());
   return (
     <div className="panel-shell min-h-screen">
-      <a href="#panel-content" className="sr-only focus:not-sr-only focus:block focus:bg-white focus:p-3">Icerige gec</a>
+      <a href="#panel-content" className="sr-only focus:not-sr-only focus:block focus:bg-white focus:p-3">İçeriğe geç</a>
       <header className="panel-masthead">
         <Link href={getPanelHomePath(role)} className="flex min-w-0 items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#173c64] text-white">
             <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m3 11 9-8 9 8M5 10v11h14V10M9 21v-8h6v8" /></svg>
           </span>
-          <span className="min-w-0"><span className="block truncate text-lg font-semibold tracking-tight">BookToVilla</span><span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Yonetim merkezi</span></span>
+          <span className="min-w-0"><span className="block truncate text-lg font-semibold tracking-tight">BookToVilla</span><span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Yönetim merkezi</span></span>
         </Link>
         {hasPermission(role, "reservations") && <form action="/panel/talepler" method="GET" role="search" className="hidden max-w-md flex-1 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 md:flex">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0 text-slate-400" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
@@ -40,6 +40,7 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
           <button className="text-xs font-semibold text-slate-500" type="submit">Ara</button>
         </form>}
         <div className="flex items-center gap-3">
+          {hasPermission(role, "workspace") && <Link href="/panel/is-merkezi" className="text-xs font-semibold text-[#234e78]">İş merkezi</Link>}
           <Link href={siteHref} className="hidden text-sm font-medium text-slate-600 hover:text-slate-900 sm:block">{pickLocalized(locale, "Siteyi gor", "View website")}</Link>
           <LanguageSwitcher locale={locale} variant="light" compact />
           <details className="relative">
@@ -59,7 +60,7 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
         <PanelSidebar role={role} locale={locale} />
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-4 px-5 pt-5 text-xs text-slate-500 sm:px-8">
-            <span className="truncate">{role === "SUPER_ADMIN" ? "Tum firmalar" : companyName} <span className="mx-2 text-slate-300">/</span> Backoffice</span>
+            <span className="truncate"><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-[#4689b5]" aria-hidden="true" />{role === "SUPER_ADMIN" ? "Tüm firmalar · Platform yönetimi" : companyName} <span className="mx-2 text-slate-300">/</span> Yönetim paneli</span>
             <time className="shrink-0" suppressHydrationWarning>{date}</time>
           </div>
           <main id="panel-content" className="panel-main mx-auto max-w-[1600px] p-5 sm:p-8" tabIndex={-1}>{children}</main>

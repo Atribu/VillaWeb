@@ -5,6 +5,7 @@ export type DemoBranchStatus = "ACTIVE" | "PAUSED";
 export type DemoTeamUserStatus = "ACTIVE" | "INVITED" | "PASSIVE";
 export type DemoMessageStatus = "NEW" | "READ" | "RESOLVED" | "ARCHIVED";
 export type DemoRoleId =
+  | "OWNER"
   | "ADMIN"
   | "SALES"
   | "OPERATIONS"
@@ -340,6 +341,7 @@ export const seedDemoCommissionRates: DemoCommissionRateRecord[] = [
 ];
 
 const baseRoleMeta: Array<Omit<DemoRoleRecord, "userCount">> = [
+  { id: "OWNER", label: "Villa Sahibi", description: "Yalnızca atanmış villaların doluluk takvimini görür ve tarih kapatma talep eder.", permissionGroups: ["Atanmış villalar", "Tarih kapatma talebi"] },
   {
     id: "ADMIN",
     label: "Admin",

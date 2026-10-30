@@ -38,7 +38,7 @@ type UserDraftState = {
 };
 
 const USER_STATUSES: DemoTeamUserStatus[] = ["ACTIVE", "INVITED", "PASSIVE"];
-const USER_ROLES: DemoRoleId[] = ["ADMIN", "SALES", "OPERATIONS", "FINANCE", "CRM", "CONTENT"];
+const USER_ROLES: DemoRoleId[] = ["ADMIN", "SALES", "OPERATIONS", "FINANCE", "CRM", "CONTENT", "OWNER"];
 
 const INITIAL_CREATE_FORM: CreateUserFormState = {
   fullName: "",

@@ -22,6 +22,7 @@ const ALLOWED_ROLES = new Set<DemoRoleId>([
   "FINANCE",
   "CRM",
   "CONTENT",
+  "OWNER",
 ]);
 
 export async function PATCH(request: Request, context: RouteContext) {

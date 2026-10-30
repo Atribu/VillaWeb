@@ -1,5 +1,6 @@
 import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { randomUUID } from "node:crypto";
+import { recordSystemEvent } from "@/lib/server/system-health";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import {
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
   try {
     formData = await request.formData();
   } catch (error) {
+    await recordSystemEvent("VILLA_FORM_PARSE_FAILED", error);
     const accessError = panelAccessErrorResponse(error);
     if (accessError) return accessError;
     return createUnexpectedUploadErrorResponse(error, "FORM_DATA_PARSE");
@@ -80,6 +82,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await recordSystemEvent("VILLA_CREATE_FAILED", error);
     return createUnexpectedUploadErrorResponse(
       error,
       error instanceof DemoVillaUnexpectedError ? error.stage : "VILLA_CREATE",
@@ -95,6 +98,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const accessError = panelAccessErrorResponse(error);
     if (accessError) return accessError;
+    await recordSystemEvent("VILLA_REVALIDATE_FAILED", error);
     return createUnexpectedUploadErrorResponse(error, "VILLA_REVALIDATE");
   }
 

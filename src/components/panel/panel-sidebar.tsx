@@ -122,6 +122,12 @@ export function PanelSidebar({ role, locale }: { role: AppRole; locale: AppLocal
   const navigation = getLocalizedPanelNavigation(role, locale);
   const [manualGroup, setManualGroup] = useState<{ pathname: string; id: string }>();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const groups = [
+    { label: locale === "en" ? "Daily workspace" : "Günlük işler", ids: ["dashboard", "workspace", "owner", "villas", "reservations", "operations"] },
+    { label: locale === "en" ? "Business management" : "İşletme yönetimi", ids: ["finance", "crm", "websites", "calendar-sync"] },
+    { label: locale === "en" ? "Organization & settings" : "Organizasyon ve ayarlar", ids: ["companies", "users-messages", "definitions", "settings", "external-links"] },
+  ];
   const links = navigation.flatMap((entry) => entry.type === "link" ? [entry] : entry.items);
   const activeHref = links.filter((item) => isPathActive(pathname, item.href))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
@@ -129,32 +135,42 @@ export function PanelSidebar({ role, locale }: { role: AppRole; locale: AppLocal
     && entry.items.some((item) => item.href === activeHref))?.id;
   const openGroup = manualGroup?.pathname === pathname ? manualGroup.id : activeGroupId;
   return (
-    <aside className="panel-navigation">
+    <aside className="panel-navigation" data-collapsed={collapsed}>
       <button type="button" onClick={() => setMobileOpen(!mobileOpen)} aria-expanded={mobileOpen} aria-controls="panel-navigation-links"
         className="flex w-full items-center justify-between text-sm font-semibold text-slate-700 lg:hidden">
-        <span>Panel menusu</span><span aria-hidden="true">{mobileOpen ? "Kapat" : "Ac"}</span>
+        <span>{locale === "en" ? "Navigation" : "Panel menüsü"}</span><span aria-hidden="true">{mobileOpen ? "−" : "+"}</span>
       </button>
       <nav id="panel-navigation-links" aria-label="Panel" className={cn(mobileOpen ? "block" : "hidden", "mt-4 lg:mt-0 lg:block")}>
-        <p className="mb-4 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Calisma alani</p>
-        <div className="space-y-1">
-          {navigation.map((entry) => {
+        <div className="mb-5 hidden items-center justify-between px-3 lg:flex">
+          <span className="panel-nav-label text-xs font-semibold text-slate-500">{locale === "en" ? "Workspace" : "Çalışma alanı"}</span>
+          <button type="button" className="panel-nav-collapse" onClick={() => setCollapsed(!collapsed)} aria-expanded={!collapsed} aria-label={collapsed ? "Menüyü genişlet" : "Menüyü daralt"} title={collapsed ? "Menüyü genişlet" : "Menüyü daralt"}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d={collapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"}/></svg>
+          </button>
+        </div>
+        {groups.map((group) => {
+          const entries = group.ids.flatMap((id) => navigation.filter((entry) => entry.id === id));
+          if (!entries.length) return null;
+          return <div key={group.label} className="panel-nav-group">
+            <p className="panel-nav-heading">{group.label}</p>
+            <div className="space-y-1">
+          {entries.map((entry) => {
             const active = entry.type === "link" ? activeHref === entry.href : activeGroupId === entry.id;
             const classes = cn("flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-[13px] font-semibold transition",
               active ? "bg-[#eaf1f7] text-[#173c64]" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800");
             if (entry.type === "link") return (
-              <Link key={entry.id} href={entry.href} aria-current={active ? "page" : undefined} className={classes} onClick={() => setMobileOpen(false)}>
-                <PanelNavIcon name={entry.icon} className="shrink-0" /><span>{entry.label}</span>
+              <Link key={entry.id} href={entry.href} title={entry.label} aria-label={entry.label} aria-current={active ? "page" : undefined} className={classes} onClick={() => setMobileOpen(false)}>
+                <PanelNavIcon name={entry.icon} className="shrink-0" /><span className="panel-nav-label">{entry.label}</span>
               </Link>
             );
             const open = openGroup === entry.id;
             return (
               <div key={entry.id}>
-                <button type="button" className={classes} aria-expanded={open} aria-controls={`nav-${entry.id}`} onClick={() => setManualGroup({ pathname, id: open ? "" : entry.id })}>
-                  <PanelNavIcon name={entry.icon} className="shrink-0" /><span className="flex-1">{entry.label}</span>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" className={open ? "rotate-180" : ""} aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg>
+                <button type="button" className={classes} title={entry.label} aria-label={entry.label} aria-expanded={open && !collapsed} aria-controls={`nav-${entry.id}`} onClick={() => { setCollapsed(false); setManualGroup({ pathname, id: open && !collapsed ? "" : entry.id }); }}>
+                  <PanelNavIcon name={entry.icon} className="shrink-0" /><span className="panel-nav-label flex-1">{entry.label}</span>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" className={cn("panel-nav-label", open && "rotate-180")} aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg>
                 </button>
-                {open ? <div id={`nav-${entry.id}`} className="my-2 ml-5 space-y-1 border-l border-slate-200 pl-4">
-                  {entry.items.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}
+                {open ? <div id={`nav-${entry.id}`} className="panel-nav-children my-2 ml-5 space-y-1 border-l border-slate-200 pl-4">
+                  {entry.items.filter((item) => entry.id !== "definitions" || item.href !== "/panel/villalar").map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}
                     aria-current={activeHref === item.href ? "page" : undefined}
                     className={cn("block rounded-md px-3 py-2 text-[13px] transition", activeHref === item.href ? "bg-[#f0f5f9] font-semibold text-[#173c64]" : "text-slate-500 hover:text-slate-900")}>
                     {item.label}
@@ -163,8 +179,10 @@ export function PanelSidebar({ role, locale }: { role: AppRole; locale: AppLocal
               </div>
             );
           })}
-        </div>
-        <div className="mt-8 border-t border-slate-100 px-3 pt-5"><p className="text-xs font-semibold text-slate-600">BookToVilla</p><p className="mt-1 text-[11px] text-slate-400">Villa ve rezervasyon yonetimi</p></div>
+            </div>
+          </div>;
+        })}
+        <div className="panel-nav-label mt-8 border-t border-slate-100 px-3 pt-5"><p className="text-xs font-semibold text-slate-600">BookToVilla</p><p className="mt-1 text-[11px] text-slate-400">Villa ve rezervasyon yönetimi</p></div>
       </nav>
     </aside>
   );

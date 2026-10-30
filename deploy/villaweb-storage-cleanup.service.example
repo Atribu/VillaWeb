@@ -1,0 +1,11 @@
+[Unit]
+Description=Remove expired VillaWeb staging files and old health events
+
+[Service]
+Type=oneshot
+User=dgtl
+Group=dgtl
+WorkingDirectory=/home/dgtl/VillaWeb
+EnvironmentFile=/etc/villaweb/backup.env
+ExecStart=/usr/bin/node /home/dgtl/VillaWeb/scripts/backup.mjs cleanup
+Nice=15

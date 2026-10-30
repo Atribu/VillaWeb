@@ -1,0 +1,22 @@
+"use client";
+import Link from "next/link";
+import { useState } from "react";
+import { calendarDays } from "@/lib/panel-workspace";
+import { PanelDialog } from "@/components/panel/panel-dialog";
+import type { AvailabilityRange } from "@/lib/villa-catalog";
+
+export type CalendarVilla = { id: string; title: string; slug: string; company: string; location: string; ranges: AvailabilityRange[] };
+export function PortfolioCalendar({ villas, month, today, canEdit, canSeeRequests }: { villas: CalendarVilla[]; month: string; today: string; canEdit: boolean; canSeeRequests: boolean }) {
+  const [query, setQuery] = useState(""); const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<{ villa: CalendarVilla; day: string } | null>(null);
+  const days = calendarDays(month);
+  const matches = villas.filter(villa => `${villa.title} ${villa.location} ${villa.company}`.toLocaleLowerCase("tr").includes(query.toLocaleLowerCase("tr")));
+  const totalPages = Math.max(1, Math.ceil(matches.length / 25)); const currentPage = Math.min(page, totalPages);
+  const visible = matches.slice((currentPage - 1) * 25, currentPage * 25);
+  const selectedRanges = selected?.villa.ranges.filter(row => row.startDate <= selected.day && row.endDate > selected.day) ?? [];
+  return <div className="work-stack"><div className="work-toolbar"><input value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} placeholder="Villa, lokasyon veya firma ara" aria-label="Takvimde villa ara" /><span>{matches.length} villa</span><div className="work-legend"><span className="is-reserved">Rezervasyon</span><span className="is-maintenance">Bakım</span><span className="is-unavailable">Kapalı / iCal</span></div></div>
+    <div className="portfolio-scroll" tabIndex={0} role="region" aria-label="Villa doluluk takvimi, yatay kaydırılabilir"><table className="portfolio-calendar"><thead><tr><th scope="col">Villa / Gün</th>{days.map(day => <th scope="col" key={day} className={day === today ? "is-today" : ""}><span>{day.slice(-2)}</span><small>{new Date(`${day}T12:00:00Z`).toLocaleDateString("tr-TR", { weekday: "short" })}</small></th>)}</tr></thead><tbody>{visible.map(villa => <tr key={villa.id}><th scope="row"><strong>{villa.title}</strong><small>{villa.location} · {villa.company}</small></th>{days.map(day => { const ranges = villa.ranges.filter(row => day >= row.startDate && day < row.endDate); const state = ranges.some(row => row.status === "RESERVED") ? "reserved" : ranges.some(row => row.status === "MAINTENANCE") ? "maintenance" : ranges.length ? "unavailable" : "free"; const departure = villa.ranges.some(row => row.endDate === day && row.status === "RESERVED"); return <td key={day} className={day === today ? "is-today" : ""}><button className={`calendar-cell is-${state}`} title={`${villa.title} · ${day} · ${ranges.length ? ranges.map(row => row.label).join(", ") : "Müsait"}${departure ? " · Çıkış" : ""}`} aria-label={`${villa.title}, ${day}, ${ranges.length ? "Dolu" : "Müsait"}${departure ? ", çıkış" : ""}`} onClick={() => setSelected({ villa, day })}>{ranges.some(row => row.startDate === day) ? "G" : departure ? "Ç" : ranges.length ? "●" : "·"}</button></td>; })}</tr>)}</tbody></table></div>
+    {!visible.length && <p className="work-empty">Aramanıza uygun villa bulunamadı.</p>}<div className="work-toolbar"><button className="panel-button-secondary" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Önceki</button><span>{currentPage} / {totalPages}</span><button className="panel-button-secondary" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>Sonraki</button><p className="work-muted">G: blok başlangıcı · Ç: rezervasyon çıkışı. Bitiş günü yeniden müsaittir.</p></div>
+    <PanelDialog open={Boolean(selected)} title={selected ? `${selected.villa.title} · ${selected.day}` : "Tarih"} onClose={() => setSelected(null)}>{selected && <div className="work-stack">{selectedRanges.length ? selectedRanges.map(row => <div key={row.id}><h3>{row.label}</h3><p>{row.startDate} → {row.endDate} (bitiş hariç)</p>{row.sourceRequestId && canSeeRequests && <Link className="panel-button-secondary" href={`/panel/talepler/${encodeURIComponent(row.sourceRequestId)}`}>Rezervasyonu aç</Link>}</div>) : <p>Bu gece için kayıtlı doluluk yok.</p>}{canEdit && <Link className="panel-button-primary" href={`/panel/villalar/${encodeURIComponent(selected.villa.slug)}/uygunluk`}>Müsaitliği yönet</Link>}</div>}</PanelDialog>
+  </div>;
+}

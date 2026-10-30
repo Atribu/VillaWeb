@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 
-const sans = Manrope({ subsets: ["latin", "latin-ext"], variable: "--demo-sans", display: "swap" });
-const serif = Cormorant_Garamond({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "600"], variable: "--demo-serif", display: "swap" });
+const sans = localFont({ src: "../../assets/fonts/manrope.woff2", weight: "200 800", style: "normal", variable: "--demo-sans", display: "swap" });
+const serif = localFont({ src: "../../assets/fonts/cormorant-normal.woff2", weight: "400 600", style: "normal", variable: "--demo-serif", display: "swap" });
 
 export const metadata: Metadata = {
   title: { absolute: "BookToVilla | Tasarım Stüdyosu" },

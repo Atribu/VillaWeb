@@ -1,0 +1,87 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const sharp = require('sharp');
+module.exports = async function ({ call, cookie, base, directory, companyId, other, villa, booking }) {
+  const api = (name, body, role = 'ADMIN', company = companyId) => call(`/api/panel/workspace/${name}`, body, 'POST', cookie(role, company));
+  const staffId = `test-CONTENT-${companyId}`, ownerId = `test-OWNER-${companyId}`;
+  const stripScripts = html => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+  let response = await api('tasks', { companyId, title: 'TASK_MARKER', detail: 'Only this company', dueAt: '2098-01-01T10:00:00Z', assigneeId: staffId, status: 'OPEN' });
+  assert.equal(response.status, 200, response.text); const task = response.json.result;
+  const unrelatedWork = (await call('/panel/is-merkezi', undefined, 'GET', cookie('FINANCE'))).text;
+  assert.doesNotMatch(unrelatedWork, /TASK_MARKER/);
+  assert.equal((await api('tasks', { ...task.data, id: task.subjectId, version: 0, companyId, assigneeId: staffId })).status, 409);
+  assert.equal((await api('tasks', { companyId: other.companyId, title: 'x', dueAt: '2098-01-01T10:00:00Z', assigneeId: staffId })).status, 403);
+  assert.equal((await api('tasks', {}, 'OWNER')).status, 403);
+  assert.equal((await api('tasks', { companyId, title: 'x', dueAt: '2098-01-01T10:00:00Z', assigneeId: `test-CONTENT-${other.companyId}` })).status, 400);
+  response = await api('followups', { requestId: booking.id, version: 0, assigneeId: `test-SALES-${companyId}`, nextContactAt: '2098-01-01T10:00:00Z', lastContactAt: '', note: 'FOLLOWUP_PRIVATE' }, 'SALES');
+  assert.equal(response.status, 200, response.text);
+  assert.equal((await api('followups', { requestId: booking.id }, 'ADMIN', other.companyId)).status, 404);
+  response = await api('owner-access', { villaId: villa.id, userId: ownerId, active: true, version: 0 });
+  assert.equal(response.status, 200, response.text); const access = response.json.result;
+  assert.equal((await api('owner-access', { villaId: other.id, userId: ownerId, active: true, version: 0 })).status, 404);
+  assert.equal((await api('owner-request', { villaId: other.id, startDate: '2098-05-01', endDate: '2098-05-04' }, 'OWNER')).status, 403);
+  response = await api('owner-request', { villaId: villa.id, startDate: '2098-05-01', endDate: '2098-05-04', reason: 'Owner stay' }, 'OWNER');
+  assert.equal(response.status, 200, response.text); const closure = response.json.result;
+  const readVillas = async () => JSON.parse(await fs.readFile(path.join(directory, 'demo-villas.json'), 'utf8'));
+  assert.equal((await readVillas()).find(v => v.id === villa.id).availabilityRanges.some(r => r.id === `owner-${closure.id}`), false, 'Pending requests must not close availability');
+  assert.equal((await api('owner-review', { id: closure.id, version: closure.version, status: 'APPROVED' }, 'OWNER')).status, 403);
+  assert.equal((await api('owner-review', { id: closure.id, status: 'APPROVED' })).status, 409);
+  response = await api('owner-review', { id: closure.id, version: closure.version, status: 'APPROVED' });
+  assert.equal(response.status, 200, response.text);
+  const blocked = (await readVillas()).find(v => v.id === villa.id).availabilityRanges.find(r => r.id === `owner-${closure.id}`);
+  assert.equal(blocked.endDate, '2098-05-04');
+  assert.equal((await api('owner-review', { id: closure.id, version: closure.version, status: 'APPROVED' })).status, 409);
+  const ownerPage = await call('/panel/villa-sahibi', undefined, 'GET', cookie('OWNER'));
+  assert.equal(ownerPage.status, 200, ownerPage.text.slice(0, 500));
+  assert.match(stripScripts(ownerPage.text), /Tarih kapatma isteği/);
+  assert.doesNotMatch(stripScripts(ownerPage.text), /PRIVATE_OWNER_MARKER|PRIVATE_SUPPLIER_MARKER|FOLLOWUP_PRIVATE|TASK_MARKER/);
+  response = await api('owner-access', { villaId: villa.id, userId: ownerId, active: false, version: access.version });
+  assert.equal(response.status, 200, response.text);
+  assert.equal((await api('owner-request', { villaId: villa.id, startDate: '2098-06-01', endDate: '2098-06-04' }, 'OWNER')).status, 403);
+
+  for (const route of ['/panel/is-merkezi', '/panel/satis-takibi', '/panel/takvim?month=2028-02', '/panel/villa-sahipleri', '/panel/ayarlar/yayin-kontrolu']) {
+    const page = await call(route, undefined, 'GET', cookie('ADMIN')); assert.equal(page.status, 200, `${route}: ${page.text.slice(0, 400)}`);
+    const foreign = stripScripts((await call(route, undefined, 'GET', cookie('ADMIN', other.companyId))).text);
+    assert.doesNotMatch(foreign, /TASK_MARKER|FOLLOWUP_PRIVATE/);
+  }
+  assert.equal((await call('/panel/ayarlar/sistem-sagligi', undefined, 'GET')).status, 200);
+  const calendar = await call('/panel/takvim?month=2028-02', undefined, 'GET', cookie('SALES'));
+  assert.match(stripScripts(calendar.text), /Portföy doluluk takvimi/);
+
+  const image = await sharp({ create: { width: 512, height: 512, channels: 3, background: '#719bad' } }).jpeg().toBuffer();
+  const form = new FormData(); form.set('companyId', companyId); form.set('image', new Blob([image], { type: 'image/jpeg' }), 'test.jpg');
+  response = await call('/api/panel/uploads/images', form, 'POST', cookie('STAFF'));
+  assert.equal(response.status, 200, response.text); const receipt = response.json;
+  const data = JSON.parse(Buffer.from(receipt.token.split('.')[0], 'base64url').toString());
+  const staged = path.join(directory, 'runtime', 'staged', `${data.id}.webp`);
+  assert.equal((await sharp(staged).metadata()).format, 'webp');
+  assert.equal(data.userId, `test-STAFF-${companyId}`);
+  assert.equal((await call('/api/panel/uploads/images', form, 'POST', cookie('OWNER'))).status, 403);
+  form.set('companyId', other.companyId); assert.equal((await call('/api/panel/uploads/images', form, 'POST', cookie('STAFF'))).status, 403);
+  const invalid = new FormData(); invalid.set('companyId', companyId); invalid.set('image', new Blob(['not an image'], { type: 'image/jpeg' }), 'bad.jpg');
+  assert.equal((await call('/api/panel/uploads/images', invalid, 'POST', cookie('STAFF'))).status, 400);
+
+  const update = new FormData(); const beforeUpload = (await readVillas()).find(v => v.id === villa.id);
+  for (const [key, value] of Object.entries(beforeUpload)) if (typeof value === 'string' || typeof value === 'number') update.set(key, String(value));
+  update.set('stagedImages', receipt.token);
+  assert.equal((await call(`/api/demo/villas/${villa.slug}`, update, 'PUT', cookie('ADMIN'))).status, 400, 'Receipts must not cross users');
+  response = await call(`/api/demo/villas/${villa.slug}`, update, 'PUT', cookie('STAFF'));
+  assert.equal(response.status, 200, response.text);
+  const addedUrl = response.json.villa.imageUrls.at(-1);
+  const finalBytes = await fs.readFile(path.join(__dirname, '..', 'public', addedUrl));
+  assert.deepEqual(finalBytes, await fs.readFile(staged), 'Finalization must not convert or watermark twice');
+  assert.equal((await call(addedUrl, undefined, 'GET', '')).status, 200, 'Finalized upload is served');
+  await fs.writeFile(path.join(directory, 'demo-villas.json'), JSON.stringify((await readVillas()).map(v => v.id === villa.id ? beforeUpload : v)));
+  await fs.rm(path.join(__dirname, '..', 'public', addedUrl));
+
+  response = await api('publication', { companyId, version: 0, required: ['license', 'licensePdf'] });
+  assert.equal(response.status, 200, response.text); const policy = response.json.result;
+  const rows = await readVillas(); const original = rows.find(v => v.id === villa.id);
+  await fs.writeFile(path.join(directory, 'demo-villas.json'), JSON.stringify(rows.map(v => v.id === villa.id ? { ...v, tourismLicenseNumber: '', tourismLicensePdfUrl: undefined, status: 'PAUSED' } : v)));
+  response = await call(`/api/demo/villas/${villa.slug}`, { status: 'ACTIVE' }, 'PATCH', cookie('STAFF'));
+  assert.equal(response.status, 400, response.text); assert.match(response.text, /Eksik alanlar/);
+  await api('publication', { companyId, version: policy.version, required: [] });
+  await fs.writeFile(path.join(directory, 'demo-villas.json'), JSON.stringify(rows));
+  console.log('PASS workspace tasks/tenant scope, sales follow-ups, owner grants/privacy/approval/revocation, calendar, publication enforcement and isolated JPEG staging');
+};

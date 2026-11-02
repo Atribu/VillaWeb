@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getUserSession } from "@/lib/auth/server-session";
 import { hasPermission, type PanelPermission } from "@/lib/auth/permissions";
 import { PanelAccessError } from "@/lib/auth/access-error";
+import { assertCompanyModule } from "@/lib/server/company-platform";
 
 export function panelAccessErrorResponse(error: unknown) {
   return error instanceof PanelAccessError ? NextResponse.json({ error: error.message }, { status: 403 }) : null;
@@ -23,8 +24,10 @@ export async function authorizePanelApi(request: Request, permission: PanelPermi
     const session = await getUserSession();
     if (!session) return NextResponse.json({ error: "Oturum acmaniz gerekiyor." }, { status: 401 });
     if (!hasPermission(session.role, permission)) return NextResponse.json({ error: "Bu islem icin yetkiniz bulunmuyor." }, { status: 403 });
+    await assertCompanyModule(session, permission);
     return null;
   } catch (error) {
+    if (error instanceof PanelAccessError) return panelAccessErrorResponse(error);
     console.error("Session verification unavailable", error instanceof Error ? error.name : "UnknownError");
     return NextResponse.json({ error: "Oturum dogrulanamadi. Lutfen tekrar deneyin." }, { status: 503 });
   }

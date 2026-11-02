@@ -1,5 +1,6 @@
 import "server-only";
 import { writePanelAudit } from "@/lib/server/panel-audit";
+import { readBookingShare } from "@/lib/server/portfolio-sharing";
 
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
@@ -17,6 +18,10 @@ export async function applyBookingStatus(tx: Prisma.TransactionClient, request: 
   const nextStatus = mapDemoStatusToBooking(status);
 
   if (status === "APPROVED") {
+    if (current.portfolioShareId && current.status !== "APPROVED") {
+      const share = await readBookingShare(current.portfolioShareId, current.companyId, current.villaId, tx);
+      if (share.version !== current.portfolioShareVersion) throw new BookingWorkflowError("Paylaşım koşulları değişmiş. Güncel koşullarla yeni talep oluşturun.");
+    }
     const startsAt = new Date(`${request.checkIn}T00:00:00.000Z`);
     const endsAt = new Date(`${request.checkOut}T00:00:00.000Z`);
     const conflict = await tx.villaAvailabilityBlock.findFirst({
@@ -37,7 +42,7 @@ export async function applyBookingStatus(tx: Prisma.TransactionClient, request: 
       create: {
         id: `reservation-${request.id}`, villaId: current.villaId,
         startsAt, endsAt, blockType: "RESERVED", sourceRequestId: request.id,
-        note: `Rezervasyon: ${request.fullName}`,
+        note: current.portfolioShareId ? "İş ortağı rezervasyonu" : `Rezervasyon: ${request.fullName}`,
       },
     });
     const villa = await tx.villa.findUniqueOrThrow({ where: { id: current.villaId } });
@@ -50,7 +55,7 @@ export async function applyBookingStatus(tx: Prisma.TransactionClient, request: 
         scheduledAt: new Date(`${task.scheduledDate}T12:00:00.000Z`),
         scheduledTimeLabel: task.taskType === "CHECK_IN" ? villa.checkInTime ?? "16:00"
           : task.taskType === "CHECK_OUT" ? villa.checkOutTime ?? "10:00" : task.scheduledTimeLabel,
-        assigneeLabel: task.assignee, supplierName: villa.supplierName ?? task.supplierName,
+        assigneeLabel: task.assignee, supplierName: current.portfolioShareId ? null : villa.supplierName ?? task.supplierName,
         sourceLabel: task.source,
       })),
     });

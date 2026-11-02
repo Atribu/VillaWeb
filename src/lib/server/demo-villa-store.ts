@@ -1,8 +1,13 @@
 import "server-only";
+import { assertCompanyCapacity, lockCompany } from "@/lib/server/company-platform";
+import { getPublicSharedVillas } from "@/lib/server/portfolio-sharing";
 import { writePanelAudit } from "@/lib/server/panel-audit";
 import { readStagedImages, StagedVillaImage } from "@/lib/server/staged-villa-images";
 import { assertPublicationReady } from "@/lib/server/publication-policy";
 import { PanelRecordError } from "@/lib/panel-record-tools";
+import { PanelAccessError } from "@/lib/auth/access-error";
+import { readPlatformLocal } from "@/lib/server/platform-local";
+import type { PortfolioShare } from "@/lib/server/portfolio-sharing";
 
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -89,7 +94,7 @@ async function runVillaCreateStep<T>(stage: string, action: () => Promise<T>) {
   try {
     return await action();
   } catch (error) {
-    if (error instanceof DemoVillaStoreError || error instanceof DemoVillaUnexpectedError) {
+    if (error instanceof DemoVillaStoreError || error instanceof DemoVillaUnexpectedError || error instanceof PanelAccessError) {
       throw error;
     }
 
@@ -728,6 +733,9 @@ function mapVillaAmenity(item: {
 }
 
 function mapVillaPricingPeriod(rule: {
+  weekendPercent?: Prisma.Decimal;
+  earlyBookingDays?: number;
+  earlyBookingPercent?: Prisma.Decimal;
   id: string;
   title: string;
   startsAt: Date;
@@ -738,6 +746,9 @@ function mapVillaPricingPeriod(rule: {
   isActive: boolean;
 }): VillaPricingPeriod {
   return {
+    weekendPercent: decimalToNumber(rule.weekendPercent),
+    earlyBookingDays: rule.earlyBookingDays ?? 0,
+    earlyBookingPercent: decimalToNumber(rule.earlyBookingPercent),
     id: rule.id,
     title: rule.title,
     startDate: dateKey(rule.startsAt),
@@ -957,6 +968,10 @@ export async function getDemoVillas(input?: DemoVillaQueryInput) {
       });
     },
   );
+  if (input?.publicSite && input.includeInactive === false) {
+    const companyId = await resolveCatalogCompanyId(input);
+    return [...results.map(toPublicVilla), ...await getPublicSharedVillas(companyId!)];
+  }
   return input?.includeInactive === false ? results.map(toPublicVilla) : results;
 }
 
@@ -1054,6 +1069,7 @@ export async function createDemoVillaFromFormData(
   const poolTypeEn = getTextField(formData, "poolTypeEn");
   const featured = getTextField(formData, "featured") === "on";
   const status = parseVillaStatus(getTextField(formData, "status"));
+  if (status === "ACTIVE") await assertCompanyCapacity(companyId, "activeVillas");
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File && value.size > 0);
@@ -1219,8 +1235,9 @@ export async function createDemoVillaFromFormData(
     ensureVillaRegion(companyId, city, district),
   );
 
-  const villa = await runVillaCreateStep("VILLA_DB_CREATE", async () =>
-    db.villa
+  const villa = await runVillaCreateStep("VILLA_DB_CREATE", async () => db.$transaction(async tx => {
+    if (status === "ACTIVE") await assertCompanyCapacity(companyId, "activeVillas", tx);
+    return tx.villa
       .create({
         data: {
           companyId,
@@ -1314,7 +1331,8 @@ export async function createDemoVillaFromFormData(
           },
         },
       })
-      .catch(mapPrismaVillaCreateError),
+      .catch(mapPrismaVillaCreateError);
+    }),
   );
 
   return {
@@ -1515,6 +1533,7 @@ export async function updateDemoVillaFromFormData(
 
   async function updateFallbackVillaRecord() {
     const current = await getFallbackVillaForMutation(slug, input);
+    if (status === "ACTIVE" && current.status !== "ACTIVE") await assertCompanyCapacity(current.companyId, "activeVillas");
     const fallbackVillas = await getFallbackVillas(current.companyId);
     const duplicate = fallbackVillas.find(
       (villa) =>
@@ -1673,8 +1692,10 @@ export async function updateDemoVillaFromFormData(
     const regionId = await ensureVillaRegion(current.companyId, city, district);
 
     await db.$transaction(async tx => {
+    await lockCompany(tx, current.companyId);
     await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${current.id} FOR UPDATE`;
     const previous = await tx.villa.findUniqueOrThrow({ where: { id: current.id } });
+    if (status === "ACTIVE" && previous.status !== "ACTIVE") await assertCompanyCapacity(current.companyId, "activeVillas", tx);
     await tx.villa.update({
       where: { id: current.id },
       data: {
@@ -1809,6 +1830,7 @@ export async function updateDemoVillaStatus(
   }
   async function updateFallbackStatus() {
     const villa = await getFallbackVillaForMutation(slug, input);
+    if (status === "ACTIVE" && villa.status !== "ACTIVE") await assertCompanyCapacity(villa.companyId, "activeVillas");
     const updatedVilla = await updateFallbackVillaStatus(villa.companyId, slug, status);
 
     if (!updatedVilla) {
@@ -1826,8 +1848,10 @@ export async function updateDemoVillaStatus(
   try {
     const villa = await resolveDbVillaForMutation(slug, input);
     const updated = await db.$transaction(async tx => {
+    await lockCompany(tx, villa.companyId);
     await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${villa.id} FOR UPDATE`;
     const previous = await tx.villa.findUniqueOrThrow({ where: { id: villa.id } });
+    if (status === "ACTIVE" && previous.status !== "ACTIVE") await assertCompanyCapacity(villa.companyId, "activeVillas", tx);
     const updated = await tx.villa.update({
       where: { id: villa.id },
       data: { status },
@@ -1944,6 +1968,9 @@ async function removeVillaUploadDirectory(slug: string) {
 export async function deleteDemoVilla(slug: string, input?: { companyId?: string | null }) {
   async function deleteFallbackRecord() {
     const villa = await getFallbackVillaForMutation(slug, input);
+    const shares = (await readPlatformLocal<PortfolioShare>("portfolio-shares")).filter(row => row.villaId === villa.id);
+    // Preserve counterparties' reservations even after the sharing grant is revoked.
+    if (shares.length) throw new DemoVillaStoreError("Portföy paylaşımı bulunan villa silinemez. Pasife alın veya arşivleyin.");
     const deleted = await deleteFallbackVilla(villa.companyId, slug);
 
     if (!deleted) {
@@ -1962,8 +1989,10 @@ export async function deleteDemoVilla(slug: string, input?: { companyId?: string
   try {
     const villa = await resolveDbVillaForMutation(slug, input);
 
-    await db.villa.delete({
-      where: { id: villa.id },
+    await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${villa.id} FOR UPDATE`;
+      if (await tx.villaShare.count({ where: { villaId: villa.id } })) throw new DemoVillaStoreError("Portföy paylaşımı bulunan villa silinemez. Pasife alın veya arşivleyin.");
+      await tx.villa.delete({ where: { id: villa.id } });
     });
 
     await removeVillaUploadDirectory(slug);
@@ -2011,6 +2040,9 @@ export async function addDemoVillaPricingPeriod(input: PricingPeriodInput & { sl
         });
         validate(periods.map(mapVillaPricingPeriod));
         const data = {
+          weekendPercent: input.weekendPercent ?? 0,
+          earlyBookingDays: input.earlyBookingDays ?? 0,
+          earlyBookingPercent: input.earlyBookingPercent ?? 0,
           title: input.title.trim(),
           startsAt: new Date(`${input.startDate}T00:00:00.000Z`),
           endsAt: new Date(`${input.endDate}T23:59:59.999Z`),
@@ -2041,6 +2073,9 @@ export async function addDemoVillaPricingPeriod(input: PricingPeriodInput & { sl
           ...periods.filter((period) => period.id !== input.id),
           {
             id: input.id ?? `pricing-${randomUUID()}`,
+            weekendPercent: input.weekendPercent ?? 0,
+            earlyBookingDays: input.earlyBookingDays ?? 0,
+            earlyBookingPercent: input.earlyBookingPercent ?? 0,
             title: input.title.trim(),
             startDate: input.startDate,
             endDate: input.endDate,

@@ -1,6 +1,6 @@
 export const appRoles = ["SUPER_ADMIN", "ADMIN", "STAFF", "SALES", "OPERATIONS", "FINANCE", "CRM", "CONTENT", "OWNER"] as const;
 export type AppRole = (typeof appRoles)[number];
-export type PanelPermission = "companies" | "users" | "settings" | "websites" | "definitions" | "external-links" | "villas" | "pricing" | "reservations" | "operations" | "finance" | "crm" | "calendar" | "dashboard" | "reports" | "workspace" | "owner";
+export type PanelPermission = "companies" | "users" | "settings" | "websites" | "definitions" | "external-links" | "villas" | "pricing" | "reservations" | "operations" | "finance" | "crm" | "calendar" | "dashboard" | "reports" | "workspace" | "owner" | "sharing";
 
 const permissions: Record<AppRole, readonly PanelPermission[]> = {
   SUPER_ADMIN: ["companies", "users", "settings", "websites", "definitions", "external-links", "villas", "pricing", "reservations", "operations", "finance", "crm", "calendar", "dashboard", "reports"],
@@ -19,6 +19,7 @@ export function isAppRole(value: unknown): value is AppRole {
 }
 
 export function hasPermission(role: AppRole, permission: PanelPermission) {
+  if (permission === "sharing") return role === "SUPER_ADMIN" || role === "ADMIN";
   if (permission === "workspace") return isAppRole(role) && role !== "OWNER";
   return permissions[role]?.includes(permission) ?? false;
 }
@@ -34,6 +35,7 @@ export function panelPathPermission(pathname: string): PanelPermission | null {
   const section = pathname.split("/")[2];
   if (pathname.startsWith("/panel/ayarlar/sistem-sagligi")) return "companies";
   const sections: Record<string, PanelPermission> = {
+    kurulum: "websites", paketler: "companies", guvenlik: "companies", "fiyat-takvimi": "pricing", donusum: "reports", "portfoy-paylasimi": "sharing",
     firmalar: "companies", personel: "users", "kullanicilar-mesajlar": "users", ayarlar: "settings",
     "web-siteleri": "websites", tanimlamalar: "definitions", "diger-linkler": "external-links",
     villalar: "villas", fiyatlar: "pricing", talepler: "reservations", rezervasyonlar: "reservations",

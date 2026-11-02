@@ -7,6 +7,8 @@ import { type PanelIconName } from "@/lib/auth/panel-access";
 import type { AppRole } from "@/lib/auth/users";
 import type { AppLocale } from "@/lib/i18n";
 import { getLocalizedPanelNavigation } from "@/lib/panel-i18n";
+import { panelPathPermission } from "@/lib/auth/permissions";
+import { PACKAGE_MODULES, type PackageModule } from "@/lib/platform-features";
 
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -117,9 +119,14 @@ function PanelNavIcon({ name, className }: { name: PanelIconName; className?: st
   return null;
 }
 
-export function PanelSidebar({ role, locale }: { role: AppRole; locale: AppLocale }) {
+export function PanelSidebar({ role, locale, enabledModules = [...PACKAGE_MODULES] }: { role: AppRole; locale: AppLocale; enabledModules?: PackageModule[] }) {
   const pathname = usePathname();
-  const navigation = getLocalizedPanelNavigation(role, locale);
+  function enabled(href: string) {
+    const permission = panelPathPermission(href) as PackageModule;
+    return role === "SUPER_ADMIN" || !PACKAGE_MODULES.includes(permission) || enabledModules.includes(permission);
+  }
+  const navigation = getLocalizedPanelNavigation(role, locale).map(entry => entry.type === "group" ? { ...entry, items: entry.items.filter(item => enabled(item.href)) } : entry)
+    .filter(entry => entry.type === "link" ? enabled(entry.href) : entry.items.length > 0);
   const [manualGroup, setManualGroup] = useState<{ pathname: string; id: string }>();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);

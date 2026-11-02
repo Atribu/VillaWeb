@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PanelRecordError } from "@/lib/panel-record-tools";
 import { isDateKey, todayInTurkey } from "@/lib/booking-dates";
 import { BOOKING_TERMS_VERSION } from "@/lib/booking-terms";
 import { authorizePanelApi } from "@/lib/auth/api-access";
@@ -20,6 +21,7 @@ import { revalidateDemoExperience } from "@/lib/server/demo-revalidate";
 export const runtime = "nodejs";
 
 type RequestPayload = {
+  channelLabel?: string;
   villaSlug?: string;
   checkIn?: string;
   checkOut?: string;
@@ -128,6 +130,7 @@ export async function POST(request: Request) {
 
     const createdRequest = await createDemoRequest({
       villa,
+      channelLabel: origin === "MANUAL_PANEL" ? "PANEL" : payload.channelLabel,
       checkIn,
       checkOut,
       guestCount,
@@ -153,8 +156,14 @@ export async function POST(request: Request) {
 
     revalidateDemoExperience(villa.slug);
 
-    return NextResponse.json({ request: requestRecord });
+    const visibleRequest = origin === "MANUAL_PANEL" ? requestRecord : {
+      id: requestRecord.id, confirmationToken: requestRecord.confirmationToken,
+      status: requestRecord.status, pricing: requestRecord.pricing,
+      termsAcceptedAt: requestRecord.termsAcceptedAt, termsVersion: requestRecord.termsVersion,
+    };
+    return NextResponse.json({ request: visibleRequest }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof PanelRecordError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof DemoOperationsStoreError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

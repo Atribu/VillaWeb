@@ -1,0 +1,13 @@
+# Include inside a TLS-enabled server block dedicated to the staging host.
+# Configure certificate paths and create the htpasswd file outside this repository.
+auth_basic "Private staging";
+auth_basic_user_file /etc/nginx/villaweb-staging.htpasswd;
+add_header X-Robots-Tag "noindex, nofollow" always;
+client_max_body_size 300m;
+location / {
+    proxy_pass http://127.0.0.1:3100;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 300s;
+}

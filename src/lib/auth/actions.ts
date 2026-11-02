@@ -6,8 +6,10 @@ import { clearUserSession, setUserSession } from "@/lib/auth/server-session";
 import { validateUser } from "@/lib/auth/users";
 import { pickLocalized } from "@/lib/i18n";
 import { getCurrentLocale } from "@/lib/server/app-locale";
+import { factorEnabled, verifyLoginFactor } from "@/lib/server/second-factor";
 
 export type LoginFormState = {
+  requiresFactor?: boolean;
   error?: string;
   companyName?: string;
   username?: string;
@@ -76,7 +78,12 @@ export async function authenticateUser(
   }
 
   try {
-    await setUserSession(result.user);
+    if (result.user.role === "SUPER_ADMIN" && await factorEnabled(result.user.id)) {
+      const code = String(formData.get("verificationCode") ?? "").trim();
+      if (!code || !await verifyLoginFactor(result.user.id, code)) return { requiresFactor: true, companyName, username,
+        error: pickLocalized(locale, "Şifrenizi ve doğrulama uygulamasındaki kodu girin. Kullanılmış kod tekrar kabul edilmez; beş hatalı denemede 15 dakika beklenir.", "Enter your password and authenticator code. Codes cannot be reused; five failed attempts lock verification for 15 minutes.") };
+      await setUserSession({ ...result.user, secondFactorVerified: true });
+    } else await setUserSession(result.user);
   } catch (error) {
     console.error("Session registration failed", error instanceof Error ? error.name : "UnknownError");
     return { error: pickLocalized(locale, "Guvenli oturum olusturulamadi. Lutfen yoneticiyle iletisime gecin.", "A secure session could not be created. Please contact your administrator."), companyName, username };

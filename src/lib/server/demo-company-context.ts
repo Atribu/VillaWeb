@@ -8,6 +8,8 @@ import {
 } from "@/lib/demo-companies";
 import { getUserSession } from "@/lib/auth/server-session";
 import { PanelAccessError } from "@/lib/auth/access-error";
+import { hasPermission } from "@/lib/auth/permissions";
+import { publicSiteContent } from "@/lib/server/site-publication";
 import {
   getCompanyRecordById,
   getCompanyRecordBySlug,
@@ -107,10 +109,15 @@ export async function assertSuperAdminPanelAccess() {
 export const getCurrentPublicCompany = cache(async (): Promise<DemoCompanyRecord> => {
   // A registered domain is authoritative; query/cookie selection is for the shared demo host.
   const domainCompany = await getCompanyRecordForHost((await headers()).get("host") ?? "");
-  if (domainCompany) return domainCompany;
   const headerSlug = await readCompanySlugFromHeaders();
   const cookieSlug = await readCompanySlugFromCookies();
-  const resolved =
+  let previewCompany: DemoCompanyRecord | null = null;
+  if ((await headers()).get("x-site-preview") === "1" && headerSlug) {
+    const actor = await getUserSession();
+    const candidate = await getCompanyRecordBySlug(headerSlug);
+    if (candidate && actor && hasPermission(actor.role, "websites") && (actor.role === "SUPER_ADMIN" || actor.companyId === candidate.id)) previewCompany = candidate;
+  }
+  const resolved = previewCompany ?? domainCompany ??
     (await getCompanyRecordBySlug(headerSlug)) ??
     (await getCompanyRecordBySlug(cookieSlug)) ??
     (await getDefaultCompanyRecord());
@@ -119,7 +126,10 @@ export const getCurrentPublicCompany = cache(async (): Promise<DemoCompanyRecord
     throw new Error("En az bir aktif firma kaydi gereklidir.");
   }
 
-  return resolved;
+  const { content } = await publicSiteContent(resolved.id);
+  return content ? { ...resolved, phone: content.phone, email: content.email, address: content.address,
+    whatsapp: content.whatsapp, heroTitle: content.heroTitle, heroDescription: content.heroDescription,
+    siteContent: content } : resolved;
 });
 
 export async function getCurrentCompanyLabel() {

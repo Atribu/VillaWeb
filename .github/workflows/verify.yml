@@ -1,0 +1,48 @@
+name: Release checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: isolated-ci-password
+          POSTGRES_DB: villaweb_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d villaweb_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://test:isolated-ci-password@localhost:5432/villaweb_test
+      DEV_FALLBACK_MODE: "false"
+      SESSION_SECRET: isolated-ci-session-secret-not-for-deployment
+      ICAL_SIGNING_SECRET: isolated-ci-ical-secret-not-for-deployment
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:migrate:deploy
+      - run: npm test
+      - run: npm run test:postgres
+      - run: npm run test:smoke
+      - run: npm run build
+      - run: npm run test:production-auth

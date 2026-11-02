@@ -30,6 +30,7 @@ export function VillaPricingPeriodsManager({ villa }: VillaPricingPeriodsManager
     nightlyPrice: String(villa.nightlyPrice),
     cleaningFee: "",
     minNightCount: "",
+    weekendPercent: "0", earlyBookingDays: "0", earlyBookingPercent: "0",
   });
 
   function updateField(key: keyof typeof formState, value: string) {
@@ -59,6 +60,7 @@ export function VillaPricingPeriodsManager({ villa }: VillaPricingPeriodsManager
           nightlyPrice: Number(formState.nightlyPrice),
           cleaningFee: formState.cleaningFee ? Number(formState.cleaningFee) : null,
           minNightCount: formState.minNightCount ? Number(formState.minNightCount) : null,
+          weekendPercent: Number(formState.weekendPercent), earlyBookingDays: Number(formState.earlyBookingDays), earlyBookingPercent: Number(formState.earlyBookingPercent),
         }),
       });
       const payload = (await response.json()) as { error?: string; villa?: CatalogVilla };
@@ -78,6 +80,7 @@ export function VillaPricingPeriodsManager({ villa }: VillaPricingPeriodsManager
         nightlyPrice: String(villa.nightlyPrice),
         cleaningFee: "",
         minNightCount: "",
+        weekendPercent: "0", earlyBookingDays: "0", earlyBookingPercent: "0",
       });
       setMessageTone("success");
       setMessage(active ? "Fiyat donemi kaydedildi ve fiyatlamaya dahil edildi." : "Fiyat donemi pasif olarak kaydedildi.");
@@ -229,6 +232,7 @@ export function VillaPricingPeriodsManager({ villa }: VillaPricingPeriodsManager
             className="mt-2 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-[var(--color-aqua)] focus:bg-white"
           />
         </div>
+        {([ ["weekendPercent", "Cuma / cumartesi farkı (%)", -90, 500], ["earlyBookingDays", "En az kaç gün önce rezervasyon?", 0, 730], ["earlyBookingPercent", "Erken rezervasyon indirimi (%)", 0, 90] ] as const).map(([key, label, min, max]) => <label key={key} className="grid gap-2 text-sm font-medium text-slate-700">{label}<input className="panel-input" type="number" step={key === "earlyBookingDays" ? 1 : 0.01} min={min} max={max} value={formState[key]} onChange={event => updateField(key, event.target.value)} /></label>)}
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} /> Donem aktif</label>
           <button
@@ -239,7 +243,7 @@ export function VillaPricingPeriodsManager({ villa }: VillaPricingPeriodsManager
             {isSubmitting ? "Kaydediliyor..." : editingId ? "Donemi Guncelle" : "Fiyat Donemi Ekle"}
           </button>
           {editingId ? <button type="button" className="panel-button-secondary" onClick={() => {
-            setEditingId(null); setActive(true); setFormState({ title: "", startDate: getToday(), endDate: "", nightlyPrice: String(villa.nightlyPrice), cleaningFee: "", minNightCount: "" });
+            setEditingId(null); setActive(true); setFormState({ title: "", startDate: getToday(), endDate: "", nightlyPrice: String(villa.nightlyPrice), cleaningFee: "", minNightCount: "", weekendPercent: "0", earlyBookingDays: "0", earlyBookingPercent: "0" });
           }}>Duzenlemeden vazgec</button> : null}
         </div>
       </form>
@@ -272,7 +276,7 @@ export function VillaPricingPeriodsManager({ villa }: VillaPricingPeriodsManager
                   setEditingId(period.id); setActive(period.active); setMessage("");
                   setFormState({ title: period.title, startDate: period.startDate, endDate: period.endDate,
                     nightlyPrice: String(period.nightlyPrice), cleaningFee: period.cleaningFee === undefined ? "" : String(period.cleaningFee),
-                    minNightCount: period.minNightCount === undefined ? "" : String(period.minNightCount) });
+                    minNightCount: period.minNightCount === undefined ? "" : String(period.minNightCount), weekendPercent: String(period.weekendPercent ?? 0), earlyBookingDays: String(period.earlyBookingDays ?? 0), earlyBookingPercent: String(period.earlyBookingPercent ?? 0) });
                   document.getElementById("pricing-period-form")?.scrollIntoView({ block: "center", behavior: "smooth" });
                   document.getElementById("pricing-title")?.focus({ preventScroll: true });
                 }}>Duzenle</button>

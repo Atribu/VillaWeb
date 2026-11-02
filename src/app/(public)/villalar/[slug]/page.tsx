@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FunnelTracker } from "@/components/public/funnel-tracker";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDemoCompanySiteHref } from "@/lib/demo-companies";
@@ -142,6 +143,7 @@ export default async function VillaDetailPage({ params, searchParams }: PageProp
   };
 
   return <div className={s.page}>
+    <FunnelTracker companySlug={company.slug} villaSlug={villa.slug} />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
     <nav className={s.breadcrumbs} aria-label={t("Sayfa yolu", "Breadcrumb")}>
       <Link href={href("/")}>{t("Ana sayfa", "Home")}</Link><span>/</span>

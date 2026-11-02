@@ -4,6 +4,8 @@ import { DEMO_COMPANY_COOKIE_NAME } from "@/lib/demo-companies";
 import { canAccessPanelPath, getPanelHomePath } from "@/lib/auth/panel-access";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { resolveSession } from "@/lib/auth/session-store";
+import { assertCompanyModule } from "@/lib/server/company-platform";
+import { panelPathPermission } from "@/lib/auth/permissions";
 import { APP_LOCALE_COOKIE_NAME, normalizeAppLocale } from "@/lib/i18n";
 
 export async function proxy(request: NextRequest) {
@@ -17,6 +19,8 @@ export async function proxy(request: NextRequest) {
   const resolvedLocale = normalizeAppLocale(localeFromUrl ?? localeFromCookie);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.delete("x-demo-company-slug");
+  requestHeaders.delete("x-site-preview");
+  if (request.method === "GET" && !request.nextUrl.pathname.startsWith("/api/") && request.nextUrl.searchParams.get("preview") === "1") requestHeaders.set("x-site-preview", "1");
 
   if (resolvedCompanySlug) {
     requestHeaders.set("x-demo-company-slug", resolvedCompanySlug);
@@ -25,6 +29,10 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-app-locale", resolvedLocale);
 
   function finalizeResponse(response: NextResponse) {
+    if (request.nextUrl.searchParams.has("preview")) {
+      response.headers.set("Cache-Control", "private, no-store");
+      response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    }
     if (resolvedCompanySlug) {
       response.cookies.set(DEMO_COMPANY_COOKIE_NAME, resolvedCompanySlug, {
         path: "/",
@@ -76,6 +84,9 @@ export async function proxy(request: NextRequest) {
       NextResponse.redirect(new URL(getPanelHomePath(session.role), request.url)),
     );
   }
+
+  try { await assertCompanyModule(session, panelPathPermission(pathname) ?? ""); }
+  catch { return finalizeResponse(new NextResponse("Bu modül firma paketinde etkin değil. Paket yöneticinizle iletişime geçin.", { status: 403 })); }
 
   return finalizeResponse(NextResponse.next({ request: { headers: requestHeaders } }));
 }

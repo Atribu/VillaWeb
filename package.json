@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "node --test tests/*.test.cjs",
     "test:smoke": "node tests/report-smoke.cjs",
+    "test:postgres": "node tests/postgres-platform.cjs",
+    "release:check": "node scripts/check-release.mjs",
     "test:production-auth": "node tests/production-auth-smoke.cjs",
     "calendar:sync": "node scripts/sync-calendars.mjs",
     "backup:create": "node scripts/backup.mjs create",

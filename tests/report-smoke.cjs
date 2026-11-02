@@ -54,7 +54,7 @@ async function main() {
   function cookie(role = 'SUPER_ADMIN', id = companyId) {
     return cookies.get(`${role}:${id}`);
   }
-  const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--port', port], {
+  const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', ...(process.env.SMOKE_WEBPACK === 'true' ? ['--webpack'] : []), '--port', port], {
     cwd: path.resolve(__dirname, '..'), env: { ...process.env, DEV_FALLBACK_MODE: 'true', DEV_DATA_DIRECTORY: directory, VILLA_RUNTIME_DIRECTORY: path.join(directory, 'runtime'),
       SESSION_SECRET: secret, ICAL_SIGNING_SECRET: secret,
       CALENDAR_SYNC_SECRET: 'isolated-calendar-scheduler-secret-1234567890',
@@ -94,22 +94,28 @@ async function main() {
       const siteRoute = '/api/demo/websites/sites/test-site-a';
       assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', '')).status, 401);
       assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', cookie('STAFF'))).status, 403);
-      assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', cookie('ADMIN', other.companyId))).status, 403);
+      assert.equal((await call(siteRoute, { themeKey: 'kiyi' }, 'PATCH', cookie('ADMIN', other.companyId))).status, 404);
       assert.equal((await call(siteRoute, { themeKey: 'invalid' }, 'PATCH')).status, 400);
       assert.equal((await call(siteRoute, { companyId: other.companyId }, 'PATCH')).status, 400);
       assert.match((await call('/?company=villavera', undefined, 'GET', '')).text, /data-site-theme="secki"/);
       for (const themeKey of ['kiyi', 'rota', 'secki']) {
         const updated = await call(siteRoute, { themeKey }, 'PATCH', cookie('ADMIN'));
         assert.equal(updated.status, 200, updated.text);
-        assert.equal(updated.json.website.themeKey, themeKey);
+        const draft = JSON.parse(await fs.readFile(path.join(directory, 'platform-config.json'), 'utf8')).find(row => row.companyId === companyId);
+        assert.equal(draft.siteDraft.themeKey, themeKey);
+        assert.match((await call('/?company=villavera&preview=1', undefined, 'GET', cookie('ADMIN'))).text, new RegExp(`data-site-theme="${themeKey}"`));
+        assert.equal((await call('/api/panel/platform/site', { action: 'publish', companyId, version: draft.version }, 'POST', cookie('ADMIN'))).status, 200);
         const home = await call('/?company=villavera', undefined, 'GET', '');
         assert.equal(home.status, 200, home.text.slice(0, 300));
         assert.match(home.text, new RegExp(`data-site-theme="${themeKey}"`));
         assert.doesNotMatch(home.text, /PRIVATE_OWNER_MARKER|PRIVATE_SUPPLIER_MARKER/);
       }
       const savedSites = JSON.parse(await fs.readFile(path.join(directory, 'demo-websites.json'), 'utf8'));
-      assert.equal(savedSites.find(site => site.id === 'test-site-a').themeKey, 'secki');
+      assert.equal(savedSites.find(site => site.id === 'test-site-a').themeKey, 'marketplace-core', 'Legacy website row stays untouched by draft publication');
       assert.equal(savedSites.find(site => site.id === 'test-site-b').themeKey, 'rota');
+      assert.equal((await call('/api/demo/websites/sites/test-site-a-micro', { themeKey: 'rota' }, 'PATCH', cookie('ADMIN'))).status, 200);
+      assert.match(await hostedPage('collection.a.test'), /data-site-theme="rota"/);
+      assert.equal((await call('/api/demo/websites/sites/test-site-a-micro', { themeKey: 'kiyi' }, 'PATCH', cookie('ADMIN'))).status, 200);
       const otherHome = await call('/?company=sahil-collection', undefined, 'GET', '');
       assert.match(otherHome.text, /data-site-theme="rota"/);
       const hostedText = await hostedPage('b.test', '/?company=villavera');
@@ -126,7 +132,7 @@ async function main() {
       assert.doesNotMatch(english.text, /Olağanın/);
       const panel = await call('/panel/web-siteleri/site-yonetimi', undefined, 'GET', cookie('ADMIN'));
       assert.equal(panel.status, 200);
-      assert.match(panel.text, /Seçili tasarımı uygula/);
+      assert.match(panel.text, /Tasarımı ve içeriği taslakta düzenle/);
       // Next dev includes raw filesystem reads in RSC debug traces, not in rendered UI.
       const panelMarkup = panel.text.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
       assert.doesNotMatch(panelMarkup, /Test B/);
@@ -337,6 +343,7 @@ async function main() {
     console.log('PASS approval -> invoice -> payment -> confirmation -> reversal -> cancellation');
     await require('./panel-tools-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa, booking });
     await require('./workspace-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa, booking });
+    await require('./platform-smoke.cjs')({ call, cookie, base, directory, companyId, other, villa, booking });
 
     if (process.env.PLAYWRIGHT_MODULE) {
       const { chromium } = require(process.env.PLAYWRIGHT_MODULE);

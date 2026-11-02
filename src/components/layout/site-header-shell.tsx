@@ -10,6 +10,7 @@ import { pickLocalized } from "@/lib/i18n";
 import type { SiteTemplateKey } from "@/lib/site-templates";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import { SiteIcon } from "@/components/site-templates/site-icon";
+import Image from "next/image";
 import s from "@/components/site-templates/site-templates.module.css";
 
 export function SiteHeaderShell({ company, locale, theme }: { company: DemoCompanyRecord; locale: AppLocale; theme: SiteTemplateKey }) {
@@ -26,7 +27,7 @@ export function SiteHeaderShell({ company, locale, theme }: { company: DemoCompa
   ];
   return <header className={`${s.header} ${overlay ? s.overlayHeader : ""}`}>
     <div className={s.headerInner}>
-      <Link href={href("/")} className={s.logo} onClick={() => setOpen(false)} aria-label={t(`${company.shortName} ana sayfa`, `${company.shortName} home`)}><SiteIcon name="home" /><span>{company.shortName}</span></Link>
+      <Link href={href("/")} className={s.logo} onClick={() => setOpen(false)} aria-label={t(`${company.shortName} ana sayfa`, `${company.shortName} home`)}>{company.siteContent?.logoUrl ? <Image src={company.siteContent.logoUrl} alt={company.shortName} width={160} height={60} unoptimized className="max-h-12 w-auto max-w-40 object-contain" /> : <><SiteIcon name="home" /><span>{company.shortName}</span></>}</Link>
       <nav id="public-navigation" className={`${s.nav} ${open ? s.navOpen : ""}`} aria-label={t("Ana menü", "Main navigation")} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
         {links.map((link) => <Link key={link.href} href={href(link.href)} onClick={() => setOpen(false)} aria-current={pathname.startsWith(link.href) ? "page" : undefined}>{link.label}</Link>)}
         <div className={s.mobileTools}><LanguageSwitcher locale={locale} variant="light" compact /><Link href="/panel/giris">{t("Panel girişi", "Partner login")}</Link></div>

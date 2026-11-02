@@ -168,6 +168,8 @@ const panelEntries: PanelNavEntry[] = [
       { label: "Dokumanlar", href: "/panel/ayarlar/dokumanlar", roles: ["ADMIN"] },
       { label: "Yayın Kontrolü", href: "/panel/ayarlar/yayin-kontrolu", roles: ["ADMIN"] },
       { label: "Sistem Sağlığı", href: "/panel/ayarlar/sistem-sagligi", roles: ["SUPER_ADMIN"] },
+      { label: "Firma Paketleri", href: "/panel/paketler", roles: ["SUPER_ADMIN"] },
+      { label: "İki Aşamalı Doğrulama", href: "/panel/guvenlik", roles: ["SUPER_ADMIN"] },
     ],
   },
   {
@@ -199,6 +201,7 @@ const panelEntries: PanelNavEntry[] = [
     roles: ["ADMIN"],
     items: [
       { label: "Site Yonetimi", href: "/panel/web-siteleri/site-yonetimi", roles: ["ADMIN"] },
+      { label: "Kurulum ve Site Yayını", href: "/panel/kurulum", roles: ["ADMIN"] },
       { label: "Landing Sayfalari", href: "/panel/web-siteleri/landing-sayfalari", roles: ["ADMIN"] },
       { label: "SEO Icerikleri", href: "/panel/web-siteleri/seo-icerikleri", roles: ["ADMIN"] },
     ],
@@ -213,6 +216,9 @@ const panelEntries: PanelNavEntry[] = [
       { label: "Villa Listesi", href: "/panel/villalar", roles: ["ADMIN", "STAFF"] },
       { label: "Yeni Villa", href: "/panel/villalar/yeni", roles: ["ADMIN", "STAFF"] },
       { label: "Fiyat Yonetimi", href: "/panel/fiyatlar", roles: ["ADMIN"] },
+      { label: "Gelişmiş Fiyat Takvimi", href: "/panel/fiyat-takvimi", roles: ["ADMIN"] },
+      { label: "Portföy Paylaşımı", href: "/panel/portfoy-paylasimi", roles: ["ADMIN"] },
+      { label: "Dönüşüm Raporu", href: "/panel/donusum", roles: ["ADMIN"] },
       { label: "Raporlar", href: "/panel/raporlar", roles: ["ADMIN"] },
     ],
   },

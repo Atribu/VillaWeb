@@ -1,4 +1,5 @@
 "use client";
+import { clientTrafficSource } from "@/lib/traffic-attribution";
 
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
@@ -175,6 +176,7 @@ export function RequestForm({
           couponCode: pricing.couponCode,
           termsAccepted,
           termsVersion: BOOKING_TERMS_VERSION,
+          channelLabel: clientTrafficSource(companySlug),
         }),
       });
 

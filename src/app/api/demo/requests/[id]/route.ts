@@ -1,5 +1,6 @@
 import { authorizePanelApi, panelAccessErrorResponse } from "@/lib/auth/api-access";
 import { NextResponse } from "next/server";
+import { PanelRecordError } from "@/lib/panel-record-tools";
 import { getUserSession } from "@/lib/auth/server-session";
 import { canAccessPanelPath } from "@/lib/auth/panel-access";
 import { REQUEST_STATUS_OPTIONS, type RequestStatus } from "@/lib/demo-operations";
@@ -45,6 +46,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ request: updatedRequest });
   } catch (error) {
+    if (error instanceof PanelRecordError) return NextResponse.json({ error: error.message }, { status: error.status });
     const accessError = panelAccessErrorResponse(error);
     if (accessError) return accessError;
     if (error instanceof DemoOperationsStoreError || error instanceof DemoVillaStoreError) {

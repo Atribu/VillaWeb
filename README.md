@@ -40,19 +40,21 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/villaweb?schema=publ
 npm run prisma:seed
 ```
 
-Prod benzeri deploy akisi icin:
+Mevcut sunucu icin once [migration/baseline kontrolunu](docs/panel-workspace-deployment.md)
+ve [platform gelistirmeleri yayin rehberini](docs/platform-growth-deployment.md) okuyun.
+Bos olmayan veritabaninda baseline adimini kontrol etmeden migration uygulamayin.
+Migration gecmisi hazir olduktan sonra:
 
 ```bash
 npm ci
-npm run prisma:db:push
+npm run prisma:migrate:deploy
 npm run build
 npm run start
 ```
 
-`npm run build` komutu Prisma Client'i otomatik olarak yeniden uretir. Projede henuz
-surumlenmis migration zinciri bulunmadigi icin mevcut sunucuda sema degisiklikleri
-`prisma:db:push` ile uygulanir; bu komut uygulama dosyalarini guncellemez, PostgreSQL
-semasini `prisma/schema.prisma` ile esler.
+`npm run build` komutu Prisma Client'i otomatik olarak yeniden uretir.
+Surumlenmis migration zinciri `prisma/migrations` altindadir. Canli guncellemelerde
+`prisma:migrate:deploy` kullanilir; build tek basina veritabani semasini guncellemez.
 
 Mevcut canli veritabaninda rutin guncelleme sirasinda `prisma:seed` calistirilmaz.
 Seed yalnizca yeni ve bos bir kurulum icin kullanilir. Bu surumun rapor maddeleri ve

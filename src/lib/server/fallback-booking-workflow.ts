@@ -1,5 +1,6 @@
 import "server-only";
 import { writePanelAudit } from "@/lib/server/panel-audit";
+import { readBookingShare } from "@/lib/server/portfolio-sharing";
 
 import { randomUUID } from "node:crypto";
 import type { DemoRequest, RequestStatus } from "@/lib/demo-operations";
@@ -23,7 +24,11 @@ export function withFallbackBookingMutation<T>(work: () => Promise<T>): Promise<
 export async function transitionFallbackBooking(request: DemoRequest, status: RequestStatus) {
   await assertPanelCompanyAccess(request.companyId);
   request = (await getFallbackRequests(request.companyId)).find((item) => item.id === request.id) ?? request;
-  const villa = (await getFallbackVillas(request.companyId)).find((item) => item.slug === request.villaSlug);
+  if (status === "APPROVED" && request.status !== "APPROVED" && request.portfolioShareId) {
+    const share = await readBookingShare(request.portfolioShareId, request.companyId, request.sourceVillaId!);
+    if (share.version !== request.portfolioShareVersion) throw new BookingWorkflowError("Paylaşım koşulları değişmiş. Güncel koşullarla yeni talep oluşturun.");
+  }
+  const villa = (await getFallbackVillas(request.sourceCompanyId ?? request.companyId)).find((item) => request.sourceVillaId ? item.id === request.sourceVillaId : item.slug === request.villaSlug);
   if (!villa) throw new BookingWorkflowError("Villa bulunamadi.");
   const ranges = villa.availabilityRanges.filter((item) => item.sourceRequestId !== request.id);
   const endDate = request.checkOut;
@@ -37,7 +42,7 @@ export async function transitionFallbackBooking(request: DemoRequest, status: Re
   const now = new Date().toISOString();
   if (status === "APPROVED") {
     ranges.push({ id: `reservation-${request.id}`, startDate: request.checkIn, endDate,
-      label: `Rezervasyon: ${request.fullName}`, status: "RESERVED", sourceRequestId: request.id });
+      label: request.portfolioShareId ? "İş ortağı rezervasyonu" : `Rezervasyon: ${request.fullName}`, status: "RESERVED", sourceRequestId: request.id });
     tasks.push(...buildOperationTasksForApprovedRequest(request).map((task) => allTasks.find((existing) => existing.id === task.id) ?? ({ ...task, status: "PENDING" as const,
       scheduledTimeLabel: task.taskType === "CHECK_IN" ? villa.checkInTime ?? "16:00"
         : task.taskType === "CHECK_OUT" ? villa.checkOutTime ?? "10:00" : task.scheduledTimeLabel,

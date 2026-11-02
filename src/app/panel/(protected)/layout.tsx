@@ -11,6 +11,8 @@ import { getUserSession } from "@/lib/auth/server-session";
 import { getCurrentLocale } from "@/lib/server/app-locale";
 import { pickLocalized } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
+import { readPlatformConfig } from "@/lib/server/company-platform";
+import { DEFAULT_PACKAGE } from "@/lib/platform-features";
 import "../panel.css";
 
 export default async function ProtectedPanelLayout({ children }: { children: ReactNode }) {
@@ -18,6 +20,7 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
   if (!session) redirect("/panel/giris");
   const locale = await getCurrentLocale();
   const role = session?.role ?? "STAFF";
+  const enabledModules = session.companyId ? (await readPlatformConfig(session.companyId)).package.modules : DEFAULT_PACKAGE.modules;
   const companyName = session?.companyName ?? "BookToVilla";
   const siteHref = session?.companySlug ? getDemoCompanySiteHref(session.companySlug) : "/";
   const displayName = session?.displayName ?? "Yetkili";
@@ -57,7 +60,7 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
         </div>
       </header>
       <div className="panel-workspace">
-        <PanelSidebar role={role} locale={locale} />
+        <PanelSidebar role={role} locale={locale} enabledModules={enabledModules} />
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-4 px-5 pt-5 text-xs text-slate-500 sm:px-8">
             <span className="truncate"><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-[#4689b5]" aria-hidden="true" />{role === "SUPER_ADMIN" ? "Tüm firmalar · Platform yönetimi" : companyName} <span className="mx-2 text-slate-300">/</span> Yönetim paneli</span>

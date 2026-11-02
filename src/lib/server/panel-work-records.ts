@@ -12,10 +12,12 @@ import { assertPanelCompanyAccess } from "@/lib/server/demo-company-context";
 import { withDevelopmentFallback } from "@/lib/server/development-fallback";
 import { PanelRecordError } from "@/lib/panel-record-tools";
 import type { WorkKind, WorkRecord } from "@/lib/panel-workspace";
+import { assertCompanyModule } from "@/lib/server/company-platform";
 
 export async function requirePanelPermission(permission: PanelPermission) {
   const session = await getUserSession();
   if (!session || !hasPermission(session.role, permission)) throw new PanelAccessError();
+  await assertCompanyModule(session, permission);
   return session;
 }
 function localPath() {

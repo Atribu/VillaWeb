@@ -1,0 +1,22 @@
+[Unit]
+Description=BookToVilla isolated staging
+After=network.target
+
+[Service]
+Type=simple
+User=villaweb-staging
+Group=villaweb-staging
+WorkingDirectory=/srv/villaweb-staging/current
+Environment=NODE_ENV=production
+Environment=APP_ENV=staging
+EnvironmentFile=/etc/villaweb/staging.env
+ExecStartPre=/usr/bin/node scripts/check-release.mjs
+ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3100
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

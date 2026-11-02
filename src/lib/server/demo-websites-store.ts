@@ -113,6 +113,17 @@ export async function updateDemoWebsite(
   const session = await getUserSession();
   if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.role)) throw new WebsiteAccessError("Site yönetimi yetkiniz bulunmuyor.");
   const update = parseWebsiteUpdate(input);
+  if (update.themeKey) {
+    const website = (await getDemoWebsites()).find(site => site.id === websiteId);
+    if (!website?.companyId) throw new WebsiteNotFoundError("Site kaydı bulunamadı.");
+    if (website.default) {
+      const { siteWorkspace, saveSiteDraft } = await import("@/lib/server/site-publication");
+      const workspace = await siteWorkspace(website.companyId);
+      await saveSiteDraft(website.companyId, workspace.config.version, { ...workspace.content, themeKey: update.themeKey });
+      delete update.themeKey;
+      if (!Object.keys(update).length) return website;
+    }
+  }
   const authorize = (companyId: string) => {
     if (!canManageWebsite(session.role, session.companyId, companyId)) throw new WebsiteAccessError("Bu site için yetkiniz bulunmuyor.");
   };

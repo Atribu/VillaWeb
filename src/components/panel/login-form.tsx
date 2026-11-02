@@ -95,6 +95,10 @@ export function LoginForm({
         />
       </div>
 
+      <label className="block space-y-2 text-sm text-slate-700">{pickLocalized(locale, "Doğrulama kodu (etkinse)", "Verification code (if enabled)")}
+        <input name="verificationCode" autoComplete="one-time-code" maxLength={32} placeholder="123456" required={state.requiresFactor}
+          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" />
+      </label>
       {state.error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {state.error}

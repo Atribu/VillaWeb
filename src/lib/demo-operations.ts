@@ -1,4 +1,5 @@
 import type { CatalogVilla } from "@/lib/villa-catalog";
+import { nightlyPeriodPrice } from "@/lib/villa-pricing-periods";
 import { todayInTurkey } from "@/lib/booking-dates";
 import { getFallbackCompanyIdForVillaSlug } from "@/lib/demo-companies";
 import { formatCurrency, seedVillaCatalog } from "@/lib/villa-catalog";
@@ -51,6 +52,7 @@ export type DemoCoupon = {
 };
 
 export type RequestPricingBreakdown = {
+  earlyBookingDiscountTotal?: number;
   nightCount: number;
   baseNightlyPrice: number;
   discountedNightlyPrice: number;
@@ -67,6 +69,12 @@ export type RequestPricingBreakdown = {
 };
 
 export type DemoRequest = {
+  channelLabel?: string;
+  portfolioShareId?: string;
+  portfolioShareVersion?: number;
+  portfolioCommission?: number;
+  sourceCompanyId?: string;
+  sourceVillaId?: string;
   id: string;
   companyId: string;
   villaSlug: string;
@@ -569,14 +577,15 @@ export function getResolvedStayPricing(input: {
   checkIn: string;
   checkOut: string;
   couponCode?: string;
+  bookingDate?: string;
 }) {
   const nightCount = getNightCount(input.checkIn, input.checkOut);
   const basePricing = getBasePricingRecord(input.villa, input.pricingRecords);
   const stayNightDates = getStayNightDateKeys(input.checkIn, input.checkOut);
-  const nightlyPrices = stayNightDates.map(
-    (date) => getActivePricingPeriod(input.villa, date)?.nightlyPrice ?? basePricing.baseNightlyPrice,
-  );
-  const subtotal = nightlyPrices.reduce((sum, price) => sum + price, 0);
+  const bookingDate = input.bookingDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const nightlyPrices = stayNightDates.map(date => nightlyPeriodPrice(getActivePricingPeriod(input.villa, date), basePricing.baseNightlyPrice, date, input.checkIn, bookingDate));
+  const subtotal = Math.round(nightlyPrices.reduce((sum, item) => sum + item.regular, 0) * 100) / 100;
+  const earlySubtotal = Math.round(nightlyPrices.reduce((sum, item) => sum + item.price, 0) * 100) / 100;
   const averageNightlyPrice =
     nightCount > 0 ? Math.round(subtotal / nightCount) : basePricing.baseNightlyPrice;
   const checkInPeriod = getActivePricingPeriod(input.villa, input.checkIn);
@@ -585,12 +594,13 @@ export function getResolvedStayPricing(input: {
     checkIn: input.checkIn,
     checkOut: input.checkOut,
   });
-  const discountedNightlyPrice = activeDiscount
-    ? Math.round(averageNightlyPrice * (1 - activeDiscount.percentOff / 100))
-    : averageNightlyPrice;
-  const discountedSubtotal = activeDiscount
-    ? Math.round(subtotal * (1 - activeDiscount.percentOff / 100))
+  const campaignSubtotal = activeDiscount
+    ? Math.round(subtotal * (1 - activeDiscount.percentOff / 100) * 100) / 100
     : subtotal;
+  // Do not stack early-booking and campaign reductions; apply the better offer.
+  const discountedSubtotal = Math.min(earlySubtotal, campaignSubtotal);
+  const discountedNightlyPrice = nightCount ? Math.round(discountedSubtotal / nightCount * 100) / 100 : averageNightlyPrice;
+  const earlyApplied = earlySubtotal < campaignSubtotal;
   const activeDiscountTotal = Math.max(subtotal - discountedSubtotal, 0);
   const coupon = input.couponCode
     ? getEligibleCoupon(input.coupons, {
@@ -601,9 +611,9 @@ export function getResolvedStayPricing(input: {
       })
     : null;
   const couponDiscountTotal = coupon
-    ? Math.round(discountedSubtotal * (coupon.percentOff / 100))
+    ? Math.round(discountedSubtotal * (coupon.percentOff / 100) * 100) / 100
     : 0;
-  const grandTotal = discountedSubtotal - couponDiscountTotal + cleaningFee;
+  const grandTotal = Math.round((discountedSubtotal - couponDiscountTotal + cleaningFee) * 100) / 100;
 
   return {
     pricing: {
@@ -612,8 +622,9 @@ export function getResolvedStayPricing(input: {
       discountedNightlyPrice,
       subtotal,
       activeDiscountTotal,
-      activeDiscountTitle: activeDiscount?.title,
-      activeDiscountPercent: activeDiscount?.percentOff,
+      earlyBookingDiscountTotal: earlyApplied ? subtotal - earlySubtotal : 0,
+      activeDiscountTitle: earlyApplied ? "Erken rezervasyon" : activeDiscount?.title,
+      activeDiscountPercent: subtotal ? Math.round(activeDiscountTotal / subtotal * 10000) / 100 : 0,
       cleaningFee,
       couponCode: coupon?.code,
       couponTitle: coupon?.title,

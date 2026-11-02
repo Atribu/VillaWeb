@@ -143,7 +143,7 @@ export async function validateUser(
   const normalizedUsername = username.trim().toLowerCase();
   const normalizedCompanyName = companyName?.trim() ?? "";
 
-  return withDevelopmentFallback(
+  return withDevelopmentFallback<LoginValidationResult>(
     async () => {
       const user = await db.user.findFirst({
         where: {

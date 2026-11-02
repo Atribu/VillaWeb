@@ -6,6 +6,7 @@ const decoder = new TextDecoder();
 export const SESSION_COOKIE_NAME = "villaweb_session";
 
 export type SessionUser = {
+  secondFactorVerified?: boolean;
   id: string;
   username: string;
   displayName: string;

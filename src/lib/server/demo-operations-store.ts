@@ -1,4 +1,6 @@
 import "server-only";
+import { trafficSource } from "@/lib/platform-features";
+import { readBookingShare } from "@/lib/server/portfolio-sharing";
 import { writePanelAudit } from "@/lib/server/panel-audit";
 import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
 import * as fallbackRecords from "@/lib/server/development-fallback-data";
@@ -240,6 +242,11 @@ function createPricingVillaSnapshot(
 
 async function mapBookingRequestsToDemoRequests(
   requests: Array<{
+    channelLabel?: string | null;
+    portfolioShareId?: string | null;
+    portfolioShareVersion?: number | null;
+    villaId?: string;
+    portfolioCommission?: { toNumber(): number } | null;
     id: string;
     companyId: string;
     status: import("@prisma/client").BookingRequestStatus;
@@ -306,7 +313,12 @@ async function mapBookingRequestsToDemoRequests(
     demoRequests.push({
       id: request.id,
       companyId: request.companyId,
-      villaSlug: request.villa.slug,
+      channelLabel: request.channelLabel ?? undefined,
+      portfolioShareId: request.portfolioShareId ?? undefined,
+      portfolioShareVersion: request.portfolioShareVersion ?? undefined,
+      sourceVillaId: request.portfolioShareId ? request.villaId : undefined,
+      portfolioCommission: request.portfolioCommission ? decimalToNumber(request.portfolioCommission) : undefined,
+      villaSlug: request.portfolioShareId ? `ortak-${request.portfolioShareId}` : request.villa.slug,
       villaTitle: request.villa.title,
       checkIn: dateKey(request.checkIn),
       checkOut: dateKey(request.checkOut),
@@ -486,6 +498,7 @@ export async function getPublicBookingConfirmation(token: string) {
       const request = await db.bookingRequest.findUnique({
         where: { confirmationToken: token },
         select: {
+          portfolioShareId: true,
           id: true,
           status: true,
           fullName: true,
@@ -525,7 +538,7 @@ export async function getPublicBookingConfirmation(token: string) {
         confirmedAt: request.confirmedAt?.toISOString(),
         companyName: request.company.publicName,
         companySlug: request.company.slug,
-        villa: request.villa,
+        villa: { ...request.villa, slug: request.portfolioShareId ? `ortak-${request.portfolioShareId}` : request.villa.slug },
       };
     },
     async () => {
@@ -543,7 +556,7 @@ export async function getPublicBookingConfirmation(token: string) {
       const paidTotal = payments.filter((item) => item.invoiceId === invoice?.id && item.status === "PAID")
         .reduce((total, item) => total + item.amount, 0);
       const company = await getFallbackCompanyRecordById(request.companyId);
-      const villa = (await getFallbackVillas(request.companyId)).find((item) => item.slug === request.villaSlug);
+      const villa = (await getFallbackVillas(request.sourceCompanyId ?? request.companyId)).find((item) => request.sourceVillaId ? item.id === request.sourceVillaId : item.slug === request.villaSlug);
       return {
         id: request.id,
         status: request.status,
@@ -1078,6 +1091,7 @@ export async function validateDemoCoupon(input: {
 }
 
 export async function createDemoRequest(input: {
+  channelLabel?: string;
   villa: CatalogVilla;
   checkIn: string;
   checkOut: string;
@@ -1117,7 +1131,15 @@ export async function createDemoRequest(input: {
   const createdId = `request-${randomUUID().slice(0, 8)}`;
   const confirmationToken = randomUUID().replaceAll("-", "");
   const createdAt = new Date().toISOString();
+  const share = input.villa.portfolioShareId ? await readBookingShare(input.villa.portfolioShareId, input.villa.companyId, input.villa.id) : null;
+  if (share && share.version !== input.villa.portfolioShareVersion) throw new DemoOperationsStoreError("Paylaşım koşulları değişti. Sayfayı yenileyip yeniden talep oluşturun.");
   const fallbackRequest = {
+    portfolioShareId: share?.id,
+    portfolioShareVersion: share?.version,
+    portfolioCommission: share ? Math.round((resolved.pricing.subtotal - resolved.pricing.activeDiscountTotal - resolved.pricing.couponDiscountTotal) * share.commissionPercent) / 100 : undefined,
+    sourceCompanyId: share?.sourceCompanyId,
+    sourceVillaId: share?.villaId,
+    channelLabel: trafficSource(input.channelLabel),
     id: createdId,
     companyId: input.villa.companyId,
     villaSlug: input.villa.slug,
@@ -1145,14 +1167,23 @@ export async function createDemoRequest(input: {
 
   try {
     await db.$transaction(async (tx) => {
+      if (share) {
+        await tx.$queryRaw`SELECT id FROM "Villa" WHERE id = ${input.villa.id} FOR UPDATE`;
+        const currentShare = await readBookingShare(share.id, input.villa.companyId, input.villa.id, tx);
+        if (currentShare.version !== share.version) throw new DemoOperationsStoreError("Paylaşım fiyatı değişti. Sayfayı yenileyin.");
+      }
       await tx.bookingRequest.create({
         data: {
           id: createdId,
+          portfolioShareId: share?.id,
+          portfolioShareVersion: share?.version,
+          portfolioCommission: fallbackRequest.portfolioCommission,
           companyId: input.villa.companyId,
           websiteId,
           villaId: input.villa.id,
           status: "NEW",
           source: mapDemoOriginToSource(input.origin),
+          channelLabel: trafficSource(input.channelLabel),
           fullName: input.fullName.trim(),
           phone: input.phone.trim(),
           email: input.email.trim(),

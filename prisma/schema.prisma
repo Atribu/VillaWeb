@@ -302,7 +302,65 @@ model PlatformSetting {
   updatedAt          DateTime @updatedAt
 }
 
+model CompanyPlatformConfig {
+  companyId String @id
+  package Json?
+  siteDraft Json?
+  sitePublished Json?
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model VillaShare {
+  id String @id @default(cuid())
+  sourceCompanyId String
+  recipientCompanyId String
+  villaId String
+  state String @default("PENDING")
+  nightlyPrice Decimal @db.Decimal(12, 2)
+  commissionPercent Decimal @db.Decimal(5, 2)
+  version Int @default(1)
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sourceCompany Company @relation("ShareSource", fields: [sourceCompanyId], references: [id], onDelete: Cascade)
+  recipientCompany Company @relation("ShareRecipient", fields: [recipientCompanyId], references: [id], onDelete: Cascade)
+  villa Villa @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  requests BookingRequest[]
+  @@unique([villaId, recipientCompanyId])
+  @@index([recipientCompanyId, state])
+}
+
+model AuthSecondFactor {
+  userId String @id
+  secretCipher String?
+  pendingCipher String?
+  pendingExpiresAt DateTime?
+  enabledAt DateTime?
+  lastStep Int @default(-1)
+  failedAttempts Int @default(0)
+  lockedUntil DateTime?
+  recoveryHashes String[] @default([])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FunnelVisit {
+  id String @id @default(cuid())
+  companyId String
+  villaId String
+  sessionHash String
+  day String
+  source String
+  createdAt DateTime @default(now())
+  @@unique([companyId, villaId, sessionHash, day])
+  @@index([companyId, day, source])
+}
+
 model Company {
+  platformConfig     CompanyPlatformConfig?
+  sharesOffered      VillaShare[] @relation("ShareSource")
+  sharesReceived     VillaShare[] @relation("ShareRecipient")
   panelWorkRecords   PanelWorkRecord[]
   id                 String                @id @default(cuid())
   slug               String                @unique
@@ -374,6 +432,7 @@ model PanelWorkRecord {
 }
 
 model User {
+  secondFactor       AuthSecondFactor?
   id                 String                @id @default(cuid())
   username           String                @unique
   email              String                @unique
@@ -548,6 +607,7 @@ model Amenity {
 }
 
 model Villa {
+  shares             VillaShare[]
   id                 String                  @id @default(cuid())
   companyId          String
   websiteId          String?
@@ -689,6 +749,9 @@ model VillaAvailabilityBlock {
 }
 
 model VillaPricingRule {
+  weekendPercent     Decimal @default(0) @db.Decimal(5, 2)
+  earlyBookingDays   Int @default(0)
+  earlyBookingPercent Decimal @default(0) @db.Decimal(5, 2)
   id                 String          @id @default(cuid())
   villaId            String
   title              String
@@ -782,6 +845,10 @@ model CouponVilla {
 }
 
 model BookingRequest {
+  portfolioShareId       String?
+  portfolioShareVersion  Int?
+  portfolioCommission   Decimal? @db.Decimal(12, 2)
+  portfolioShare        VillaShare? @relation(fields: [portfolioShareId], references: [id], onDelete: Restrict)
   id                    String                       @id @default(cuid())
   companyId             String
   websiteId             String?

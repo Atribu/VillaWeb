@@ -1,4 +1,5 @@
 import "server-only";
+import { assertCompanyCapacity, lockCompany } from "@/lib/server/company-platform";
 import { mutateFallbackRecord } from "@/lib/server/fallback-mutations";
 import * as fallbackRecords from "@/lib/server/development-fallback-data";
 
@@ -363,6 +364,7 @@ export async function createDemoTeamUser(input: {
       const now = new Date();
 
       const created = await db.$transaction(async (tx) => {
+        if (input.status !== "PASSIVE") await assertCompanyCapacity(companyId, "users", tx);
         const user = await tx.user.create({
           data: {
             username,
@@ -408,6 +410,7 @@ export async function createDemoTeamUser(input: {
 
       await assertPanelCompanyAccess(branch.companyId);
 
+      if (input.status !== "PASSIVE") await assertCompanyCapacity(branch.companyId!, "users");
       const created = await createFallbackTeamUser({
         companyId: branch.companyId ?? (await resolveUsersMessagesCompanyId()),
         fullName,
@@ -627,6 +630,9 @@ export async function updateDemoTeamUser(
       }
 
       await db.$transaction(async (tx) => {
+        await lockCompany(tx, membership.companyId);
+        const latest = await tx.companyMembership.findUniqueOrThrow({ where: { id: membership.id } });
+        if (latest.status === "SUSPENDED" && input.status && input.status !== "PASSIVE") await assertCompanyCapacity(membership.companyId, "users", tx);
         if (input.status !== undefined || input.roleId !== undefined) {
           await tx.authSession.deleteMany({ where: { userId: membership.userId } });
         }
@@ -667,6 +673,8 @@ export async function updateDemoTeamUser(
       }
 
       await assertPanelCompanyAccess(current.companyId);
+
+      if (current.status === "PASSIVE" && input.status && input.status !== "PASSIVE") await assertCompanyCapacity(current.companyId!, "users");
 
       if (input.status !== undefined || input.roleId !== undefined) {
         await updateDevelopmentAuth((data) => { data.sessions = data.sessions.filter((session) => session.userId !== userId); });

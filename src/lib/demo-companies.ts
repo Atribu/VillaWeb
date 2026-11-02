@@ -5,6 +5,7 @@ export const DEMO_COMPANY_COOKIE_NAME = "villaweb_public_company";
 export type DemoCompanyStatus = "ACTIVE" | "PAUSED" | "ARCHIVED";
 
 export type DemoCompanyRecord = {
+  siteContent?: import("@/lib/platform-features").SiteContent;
   id: string;
   slug: string;
   name: string;

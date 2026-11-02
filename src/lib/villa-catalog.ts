@@ -53,6 +53,9 @@ export type VillaAmenityItem = {
 };
 
 export type VillaPricingPeriod = {
+  weekendPercent?: number;
+  earlyBookingDays?: number;
+  earlyBookingPercent?: number;
   id: string;
   title: string;
   startDate: string;
@@ -111,6 +114,8 @@ export const VILLA_SUITABILITY_OPTIONS = [
 ] as const;
 
 export type CatalogVilla = {
+  portfolioShareId?: string;
+  portfolioShareVersion?: number;
   id: string;
   companyId: string;
   title: string;

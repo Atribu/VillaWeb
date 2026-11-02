@@ -28,7 +28,7 @@ function revalidateVillaPaths(slug: string) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const denied = await authorizePanelApi(request, "villas");
+  const denied = await authorizePanelApi(request, "pricing");
   if (denied) return denied;
   const session = await getUserSession();
   if (!session) {
@@ -47,9 +47,15 @@ export async function POST(request: Request, context: RouteContext) {
       nightlyPrice?: number;
       cleaningFee?: number | null;
       minNightCount?: number | null;
+      weekendPercent?: number;
+      earlyBookingDays?: number;
+      earlyBookingPercent?: number;
     };
     const villa = await addDemoVillaPricingPeriod({
       slug,
+      weekendPercent: payload.weekendPercent,
+      earlyBookingDays: payload.earlyBookingDays,
+      earlyBookingPercent: payload.earlyBookingPercent,
       id: payload.id ? String(payload.id) : undefined,
       active: payload.active !== false,
       title: String(payload.title ?? ""),
@@ -84,7 +90,7 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const denied = await authorizePanelApi(request, "villas");
+  const denied = await authorizePanelApi(request, "pricing");
   if (denied) return denied;
   const session = await getUserSession();
   if (!session) {

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { SiteTemplatePicker } from "@/components/panel/site-template-picker";
 import { useRouter } from "next/navigation";
 import {
   getWebsiteStatusLabel,
@@ -9,7 +11,6 @@ import {
   type DemoWebsiteStatus,
 } from "@/lib/demo-websites";
 import { formatShortDate } from "@/lib/villa-catalog";
-import { SiteTemplatePicker } from "@/components/panel/site-template-picker";
 import type { SiteTemplateKey } from "@/lib/site-templates";
 
 type WebsitesManagerProps = {
@@ -139,7 +140,12 @@ export function WebsitesManager({ websites }: WebsitesManagerProps) {
                 </button>
               </div>
             </div>
-            <SiteTemplatePicker key={`${website.id}-${website.themeKey}`} websiteId={website.id} themeKey={website.themeKey} busy={busyWebsiteId !== null} onApply={(themeKey) => updateWebsite(website.id, { themeKey })} />
+            {website.default ? <Link className="panel-button-secondary mt-5" href={`/panel/kurulum?companyId=${encodeURIComponent(website.companyId ?? "")}`}>Tasarımı ve içeriği taslakta düzenle</Link> : <>
+              <p className="mt-5 text-sm text-slate-500">Bu bağımsız mikro sitenin tasarımı ana site taslağından ayrıdır. Onayladığınız değişiklik doğrudan bu siteye uygulanır.</p>
+              <SiteTemplatePicker key={`${website.id}-${website.themeKey}`} websiteId={website.id} themeKey={website.themeKey} busy={busyWebsiteId !== null} onApply={async themeKey => {
+                if (window.confirm("Seçili tasarım bu mikro sitede hemen yayınlansın mı?")) await updateWebsite(website.id, { themeKey });
+              }} />
+            </>}
           </article>
         ))}
       </div>
